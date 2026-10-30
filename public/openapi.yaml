@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: Inventory API
-  version: 1.21.0
+  version: 1.22.0
   description: >-
     Organization-scoped API for configurable inventory structures, localized
     content, indoor 3D room scans, location-aware stock, cycle counts,
-    assignments, internal requests, reservation planning, CSV exchange, typed custom fields, label setups, media, AI,
+    assignments, internal requests, reservation planning, CSV exchange, typed custom fields, label setups, shared label printing, stock planning, media, AI,
     outgoing integration webhooks, and data quality. User-bound credentials may
     select one of their memberships with X-Organization-ID. Standalone API
     tokens are pinned to their issuing organization.
@@ -37,6 +37,8 @@ tags:
     description: Canonical content languages and field-aware AI translations.
   - name: Label setups
     description: Reusable physical dimensions and positioned content for printed inventory labels.
+  - name: Label printing
+    description: Personal saved queues, shared Office printers, Windows agents and local QZ signing. Browser-session operations cannot use ordinary API tokens.
   - name: Stock
     description: Stock health, configuration, movements, and serialized units.
   - name: Inventory cycles
@@ -142,7 +144,7 @@ paths:
             schema: { $ref: "#/components/schemas/NotificationPreferencePatch" }
       responses:
         "200": { description: Preferences updated }
-        "422": { description: Invalid thresholds, cadence, fields, locale, or channel opt-ins }
+        "422": { description: "Invalid thresholds, cadence, fields, locale, or channel opt-ins" }
   /notifications/push-subscriptions:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -264,7 +266,7 @@ paths:
       description: Permanently removes the encrypted credentials for the selected organization. Requires `webhooks.manage`.
       security: [{ adminSession: [] }]
       responses:
-        "204": { description: Connection removed, or no connection existed }
+        "204": { description: "Connection removed, or no connection existed" }
         "401": { description: An authenticated browser session is required }
         "403": { description: Browser session lacks webhooks.manage }
   /integrations/woocommerce/test:
@@ -345,7 +347,7 @@ paths:
                 id: { type: integer, minimum: 1 }
               additionalProperties: true
       responses:
-        "200": { description: Delivery authenticated and reconciled, or safely recognized as a duplicate }
+        "200": { description: "Delivery authenticated and reconciled, or safely recognized as a duplicate" }
         "400": { description: Invalid JSON or unsupported topic }
         "401": { description: Invalid signature or unknown WooCommerce webhook ID }
         "410": { description: WooCommerce order synchronization is disabled }
@@ -387,7 +389,7 @@ paths:
         "400": { description: Request body is not valid JSON }
         "401": { description: An authenticated browser session is required }
         "403": { description: Browser session lacks webhooks.manage }
-        "422": { description: Invalid name, target URL, event subscription, or enabled state }
+        "422": { description: "Invalid name, target URL, event subscription, or enabled state" }
         "503": { description: Webhook at-rest encryption is not configured }
   /webhooks/{id}:
     parameters:
@@ -547,7 +549,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WebhookRunResponse" }
-        "401": { description: Missing, invalid, or unconfigured webhook cron secret }
+        "401": { description: "Missing, invalid, or unconfigured webhook cron secret" }
         "422": { description: Limit must be an integer between 1 and 100 }
   /spatial-structures:
     parameters:
@@ -709,7 +711,7 @@ paths:
         "411": { description: Content-Length is required before buffering the multipart upload }
         "413": { description: Combined upload exceeds the configured room-scan limit }
         "415": { description: A keyframe or photorealistic derivative has an unsafe MIME type/extension pair }
-        "422": { description: Invalid scene, identifier, date, or non-place resource }
+        "422": { description: "Invalid scene, identifier, date, or non-place resource" }
   /room-scans/{scanId}:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -973,7 +975,7 @@ paths:
                 required: [organization]
                 properties:
                   organization: { $ref: "#/components/schemas/OrganizationMembership" }
-        "403": { description: A browser session is required, and regular-user organization creation must be enabled unless the user is a superadmin }
+        "403": { description: "A browser session is required, and regular-user organization creation must be enabled unless the user is a superadmin" }
         "409": { description: Requested organization slug is already in use }
         "422": { description: Invalid organization name or slug }
   /organizations/select:
@@ -1506,7 +1508,7 @@ paths:
     get:
       tags: [Label setups]
       summary: List reusable label setups
-      description: Requires the read scope. Setups are ordered by name and contain the complete print layout.
+      description: Requires labels.read (read scope for standalone tokens). Setups are ordered by name and contain the complete print layout.
       responses:
         "200":
           description: Label setups
@@ -1524,7 +1526,7 @@ paths:
     post:
       tags: [Label setups]
       summary: Create a label setup
-      description: Requires the write scope. Setup names are unique case-insensitively.
+      description: Requires labels.manage (write scope for standalone tokens). Setup names are unique case-insensitively.
       requestBody:
         required: true
         content:
@@ -1556,7 +1558,7 @@ paths:
     get:
       tags: [Label setups]
       summary: Retrieve a label setup
-      description: Requires the read scope.
+      description: Requires labels.read (read scope for standalone tokens).
       responses:
         "200":
           description: Label setup
@@ -1574,7 +1576,7 @@ paths:
     patch:
       tags: [Label setups]
       summary: Update a label setup using its current revision
-      description: Requires the write scope. Send the last observed revision to prevent overwriting a concurrent edit; a successful update increments it.
+      description: Requires labels.manage (write scope for standalone tokens). Send the last observed revision to prevent overwriting a concurrent edit; a successful update increments it.
       requestBody:
         required: true
         content:
@@ -1599,7 +1601,7 @@ paths:
     delete:
       tags: [Label setups]
       summary: Delete a label setup
-      description: Requires the write scope and the last observed revision so a stale editor cannot delete newer work.
+      description: Requires labels.manage (write scope for standalone tokens) and the last observed revision so a stale editor cannot delete newer work.
       parameters:
         - name: revision
           in: query
@@ -1832,10 +1834,10 @@ paths:
         "409": { description: Idempotency-Key was reused for another identity or image }
         "413": { description: Image exceeds the configured upload limit }
         "415": { description: Request is not multipart or the image type is unsupported }
-        "422": { description: Missing, duplicate, empty, or unreadable image }
+        "422": { description: "Missing, duplicate, empty, or unreadable image" }
         "429": { description: AI recognition is disabled or the request limit was reached }
         "502": { description: Vision provider or structured-output error }
-        "503": { description: Inventory catalog, retry protection, or shared rate limiter unavailable }
+        "503": { description: "Inventory catalog, retry protection, or shared rate limiter unavailable" }
   /ai/count:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -1871,7 +1873,7 @@ paths:
                   enum: [grounding-dino, yolo-world, sam-2, sam-3]
                   description: Optional counting model. The server default is used when omitted.
       responses:
-        "400": { description: Missing or malformed Idempotency-Key, or malformed multipart request }
+        "400": { description: "Missing or malformed Idempotency-Key, or malformed multipart request" }
         "200":
           description: Advisory visual count
           content:
@@ -1892,14 +1894,14 @@ paths:
               schema: { type: integer, minimum: 1 }
         "413": { description: Image exceeds the configured upload limit }
         "415": { description: Request is not multipart or the image type is unsupported }
-        "422": { description: Invalid image, item hint, model, or provider detection limit }
+        "422": { description: "Invalid image, item hint, model, or provider detection limit" }
         "429":
           description: AI request limit reached
           headers:
             Retry-After:
               schema: { type: integer, minimum: 1 }
         "502": { description: Replicate prediction creation or result-validation error }
-        "503": { description: Replicate configuration, billing, authentication, capacity, or shared rate limiter unavailable }
+        "503": { description: "Replicate configuration, billing, authentication, capacity, or shared rate limiter unavailable" }
         "504": { description: Replicate prediction exceeded the configured deadline }
   /ai/count/jobs:
     parameters:
@@ -1934,7 +1936,7 @@ paths:
               schema: { $ref: "#/components/schemas/InventoryCountJob" }
         "401": { description: Missing or invalid identity }
         "403": { description: Identity is missing the ai scope }
-        "422": { description: Invalid, expired, or wrong-identity job token }
+        "422": { description: "Invalid, expired, or wrong-identity job token" }
         "502":
           description: Replicate polling or result-validation error. terminal=true means the prediction itself has finished and a new count may be started; terminal=false means the same signed job should be resumed.
           content:
@@ -1945,7 +1947,7 @@ paths:
                 properties:
                   error: { type: string }
                   terminal: { type: boolean }
-        "503": { description: Replicate authentication/configuration error, or a transient capacity/poll timeout marked with Retry-After }
+        "503": { description: "Replicate authentication/configuration error, or a transient capacity/poll timeout marked with Retry-After" }
         "504": { description: Prediction exceeded its deadline }
   /ai/count-models:
     parameters:
@@ -2469,9 +2471,9 @@ paths:
                 required: [variant]
                 properties:
                   variant: { $ref: "#/components/schemas/ResourceFamilyMember" }
-        "403": { description: Missing primary-item update access, candidate-item update access, or inventory create permission when creating }
+        "403": { description: "Missing primary-item update access, candidate-item update access, or inventory create permission when creating" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { description: Identifier conflict, archived item, option-managed family, existing membership, or nested family attempt }
+        "409": { description: "Identifier conflict, archived item, option-managed family, existing membership, or nested family attempt" }
         "422": { description: Invalid variant identity }
     delete:
       tags: [Resources]
@@ -2530,8 +2532,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ResourceOptions" }
-        "409": { description: Definitions are locked, the item is a child variant, or the family already has manual variants }
-        "422": { description: Invalid group, value, component, BOM mapping, or matrix size }
+        "409": { description: "Definitions are locked, the item is a child variant, or the family already has manual variants" }
+        "422": { description: "Invalid group, value, component, BOM mapping, or matrix size" }
     post:
       tags: [Resources, Manufacturing]
       summary: Generate every non-default option combination
@@ -2543,7 +2545,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ResourceOptionGenerationResult" }
         "403": { description: Missing inventory create or primary-item update access }
-        "409": { description: Variants already exist, generation already ran, or the primary is archived }
+        "409": { description: "Variants already exist, generation already ran, or the primary is archived" }
         "422": { description: Invalid option matrix or circular effective BOM }
 
   /resources/{id}/translations:
@@ -2554,7 +2556,7 @@ paths:
       tags: [Content translations]
       summary: Inspect field-level translation freshness
       responses:
-        "200": { description: Per-language current, stale, and missing fields }
+        "200": { description: "Per-language current, stale, and missing fields" }
         "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [Content translations, AI]
@@ -2610,7 +2612,7 @@ paths:
         "200": { description: Translation document updated }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Translation revision changed or suggestion became stale }
-        "422": { description: Invalid language, field, or operation }
+        "422": { description: "Invalid language, field, or operation" }
   /resources/{id}/relations:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -3148,7 +3150,7 @@ paths:
                 required: [action]
                 properties:
                   action: { $ref: "#/components/schemas/PublicActionFlow" }
-        "404": { description: Public action URL is disabled, revoked, or unknown }
+        "404": { description: "Public action URL is disabled, revoked, or unknown" }
   /public/action-flows/{triggerId}/execute:
     servers:
       - url: /api
@@ -3177,9 +3179,9 @@ paths:
               schema: { $ref: "#/components/schemas/StockScanExecution" }
         "400": { description: Missing or invalid Idempotency-Key }
         "403": { description: Cross-origin request rejected }
-        "404": { description: Public action URL is disabled, revoked, or unknown }
-        "409": { description: Workflow revision, stock, or idempotency conflict }
-        "422": { description: Invalid code, quantity, or form input }
+        "404": { description: "Public action URL is disabled, revoked, or unknown" }
+        "409": { description: "Workflow revision, stock, or idempotency conflict" }
+        "422": { description: "Invalid code, quantity, or form input" }
         "429": { description: Public action rate limit reached }
   /resources/{id}/stock:
     parameters:
@@ -3371,7 +3373,7 @@ paths:
         "400": { description: Missing or invalid Idempotency-Key }
         "403": { description: Request creation and inventory read access are required }
         "409": { description: Conflicting Idempotency-Key }
-        "422": { description: Invalid request window, items, quantities, or delivery resource }
+        "422": { description: "Invalid request window, items, quantities, or delivery resource" }
   /internal-requests/calendar:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -3855,7 +3857,7 @@ paths:
                   movement: { $ref: "#/components/schemas/StockMovement" }
         "403": { description: Stock management permission required }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { description: Unit is linked to another operation, tracking is not serialized, or stock would become negative }
+        "409": { description: "Unit is linked to another operation, tracking is not serialized, or stock would become negative" }
         "422": { description: Invalid resource or unit ID }
     patch:
       tags: [Stock]
@@ -4015,7 +4017,7 @@ paths:
         "200": { description: Replayed original response }
         "201": { description: Order created }
         "409": { description: Idempotency conflict }
-        "422": { description: Invalid contact, status, or order line }
+        "422": { description: "Invalid contact, status, or order line" }
   /orders/{orderId}:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -4086,8 +4088,8 @@ paths:
         "200": { description: Replayed the original shipment response }
         "201": { description: Shipment created }
         "400": { description: Missing or invalid Idempotency-Key }
-        "409": { description: Quantity, serialized-unit, tracking-number, or idempotency conflict }
-        "422": { description: Invalid shipment, line, or order type }
+        "409": { description: "Quantity, serialized-unit, tracking-number, or idempotency conflict" }
+        "422": { description: "Invalid shipment, line, or order type" }
   /orders/{orderId}/shipments/{shipmentId}:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -4146,7 +4148,7 @@ paths:
       responses:
         "200": { description: Replayed original stock movement }
         "201": { description: Movement created and order progress updated }
-        "409": { description: Insufficient stock, excessive quantity, or invalid lifecycle state }
+        "409": { description: "Insufficient stock, excessive quantity, or invalid lifecycle state" }
         "422": { description: Invalid movement for the order type }
   /orders/{orderId}/lines/{lineId}/units:
     parameters:
@@ -4194,7 +4196,7 @@ paths:
                     items: { type: string, format: uuid }
                   order: { $ref: "#/components/schemas/Order" }
                   units: { $ref: "#/components/schemas/SerializedOrderLineUnits" }
-        "409": { description: Unit state, capacity, assignment, or order lifecycle conflict }
+        "409": { description: "Unit state, capacity, assignment, or order lifecycle conflict" }
         "422": { description: Invalid action or non-serialized order line }
   /resources/{id}/media:
     parameters:
@@ -4220,8 +4222,8 @@ paths:
       responses:
         "200": { description: Replayed the existing upload batch }
         "201": { description: Uploaded }
-        "413": { description: A file exceeds MAX_UPLOAD_MB, or a USDZ model exceeds MAX_USDZ_UPLOAD_MB }
-        "415": { description: Unsupported media type, invalid USDZ filename, or structurally invalid USDZ package }
+        "413": { description: "A file exceeds MAX_UPLOAD_MB, or a USDZ model exceeds MAX_USDZ_UPLOAD_MB" }
+        "415": { description: "Unsupported media type, invalid USDZ filename, or structurally invalid USDZ package" }
         "422": { description: A USDZ Object Capture model was uploaded without an existing or accompanying item image }
         "409": { description: Idempotency key belongs to another resource }
         "503": { description: The configured storage provider cannot store the accepted media type }
@@ -4299,7 +4301,7 @@ paths:
               type: object
               additionalProperties: false
       responses:
-        "200": { description: Missing details added, no reliable additions found, or completed response replayed }
+        "200": { description: "Missing details added, no reliable additions found, or completed response replayed" }
         "202": { description: An operation with this key is still processing }
         "403": { description: Proposed changes fall outside the caller's inventory access rules }
         "409": { description: Idempotency key belongs to another resource or payload }
@@ -4408,12 +4410,12 @@ paths:
                       enum: [1024, 2048, 4096]
                       default: 1024
       responses:
-        "200": { description: Image imported or generated, appended to the item, or completed response replayed }
+        "200": { description: "Image imported or generated, appended to the item, or completed response replayed" }
         "202": { description: An operation with this key is still processing }
         "409": { description: Idempotency key belongs to another resource or payload }
         "422": { description: Invalid request or unavailable image model }
         "429": { description: AI research or image-generation limit reached }
-        "502": { description: AI provider, web-search, remote-image, or storage error }
+        "502": { description: "AI provider, web-search, remote-image, or storage error" }
         "503": { description: Shared AI rate limiter unavailable }
   /stats:
     parameters:
@@ -4446,6 +4448,739 @@ paths:
                 removeResourceId: { type: string, format: uuid }
       responses:
         "200": { description: Merged resource }
+  /label-workspace:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags:
+        - Label printing
+      summary: Read the personal saved print list
+      description: Requires a user browser session with labels.read. Data is scoped to the current user
+        and organization.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Saved queue and preferences.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelWorkspace"
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+    patch:
+      tags:
+        - Label printing
+      summary: Save print preferences or replace the prepared list
+      description: Requires a user browser session with labels.read. Queue updates require the current
+        revision; 409 prevents a stale browser from overwriting another window. At most 100 labels,
+        one tape width and a 24 MiB JSON body. Preference updates merge only supplied keys.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LabelWorkspaceMutation"
+      responses:
+        "200":
+          description: Queue updates return the workspace; preference updates return preferences only.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/LabelWorkspace"
+                  - type: object
+                    required:
+                      - preferences
+                    properties:
+                      preferences:
+                        $ref: "#/components/schemas/LabelPreferences"
+        "400":
+          description: Malformed request.
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+        "409":
+          description: Saved queue revision changed; reload before editing.
+        "413":
+          description: Request exceeds the size limit.
+        "422":
+          description: Invalid input or raster data.
+  /label-printers:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags:
+        - Label printing
+      summary: List enabled shared printers
+      description: Requires a browser session with labels.read. online means an agent poll was received
+        within 45 seconds.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Enabled printers in this organization.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - printers
+                properties:
+                  printers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SharedPrinter"
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+    post:
+      tags:
+        - Label printing
+      summary: Provision a shared Office printer
+      description: Requires a browser session with tokens.manage. Currently provisions 24 mm tape only.
+        The returned iprt_ token is shown once and is restricted to this printer; store it in the
+        agent configuration.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                tape:
+                  type: number
+                  const: 24
+                  default: 24
+              additionalProperties: false
+      responses:
+        "201":
+          description: Printer and one-time agent credential.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - printer
+                  - token
+                properties:
+                  printer:
+                    type: object
+                    required:
+                      - id
+                      - name
+                      - tape
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      tape:
+                        type: number
+                        const: 24
+                  token:
+                    type: string
+        "400":
+          description: Malformed request.
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+        "413":
+          description: Request exceeds the size limit.
+        "422":
+          description: Invalid input or raster data.
+    patch:
+      tags:
+        - Label printing
+      summary: Disable a shared printer
+      description: Requires a browser session with tokens.manage. Revokes agent access and cancels queued
+        jobs. To rotate credentials, provision a replacement printer.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - enabled
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                enabled:
+                  type: boolean
+                  const: false
+              additionalProperties: false
+      responses:
+        "200":
+          description: Printer disabled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - disabled
+                properties:
+                  disabled:
+                    type: boolean
+                    const: true
+        "400":
+          description: Malformed request.
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+        "404":
+          description: Printer not found in this organization.
+        "413":
+          description: Request exceeds the size limit.
+        "422":
+          description: Invalid input or raster data.
+  /label-print-jobs:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags:
+        - Label printing
+      summary: List your latest shared print jobs
+      description: Requires a browser session with labels.read. Returns at most 20 jobs submitted by the
+        current user in this organization.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Recent jobs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - jobs
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SharedPrintJob"
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+    post:
+      tags:
+        - Label printing
+      summary: Queue a prepared PT-P710BT print job
+      description: "Requires a browser session with labels.read. The browser renders and validates labels
+        before submission. Reuse body.id only with identical data to retrieve an existing job. Limits:
+        100 labels, 4 MB RAW data, 10 submissions/minute per user/printer and 20 pending jobs per
+        printer. Queued jobs expire after 10 minutes."
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SharedPrintInput"
+      responses:
+        "201":
+          description: Queued job or replay of the same submission.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    $ref: "#/components/schemas/SharedPrintJob"
+        "400":
+          description: Malformed request.
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+        "404":
+          description: Printer unavailable.
+        "409":
+          description: Idempotency ID reused with different data, or tape width differs from the printer.
+        "413":
+          description: Request exceeds the size limit.
+        "422":
+          description: Invalid input or raster data.
+        "429":
+          description: Submission rate or pending queue limit reached.
+    delete:
+      tags:
+        - Label printing
+      summary: Cancel one of your waiting print jobs
+      description: Requires a browser session with labels.read. Only a queued job owned by the caller can
+        be cancelled.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: string
+                  format: uuid
+              additionalProperties: false
+      responses:
+        "200":
+          description: Job cancelled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - cancelled
+                properties:
+                  cancelled:
+                    type: boolean
+                    const: true
+        "400":
+          description: Malformed request.
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+        "409":
+          description: Job already dispatched or not found.
+        "413":
+          description: Request exceeds the size limit.
+        "422":
+          description: Invalid input or raster data.
+  /label-print-agent/claim:
+    post:
+      tags:
+        - Label printing
+      summary: Claim the next job for a printer
+      description: Windows agent endpoint; use the dedicated iprt_ credential, not an inventory API token.
+        Reuse claimId to recover the same claim. Stale claims become uncertain after five minutes and
+        are never handed out again. History cleanup runs on polling after seven days.
+      security:
+        - printAgent: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claimId
+              properties:
+                claimId:
+                  type: string
+                  format: uuid
+              additionalProperties: false
+      responses:
+        "200":
+          description: Claimed RAW data or null when no job is available.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - job
+                properties:
+                  job:
+                    anyOf:
+                      - type: object
+                        required:
+                          - id
+                          - data
+                          - sha256
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          data:
+                            type: string
+                            contentEncoding: base64
+                          sha256:
+                            type: string
+                      - type: "null"
+        "400":
+          description: Malformed request.
+        "401":
+          description: Invalid, disabled or read-only printer credential.
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+        "413":
+          description: Request exceeds the size limit.
+  /label-print-agent/ack:
+    post:
+      tags:
+        - Label printing
+      summary: Acknowledge a printer claim
+      description: Agent only. Report submitted after Windows accepts the RAW job, failed after a definite
+        failure, or uncertain if acceptance is ambiguous. The receipt clears the stored payload. It
+        does not prove physical printing.
+      security:
+        - printAgent: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - claimId
+                - status
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                claimId:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                  enum:
+                    - submitted
+                    - failed
+                    - uncertain
+                spoolJobId:
+                  anyOf:
+                    - type: integer
+                      minimum: 1
+                    - type: "null"
+                  default: null
+              additionalProperties: false
+      responses:
+        "200":
+          description: Receipt recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        "400":
+          description: Malformed request.
+        "401":
+          description: Invalid printer credential.
+        "409":
+          description: Matching claim not found.
+        "413":
+          description: Request exceeds the size limit.
+  /labels/qz-certificate:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags:
+        - Label printing
+      summary: Read the optional QZ signing certificate
+      description: Requires a browser session with labels.read. Without signing configuration the
+        application uses QZ approval prompts.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: PEM signing certificate.
+          content:
+            text/plain:
+              schema:
+                type: string
+        "403":
+          description: Required permission or browser session missing; printing mutations also reject
+            read-only organizations and cross-site requests.
+        "500":
+          description: Certificate could not be read.
+        "503":
+          description: QZ signing not configured.
+  /labels/qz-sign:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    post:
+      tags:
+        - Label printing
+      summary: Sign an allowed QZ print request
+      description: Requires a browser session with labels.read. Only recent printer-discovery requests and
+        bounded, single-copy raw PT-P710BT jobs are accepted. Cross-site, file, network, serial and
+        direct USB commands are rejected. Private keys remain on the server.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - request
+              properties:
+                request:
+                  type: string
+                  description: Exact serialized QZ request string.
+      responses:
+        "200":
+          description: Base64 RSA SHA-512 signature.
+          content:
+            text/plain:
+              schema:
+                type: string
+        "400":
+          description: Malformed request.
+        "403":
+          description: Session permission missing or signing request disallowed.
+        "413":
+          description: Request exceeds the size limit.
+        "500":
+          description: Signing failed.
+        "503":
+          description: QZ signing not configured.
+  /stock/forecast:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags:
+        - Stock
+      summary: Read stock planning inputs and history
+      description: "Requires stock.read. Returns a consistent snapshot for non-archived items with stock
+        settings: up to 90 days of consumption, recent 30-day consumption, daily stock balances and
+        outstanding purchase receipts. Consumption includes issues, production consumption and waste;
+        loans, transfers and corrections are excluded. This endpoint returns inputs; the web client
+        calculates forecast curves and replenishment suggestions. It neither orders nor changes
+        stock."
+      responses:
+        "200":
+          description: Planning data.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - generatedAt
+                  - items
+                properties:
+                  generatedAt:
+                    type: string
+                    format: date-time
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StockPlanningItem"
+        "403":
+          description: stock.read required.
+        "500":
+          description: Unable to load planning data.
+  /ai/count/bulk:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+      - $ref: "#/components/parameters/RequiredIdempotencyKey"
+    post:
+      tags:
+        - AI
+      summary: Estimate bin contents from 3–5 photos (experimental)
+      description: Requires ai.count and access to input.itemId. Sends images to the configured
+        OpenAI-compatible provider in two analysis calls. Supply input as a JSON string, including
+        nullable containerDimensions and partDimensions. Reuse the Idempotency-Key only for the same
+        request. An estimate may be null; no stock is booked. Accuracy is not validated.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - input
+                - images
+              properties:
+                input:
+                  type: string
+                  description: JSON-encoded BulkCountInput; see the matching schema.
+                  contentMediaType: application/json
+                  contentSchema:
+                    $ref: "#/components/schemas/BulkCountInput"
+                images:
+                  type: array
+                  minItems: 3
+                  maxItems: 5
+                  items:
+                    type: string
+                    format: binary
+                  description: Distinct views of the same unchanged bin; at most 8 MiB per image.
+      responses:
+        "200":
+          description: Estimate with assumptions, or no usable estimate.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkCountResult"
+        "400":
+          description: Missing Idempotency-Key or malformed multipart body.
+        "402":
+          description: Monthly AI budget exceeded.
+        "403":
+          description: ai.count and access to the item are required.
+        "409":
+          description: Operation still processing or idempotency key conflicts.
+        "413":
+          description: Upload too large.
+        "422":
+          description: Invalid annotations, input or images; duplicate photos rejected.
+        "429":
+          description: Counting disabled or rate limit reached.
+        "502":
+          description: Provider returned no usable result.
+        "503":
+          description: Required runtime/provider or service unavailable.
+  /ai/count/3d:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags:
+        - AI
+      summary: Check local 3D counting availability
+      description: Requires ai.count and item access. Availability requires BULK_3D_ENABLED and a
+        separately provisioned Python/GPU runtime; the standard Docker image does not include it.
+      parameters:
+        - name: itemId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Local runtime availability.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - available
+                properties:
+                  available:
+                    type: boolean
+        "403":
+          description: ai.count and access to the item are required.
+        "422":
+          description: Invalid annotations, input or images; duplicate photos rejected.
+    post:
+      tags:
+        - AI
+      summary: Start an experimental 3D bin estimate
+      description: Requires ai.count and item access. Upload 3–4 JPEG/PNG/WebP/AVIF photos, manual marks
+        and explicit shape/packing assumptions. The first image is the top view. Runs on the
+        configured local GPU; no paid inference API is called. Poll the returned jobId. Reuse the same
+        key for identical retries. Deadline is ten minutes; results remain accessible for 24 hours. No
+        stock is booked.
+      parameters:
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - input
+                - images
+              properties:
+                input:
+                  type: string
+                  description: JSON-encoded Bulk3dInput; see the matching schema.
+                  contentMediaType: application/json
+                  contentSchema:
+                    $ref: "#/components/schemas/Bulk3dInput"
+                images:
+                  type: array
+                  minItems: 3
+                  maxItems: 4
+                  items:
+                    type: string
+                    format: binary
+                  description: Distinct views of the same unchanged bin; at most 8 MiB per image.
+      responses:
+        "202":
+          description: Durable job accepted or replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bulk3dJob"
+        "400":
+          description: Missing Idempotency-Key or malformed multipart body.
+        "403":
+          description: ai.count and access to the item are required.
+        "409":
+          description: Operation still processing or idempotency key conflicts.
+        "413":
+          description: Upload too large.
+        "422":
+          description: Invalid annotations, input or images; duplicate photos rejected.
+        "429":
+          description: Counting disabled or rate limit reached.
+        "503":
+          description: Required runtime/provider or service unavailable.
+  /ai/count/3d/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - AI
+      summary: Read a 3D estimate or download its GLB
+      description: "Only the initiating actor in the same organization with current item access may read
+        this job. A completed reconstruction can have estimate: null. Results expire after 24 hours;
+        physical cleanup occurs on a subsequent submission."
+      parameters:
+        - name: asset
+          in: query
+          schema:
+            type: string
+            enum:
+              - model
+          description: Download the reconstructed GLB instead of JSON state.
+      responses:
+        "200":
+          description: JSON job state, or GLB when asset=model.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bulk3dState"
+            model/gltf-binary:
+              schema:
+                type: string
+                format: binary
+        "403":
+          description: ai.count and access to the item are required.
+        "404":
+          description: Job not found or not owned by caller.
+        "409":
+          description: Model not ready.
+        "410":
+          description: Result expired.
+        "503":
+          description: Required runtime/provider or service unavailable.
 webhooks:
   inventoryEvent:
     post:
@@ -4501,6 +5236,11 @@ webhooks:
           description: Non-2xx response; transient statuses may be retried according to the delivery policy.
 components:
   securitySchemes:
+    printAgent:
+      type: http
+      scheme: bearer
+      bearerFormat: iprt_ token
+      description: Dedicated printer credential issued once by POST /label-printers. Only valid for agent claim and acknowledgement.
     bearerAuth:
       type: http
       scheme: bearer
@@ -4509,7 +5249,7 @@ components:
       type: apiKey
       in: cookie
       name: authjs.session-token
-      description: Auth.js browser session cookie; each operation declares its required administrative permission. HTTPS deployments use the secure-prefixed cookie variant.
+      description: Authenticated Auth.js browser session cookie; each operation declares its required permission. Not restricted to administrators. HTTPS deployments use the secure-prefixed cookie variant.
     superadminSession:
       type: apiKey
       in: cookie
@@ -4580,6 +5320,1201 @@ components:
     NotFound:
       description: Resource not found
   schemas:
+    StockPlanningItem:
+      type: object
+      required:
+        - resourceId
+        - name
+        - subtitle
+        - sku
+        - quantity
+        - unitName
+        - minimumStock
+        - reorderQuantity
+        - leadTimeDays
+        - purchaseUnitName
+        - purchaseUnitFactor
+        - observedDays
+        - consumed
+        - recentConsumed
+        - demandDays
+        - receipts
+        - history
+      properties:
+        resourceId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        subtitle:
+          type: string
+        sku:
+          anyOf:
+            - type: string
+            - type: "null"
+        quantity:
+          type: number
+        unitName:
+          type: string
+        minimumStock:
+          type: number
+        reorderQuantity:
+          type: number
+        leadTimeDays:
+          type: number
+        purchaseUnitName:
+          anyOf:
+            - type: string
+            - type: "null"
+        purchaseUnitFactor:
+          anyOf:
+            - type: number
+            - type: "null"
+        observedDays:
+          type: number
+        consumed:
+          type: number
+        recentConsumed:
+          type: number
+        demandDays:
+          type: integer
+        receipts:
+          type: array
+          items:
+            type: object
+            required:
+              - quantity
+              - expectedAt
+            properties:
+              quantity:
+                type: number
+              expectedAt:
+                anyOf:
+                  - type: string
+                    format: date-time
+                  - type: "null"
+        history:
+          type: array
+          items:
+            type: object
+            required:
+              - day
+              - quantity
+            properties:
+              day:
+                type: number
+              quantity:
+                type: number
+    SharedPrintJob:
+      type: object
+      required:
+        - id
+        - printerId
+        - count
+        - status
+        - createdAt
+        - spoolJobId
+      properties:
+        id:
+          type: string
+          format: uuid
+        printerId:
+          type: string
+          format: uuid
+        count:
+          type: integer
+          minimum: 1
+          maximum: 100
+        status:
+          type: string
+          enum:
+            - queued
+            - claimed
+            - submitted
+            - failed
+            - uncertain
+            - cancelled
+            - expired
+        createdAt:
+          type: string
+          format: date-time
+        spoolJobId:
+          anyOf:
+            - type: integer
+            - type: "null"
+      description: submitted confirms Windows spooler acceptance, not physical output. uncertain jobs are
+        never automatically reprinted.
+    SharedPrinter:
+      type: object
+      required:
+        - id
+        - name
+        - tape
+        - online
+        - enabled
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        tape:
+          type: number
+        online:
+          type: boolean
+        enabled:
+          type: boolean
+    LabelWorkspace:
+      type: object
+      required:
+        - revision
+        - labels
+        - preferences
+      properties:
+        revision:
+          type: integer
+          minimum: 0
+        labels:
+          type: array
+          items:
+            $ref: "#/components/schemas/SavedLabel"
+        preferences:
+          $ref: "#/components/schemas/LabelPreferences"
+    Bulk3dState:
+      oneOf:
+        - type: object
+          properties:
+            status:
+              type: string
+              enum:
+                - queued
+                - loading
+                - reconstructing
+                - analyzing
+          required:
+            - status
+          additionalProperties: false
+        - type: object
+          properties:
+            status:
+              type: string
+              const: completed
+            result:
+              $ref: "#/components/schemas/Bulk3dResult"
+          required:
+            - status
+            - result
+          additionalProperties: false
+        - type: object
+          properties:
+            status:
+              type: string
+              const: failed
+            code:
+              type: string
+              enum:
+                - analysisFailed
+                - timeout
+          required:
+            - status
+            - code
+          additionalProperties: false
+    Bulk3dJob:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        expiresAt:
+          type: string
+          format: date-time
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z))$
+      required:
+        - jobId
+        - expiresAt
+      additionalProperties: false
+    Bulk3dResult:
+      type: object
+      properties:
+        method:
+          type: string
+          const: bulk_3d
+        version:
+          type: string
+          const: mapanything_manual_v1
+        model:
+          type: string
+          const: facebook/map-anything
+        isExact:
+          type: boolean
+          const: false
+        accuracyValidated:
+          type: boolean
+          const: false
+        estimate:
+          anyOf:
+            - type: object
+              properties:
+                count:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000000
+                lowerBound:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+                upperBound:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000000
+              required:
+                - count
+                - lowerBound
+                - upperBound
+              additionalProperties: false
+            - type: "null"
+        warningCodes:
+          maxItems: 5
+          type: array
+          items:
+            type: string
+            enum:
+              - hiddenBottom
+              - partShape
+              - manualMarks
+              - geometry
+              - sampleSpread
+        imageCount:
+          type: integer
+          minimum: 3
+          maximum: 4
+        sampleCount:
+          type: integer
+          minimum: 3
+          maximum: 20
+        inferenceSeconds:
+          type: number
+          minimum: 0
+          maximum: 600
+      required:
+        - method
+        - version
+        - model
+        - isExact
+        - accuracyValidated
+        - estimate
+        - warningCodes
+        - imageCount
+        - sampleCount
+        - inferenceSeconds
+      additionalProperties: false
+      description: Experimental estimate from reconstructed geometry and manual assumptions. estimate can
+        be null even when a GLB is available. No validated accuracy or automatic stock booking.
+    Bulk3dInput:
+      type: object
+      properties:
+        itemId:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        language:
+          type: string
+          enum:
+            - de
+            - en
+        marks:
+          type: object
+          properties:
+            pile:
+              minItems: 4
+              maxItems: 20
+              type: array
+              items:
+                type: array
+                prefixItems:
+                  - type: number
+                    minimum: 0
+                    maximum: 1
+                  - type: number
+                    minimum: 0
+                    maximum: 1
+            table:
+              minItems: 3
+              maxItems: 3
+              type: array
+              items:
+                type: array
+                prefixItems:
+                  - type: number
+                    minimum: 0
+                    maximum: 1
+                  - type: number
+                    minimum: 0
+                    maximum: 1
+            edges:
+              minItems: 3
+              maxItems: 20
+              type: array
+              items:
+                type: array
+                prefixItems:
+                  - type: array
+                    prefixItems:
+                      - type: number
+                        minimum: 0
+                        maximum: 1
+                      - type: number
+                        minimum: 0
+                        maximum: 1
+                  - type: array
+                    prefixItems:
+                      - type: number
+                        minimum: 0
+                        maximum: 1
+                      - type: number
+                        minimum: 0
+                        maximum: 1
+          required:
+            - pile
+            - table
+            - edges
+          additionalProperties: false
+        assumptions:
+          type: object
+          properties:
+            shape:
+              type: string
+              enum:
+                - ellipsoid
+                - cuboid
+                - triangular_prism
+            widthRatio:
+              type: number
+              minimum: 0.1
+              maximum: 2
+            heightRatio:
+              type: number
+              minimum: 0.1
+              maximum: 2
+            packing:
+              type: number
+              minimum: 0.1
+              maximum: 1
+            floorOffset:
+              type: number
+              minimum: 0
+              maximum: 3
+          required:
+            - shape
+            - widthRatio
+            - heightRatio
+            - packing
+            - floorOffset
+          additionalProperties: false
+      required:
+        - itemId
+        - language
+        - marks
+        - assumptions
+      additionalProperties: false
+      description: Coordinates are normalized [0,1] in the first oriented photo. Use a simple fill
+        polygon, three non-collinear table points outside it, and at least three representative
+        part-length segments within the fill area. Other geometry checks apply.
+    BulkCountResult:
+      type: object
+      properties:
+        estimate:
+          anyOf:
+            - type: object
+              properties:
+                count:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+                lowerBound:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+                upperBound:
+                  type: integer
+                  minimum: 0
+                  maximum: 1000000
+              required:
+                - count
+                - lowerBound
+                - upperBound
+              additionalProperties: false
+            - type: "null"
+        visibility:
+          type: string
+          enum:
+            - mostly_visible
+            - partial_layers
+            - surface_only
+            - unclear
+        explanation:
+          type: string
+          minLength: 1
+          maxLength: 1500
+        assumptions:
+          maxItems: 6
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 400
+        warnings:
+          maxItems: 6
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 400
+        captureAdvice:
+          maxItems: 4
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 400
+        method:
+          type: string
+          const: bulk_visual
+        isExact:
+          type: boolean
+          const: false
+        accuracyValidated:
+          type: boolean
+          const: false
+        model:
+          type: string
+          minLength: 1
+          maxLength: 200
+        analysis:
+          type: object
+          properties:
+            version:
+              type: string
+              const: bulk_visual_v3
+            agreement:
+              type: string
+              enum:
+                - overlap
+                - divergent
+                - insufficient
+                - empty
+            methods:
+              minItems: 2
+              maxItems: 2
+              type: array
+              items:
+                type: object
+                properties:
+                  strategy:
+                    type: string
+                    enum:
+                      - layers
+                      - volume
+                  estimate:
+                    anyOf:
+                      - type: object
+                        properties:
+                          count:
+                            type: integer
+                            minimum: 0
+                            maximum: 1000000
+                          lowerBound:
+                            type: integer
+                            minimum: 0
+                            maximum: 1000000
+                          upperBound:
+                            type: integer
+                            minimum: 0
+                            maximum: 1000000
+                        required:
+                          - count
+                          - lowerBound
+                          - upperBound
+                        additionalProperties: false
+                      - type: "null"
+                  observation:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - estimated
+                          - empty
+                          - insufficient
+                      depthEvidence:
+                        type: string
+                        enum:
+                          - observed
+                          - inferred
+                          - unconstrained
+                      visibleMinimum:
+                        type: integer
+                        minimum: 0
+                        maximum: 1000000
+                      views:
+                        minItems: 3
+                        maxItems: 5
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            image:
+                              type: integer
+                              minimum: 1
+                              maximum: 5
+                            evidence:
+                              type: string
+                              minLength: 1
+                              maxLength: 400
+                          required:
+                            - image
+                            - evidence
+                          additionalProperties: false
+                      factorA:
+                        anyOf:
+                          - type: object
+                            properties:
+                              low:
+                                type: number
+                                exclusiveMinimum: 0
+                                maximum: 1000000
+                              best:
+                                type: number
+                                exclusiveMinimum: 0
+                                maximum: 1000000
+                              high:
+                                type: number
+                                exclusiveMinimum: 0
+                                maximum: 1000000
+                            required:
+                              - low
+                              - best
+                              - high
+                            additionalProperties: false
+                          - type: "null"
+                      factorB:
+                        anyOf:
+                          - type: object
+                            properties:
+                              low:
+                                type: number
+                                exclusiveMinimum: 0
+                                maximum: 1000000
+                              best:
+                                type: number
+                                exclusiveMinimum: 0
+                                maximum: 1000000
+                              high:
+                                type: number
+                                exclusiveMinimum: 0
+                                maximum: 1000000
+                            required:
+                              - low
+                              - best
+                              - high
+                            additionalProperties: false
+                          - type: "null"
+                      volumeGeometry:
+                        anyOf:
+                          - type: object
+                            properties:
+                              lengthInItemLengths:
+                                type: object
+                                properties:
+                                  low:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  best:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  high:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                required:
+                                  - low
+                                  - best
+                                  - high
+                                additionalProperties: false
+                              widthInItemWidths:
+                                type: object
+                                properties:
+                                  low:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  best:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  high:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                required:
+                                  - low
+                                  - best
+                                  - high
+                                additionalProperties: false
+                              depthInItemHeights:
+                                type: object
+                                properties:
+                                  low:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  best:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  high:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                required:
+                                  - low
+                                  - best
+                                  - high
+                                additionalProperties: false
+                              containerVolumeFraction:
+                                type: object
+                                properties:
+                                  low:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  best:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  high:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                required:
+                                  - low
+                                  - best
+                                  - high
+                                additionalProperties: false
+                              itemShapeFraction:
+                                type: object
+                                properties:
+                                  low:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  best:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  high:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                required:
+                                  - low
+                                  - best
+                                  - high
+                                additionalProperties: false
+                              outerEnvelopePacking:
+                                type: object
+                                properties:
+                                  low:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  best:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                  high:
+                                    type: number
+                                    exclusiveMinimum: 0
+                                    maximum: 1000000
+                                required:
+                                  - low
+                                  - best
+                                  - high
+                                additionalProperties: false
+                            required:
+                              - lengthInItemLengths
+                              - widthInItemWidths
+                              - depthInItemHeights
+                              - containerVolumeFraction
+                              - itemShapeFraction
+                              - outerEnvelopePacking
+                            additionalProperties: false
+                          - type: "null"
+                      explanation:
+                        type: string
+                        minLength: 1
+                        maxLength: 600
+                      assumptions:
+                        maxItems: 3
+                        type: array
+                        items:
+                          type: string
+                          minLength: 1
+                          maxLength: 400
+                      warnings:
+                        maxItems: 2
+                        type: array
+                        items:
+                          type: string
+                          minLength: 1
+                          maxLength: 400
+                      captureAdvice:
+                        maxItems: 2
+                        type: array
+                        items:
+                          type: string
+                          minLength: 1
+                          maxLength: 400
+                    required:
+                      - status
+                      - depthEvidence
+                      - visibleMinimum
+                      - views
+                      - factorA
+                      - factorB
+                      - volumeGeometry
+                      - explanation
+                      - assumptions
+                      - warnings
+                      - captureAdvice
+                    additionalProperties: false
+                required:
+                  - strategy
+                  - estimate
+                  - observation
+                additionalProperties: false
+          required:
+            - version
+            - agreement
+            - methods
+          additionalProperties: false
+      required:
+        - estimate
+        - visibility
+        - explanation
+        - assumptions
+        - warnings
+        - captureAdvice
+        - method
+        - isExact
+        - accuracyValidated
+        - model
+      additionalProperties: false
+      description: Experimental, uncalibrated estimate. estimate can be null when evidence is
+        insufficient. The range is not a confidence interval. This response never books stock.
+    BulkCountInput:
+      type: object
+      properties:
+        itemId:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        itemHint:
+          type: string
+          minLength: 1
+          maxLength: 240
+        language:
+          type: string
+          enum:
+            - de
+            - en
+        containerDimensions:
+          anyOf:
+            - type: object
+              properties:
+                lengthMm:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 10000
+                widthMm:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 10000
+                heightMm:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 10000
+              required:
+                - lengthMm
+                - widthMm
+                - heightMm
+              additionalProperties: false
+            - type: "null"
+        partDimensions:
+          anyOf:
+            - type: object
+              properties:
+                lengthMm:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 10000
+                widthMm:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 10000
+                heightMm:
+                  type: number
+                  exclusiveMinimum: 0
+                  maximum: 10000
+              required:
+                - lengthMm
+                - widthMm
+                - heightMm
+              additionalProperties: false
+            - type: "null"
+      required:
+        - itemId
+        - itemHint
+        - language
+        - containerDimensions
+        - partDimensions
+      additionalProperties: false
+    SharedPrintInput:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        printerId:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        tape:
+          type: number
+          enum:
+            - 3.5
+            - 6
+            - 9
+            - 12
+            - 18
+            - 24
+        labels:
+          minItems: 1
+          maxItems: 100
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 5333334
+            pattern: ^[A-Za-z0-9+/]+={0,2}$
+      required:
+        - id
+        - printerId
+        - tape
+        - labels
+      additionalProperties: false
+      description: id is a client-generated UUID used for idempotency. labels contains base64-encoded
+        PT-P710BT raster labels, not images or arbitrary printer commands. All labels must use the
+        printer tape width. At most 100 labels and 4,000,000 bytes in the combined RAW job.
+    LabelWorkspaceMutation:
+      oneOf:
+        - type: object
+          properties:
+            action:
+              type: string
+              const: preferences
+            preferences:
+              $ref: "#/components/schemas/LabelPreferences"
+          required:
+            - action
+            - preferences
+          additionalProperties: false
+        - type: object
+          properties:
+            action:
+              type: string
+              const: queue
+            revision:
+              type: integer
+              minimum: 0
+              maximum: 9007199254740991
+            labels:
+              maxItems: 100
+              type: array
+              items:
+                $ref: "#/components/schemas/SavedLabel"
+          required:
+            - action
+            - revision
+            - labels
+          additionalProperties: false
+    LabelPreferences:
+      type: object
+      properties:
+        setupId:
+          type: string
+          maxLength: 100
+        printTarget:
+          type: string
+          enum:
+            - browser
+            - ptouch
+            - shared
+        tape:
+          type: number
+          enum:
+            - 3.5
+            - 6
+            - 9
+            - 12
+            - 18
+            - 24
+        printer:
+          type: string
+          maxLength: 320
+        sharedPrinter:
+          anyOf:
+            - type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            - type: string
+              const: ""
+      additionalProperties: false
+    SavedLabel:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        name:
+          type: string
+          maxLength: 10000
+        template:
+          type: string
+          maxLength: 10000
+        tape:
+          type: number
+          enum: [3.5, 6, 9, 12, 18, 24]
+        widthMm:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000
+        data:
+          type: string
+          maxLength: 400000
+          pattern: ^[A-Za-z0-9+/]+={0,2}$
+        preview:
+          type: string
+          maxLength: 1500000
+          pattern: ^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$
+        resource:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            name:
+              type: string
+              maxLength: 10000
+            subtitle:
+              type: string
+              maxLength: 10000
+            sku:
+              anyOf:
+                - type: string
+                  maxLength: 10000
+                - type: "null"
+            barcode:
+              anyOf:
+                - type: string
+                  maxLength: 10000
+                - type: "null"
+            location:
+              anyOf:
+                - type: string
+                  maxLength: 10000
+                - type: "null"
+            type:
+              type: string
+              maxLength: 64
+            quantity:
+              type: number
+            cover:
+              anyOf:
+                - type: object
+                  properties:
+                    url:
+                      type: string
+                      maxLength: 8192
+                    altText:
+                      type: string
+                      maxLength: 10000
+                  required:
+                    - url
+                    - altText
+                - type: "null"
+            stockUnit:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                code:
+                  type: string
+                  maxLength: 10000
+                location:
+                  anyOf:
+                    - type: string
+                      maxLength: 10000
+                    - type: "null"
+              required:
+                - id
+                - code
+                - location
+          required:
+            - id
+            - name
+            - sku
+            - barcode
+            - location
+            - type
+            - quantity
+            - cover
+        original:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            name:
+              type: string
+              maxLength: 10000
+            subtitle:
+              type: string
+              maxLength: 10000
+            sku:
+              anyOf:
+                - type: string
+                  maxLength: 10000
+                - type: "null"
+            barcode:
+              anyOf:
+                - type: string
+                  maxLength: 10000
+                - type: "null"
+            location:
+              anyOf:
+                - type: string
+                  maxLength: 10000
+                - type: "null"
+            type:
+              type: string
+              maxLength: 64
+            quantity:
+              type: number
+            cover:
+              anyOf:
+                - type: object
+                  properties:
+                    url:
+                      type: string
+                      maxLength: 8192
+                    altText:
+                      type: string
+                      maxLength: 10000
+                  required:
+                    - url
+                    - altText
+                - type: "null"
+            stockUnit:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                code:
+                  type: string
+                  maxLength: 10000
+                location:
+                  anyOf:
+                    - type: string
+                      maxLength: 10000
+                    - type: "null"
+              required:
+                - id
+                - code
+                - location
+          required:
+            - id
+            - name
+            - sku
+            - barcode
+            - location
+            - type
+            - quantity
+            - cover
+        setup:
+          type: object
+          properties:
+            name:
+              type: string
+              minLength: 1
+              maxLength: 160
+            widthMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 1000
+            heightMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 1000
+            elements:
+              $ref: "#/components/schemas/LabelElements"
+            inverted:
+              type: boolean
+            id:
+              type: string
+              maxLength: 100
+            revision:
+              type: integer
+              exclusiveMinimum: 0
+              maximum: 9007199254740991
+            createdAt:
+              type: string
+              maxLength: 10000
+            updatedAt:
+              type: string
+              maxLength: 10000
+          required:
+            - name
+            - widthMm
+            - heightMm
+            - elements
+            - id
+            - revision
+            - createdAt
+            - updatedAt
+          additionalProperties: false
+      required:
+        - id
+        - name
+        - template
+        - tape
+        - widthMm
+        - data
+        - preview
+        - resource
+        - original
+        - setup
     OrganizationSummary:
       type: object
       additionalProperties: false
@@ -5973,112 +7908,990 @@ components:
     LabelElement:
       oneOf:
         - type: object
-          title: Custom background element
-          required: [type, x, y, width, height, visible]
-          additionalProperties: false
           properties:
-            type: { type: string, const: background }
-            x: { type: number, minimum: 0, maximum: 100 }
-            y: { type: number, minimum: 0, maximum: 100 }
-            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            visible: { type: boolean }
-            source: { type: string, maxLength: 3000000, description: Base64 data URL for a PNG, JPEG, WebP, GIF, AVIF, or SVG image. }
-            fit: { type: string, enum: [cover, contain], default: cover }
-            opacity: { type: number, minimum: 0, maximum: 1, default: 1 }
+            type:
+              type: string
+              const: text
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+            autoWidth:
+              type: boolean
+            fontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            minFontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            fontFamily:
+              type: string
+              enum:
+                - sans
+                - serif
+                - monospace
+                - rounded
+                - barlow-semi-condensed
+                - inter
+                - roboto
+                - roboto-condensed
+                - nunito-sans
+            fontWeight:
+              type: integer
+              minimum: 100
+              maximum: 900
+              multipleOf: 100
+            letterSpacingEm:
+              type: number
+              minimum: -0.1
+              maximum: 1
+            lineHeight:
+              type: number
+              minimum: 0.8
+              maximum: 3
+            align:
+              type: string
+              enum:
+                - left
+                - center
+                - right
+            verticalAlign:
+              type: string
+              enum:
+                - top
+                - middle
+                - bottom
+            textOverflow:
+              type: string
+              enum:
+                - ellipsis
+                - shrink
+            content:
+              maxItems: 500
+              type: array
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                    maxLength: 8000
+                  weight:
+                    type: integer
+                    minimum: 100
+                    maximum: 900
+                    multipleOf: 100
+                  italic:
+                    type: boolean
+                  underline:
+                    type: boolean
+                required:
+                  - text
+                additionalProperties: false
+          required:
+            - type
+            - id
+            - x
+            - y
+            - width
+            - height
+            - visible
+            - content
+          additionalProperties: false
         - type: object
-          title: QR element
-          required: [type, x, y, width, height, visible]
-          additionalProperties: false
           properties:
-            type: { type: string, const: qr }
-            x: { type: number, minimum: 0, maximum: 100 }
-            y: { type: number, minimum: 0, maximum: 100 }
-            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            visible: { type: boolean }
-            foregroundColor: { type: string, pattern: '^#[0-9a-fA-F]{6}$', default: '#000000' }
-            backgroundColor: { type: string, pattern: '^#[0-9a-fA-F]{6}$', default: '#ffffff' }
-            quietZoneModules: { type: integer, minimum: 0, maximum: 4, default: 0 }
+            type:
+              type: string
+              const: background
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+            source:
+              type: string
+              maxLength: 3000000
+              pattern: ^data:image\/(?:png|jpeg|webp|gif|avif|svg\+xml);base64,[a-z0-9+/=\s]+$
+            fit:
+              type: string
+              enum:
+                - cover
+                - contain
+            opacity:
+              type: number
+              minimum: 0
+              maximum: 1
+          required:
+            - type
+            - x
+            - y
+            - width
+            - height
+            - visible
+          additionalProperties: false
         - type: object
-          title: Barcode element
-          required: [type, x, y, width, height, visible]
-          additionalProperties: false
           properties:
-            type: { type: string, const: barcode }
-            x: { type: number, minimum: 0, maximum: 100 }
-            y: { type: number, minimum: 0, maximum: 100 }
-            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            visible: { type: boolean }
+            type:
+              type: string
+              const: qr
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+            foregroundColor:
+              type: string
+              pattern: ^#[0-9a-f]{6}$
+            backgroundColor:
+              type: string
+              pattern: ^#[0-9a-f]{6}$
+            quietZoneModules:
+              type: integer
+              minimum: 0
+              maximum: 4
+          required:
+            - type
+            - x
+            - y
+            - width
+            - height
+            - visible
+          additionalProperties: false
         - type: object
-          title: Object image element
-          required: [type, x, y, width, height, visible]
-          additionalProperties: false
           properties:
-            type: { type: string, const: image }
-            x: { type: number, minimum: 0, maximum: 100 }
-            y: { type: number, minimum: 0, maximum: 100 }
-            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            visible: { type: boolean }
-            fit: { type: string, enum: [cover, contain], default: cover }
+            type:
+              type: string
+              const: image
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+            source:
+              type: string
+              maxLength: 3000000
+              pattern: ^data:image\/(?:png|jpeg|webp|gif|avif|svg\+xml);base64,[a-z0-9+/=\s]+$
+            altText:
+              type: string
+              maxLength: 300
+            fit:
+              type: string
+              enum:
+                - cover
+                - contain
+            photoOptimization:
+              type: string
+              enum:
+                - auto
+                - standard
+            cropWhiteMargins:
+              type: boolean
+            cropTolerance:
+              type: number
+              minimum: 0
+              maximum: 80
+            cropPadding:
+              type: number
+              minimum: -10
+              maximum: 20
+          required:
+            - type
+            - x
+            - y
+            - width
+            - height
+            - visible
+          additionalProperties: false
         - type: object
-          title: Text element
-          required: [type, x, y, width, height, visible]
-          additionalProperties: false
           properties:
-            type: { type: string, enum: [name, identifier, url, location] }
-            x: { type: number, minimum: 0, maximum: 100 }
-            y: { type: number, minimum: 0, maximum: 100 }
-            width: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            height: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            visible: { type: boolean }
-            fontSizeMm: { type: number, exclusiveMinimum: 0, maximum: 100 }
-            minFontSizeMm: { type: number, exclusiveMinimum: 0, maximum: 100, description: Smallest font size used when textOverflow is shrink. }
-            fontFamily: { type: string, enum: [sans, serif, monospace, rounded], description: Defaults to sans for names and monospace for other text elements. }
-            align: { type: string, enum: [left, center, right], default: left }
-            textOverflow: { type: string, enum: [ellipsis, shrink], default: ellipsis }
-      description: A normalized percentage box. The element must fit entirely inside the label; options are restricted by element type.
+            type:
+              type: string
+              const: name
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+            autoWidth:
+              type: boolean
+            fontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            minFontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            fontFamily:
+              type: string
+              enum:
+                - sans
+                - serif
+                - monospace
+                - rounded
+                - barlow-semi-condensed
+                - inter
+                - roboto
+                - roboto-condensed
+                - nunito-sans
+            fontWeight:
+              type: integer
+              minimum: 100
+              maximum: 900
+              multipleOf: 100
+            letterSpacingEm:
+              type: number
+              minimum: -0.1
+              maximum: 1
+            lineHeight:
+              type: number
+              minimum: 0.8
+              maximum: 3
+            align:
+              type: string
+              enum:
+                - left
+                - center
+                - right
+            verticalAlign:
+              type: string
+              enum:
+                - top
+                - middle
+                - bottom
+            textOverflow:
+              type: string
+              enum:
+                - ellipsis
+                - shrink
+            content:
+              maxItems: 500
+              type: array
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                    maxLength: 8000
+                  weight:
+                    type: integer
+                    minimum: 100
+                    maximum: 900
+                    multipleOf: 100
+                  italic:
+                    type: boolean
+                  underline:
+                    type: boolean
+                required:
+                  - text
+                additionalProperties: false
+          required:
+            - type
+            - x
+            - y
+            - width
+            - height
+            - visible
+          additionalProperties: false
+        - type: object
+          properties:
+            type:
+              type: string
+              const: subtitle
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+            autoWidth:
+              type: boolean
+            fontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            minFontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            fontFamily:
+              type: string
+              enum:
+                - sans
+                - serif
+                - monospace
+                - rounded
+                - barlow-semi-condensed
+                - inter
+                - roboto
+                - roboto-condensed
+                - nunito-sans
+            fontWeight:
+              type: integer
+              minimum: 100
+              maximum: 900
+              multipleOf: 100
+            letterSpacingEm:
+              type: number
+              minimum: -0.1
+              maximum: 1
+            lineHeight:
+              type: number
+              minimum: 0.8
+              maximum: 3
+            align:
+              type: string
+              enum:
+                - left
+                - center
+                - right
+            verticalAlign:
+              type: string
+              enum:
+                - top
+                - middle
+                - bottom
+            textOverflow:
+              type: string
+              enum:
+                - ellipsis
+                - shrink
+            content:
+              maxItems: 500
+              type: array
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                    maxLength: 8000
+                  weight:
+                    type: integer
+                    minimum: 100
+                    maximum: 900
+                    multipleOf: 100
+                  italic:
+                    type: boolean
+                  underline:
+                    type: boolean
+                required:
+                  - text
+                additionalProperties: false
+          required:
+            - type
+            - x
+            - y
+            - width
+            - height
+            - visible
+          additionalProperties: false
+        - type: object
+          properties:
+            type:
+              type: string
+              const: identifier
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+            autoWidth:
+              type: boolean
+            fontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            minFontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            fontFamily:
+              type: string
+              enum:
+                - sans
+                - serif
+                - monospace
+                - rounded
+                - barlow-semi-condensed
+                - inter
+                - roboto
+                - roboto-condensed
+                - nunito-sans
+            fontWeight:
+              type: integer
+              minimum: 100
+              maximum: 900
+              multipleOf: 100
+            letterSpacingEm:
+              type: number
+              minimum: -0.1
+              maximum: 1
+            lineHeight:
+              type: number
+              minimum: 0.8
+              maximum: 3
+            align:
+              type: string
+              enum:
+                - left
+                - center
+                - right
+            verticalAlign:
+              type: string
+              enum:
+                - top
+                - middle
+                - bottom
+            textOverflow:
+              type: string
+              enum:
+                - ellipsis
+                - shrink
+            content:
+              maxItems: 500
+              type: array
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                    maxLength: 8000
+                  weight:
+                    type: integer
+                    minimum: 100
+                    maximum: 900
+                    multipleOf: 100
+                  italic:
+                    type: boolean
+                  underline:
+                    type: boolean
+                required:
+                  - text
+                additionalProperties: false
+          required:
+            - type
+            - x
+            - y
+            - width
+            - height
+            - visible
+          additionalProperties: false
+        - type: object
+          properties:
+            type:
+              type: string
+              const: barcode
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+          required:
+            - type
+            - x
+            - y
+            - width
+            - height
+            - visible
+          additionalProperties: false
+        - type: object
+          properties:
+            type:
+              type: string
+              const: url
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+            autoWidth:
+              type: boolean
+            fontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            minFontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            fontFamily:
+              type: string
+              enum:
+                - sans
+                - serif
+                - monospace
+                - rounded
+                - barlow-semi-condensed
+                - inter
+                - roboto
+                - roboto-condensed
+                - nunito-sans
+            fontWeight:
+              type: integer
+              minimum: 100
+              maximum: 900
+              multipleOf: 100
+            letterSpacingEm:
+              type: number
+              minimum: -0.1
+              maximum: 1
+            lineHeight:
+              type: number
+              minimum: 0.8
+              maximum: 3
+            align:
+              type: string
+              enum:
+                - left
+                - center
+                - right
+            verticalAlign:
+              type: string
+              enum:
+                - top
+                - middle
+                - bottom
+            textOverflow:
+              type: string
+              enum:
+                - ellipsis
+                - shrink
+            content:
+              maxItems: 500
+              type: array
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                    maxLength: 8000
+                  weight:
+                    type: integer
+                    minimum: 100
+                    maximum: 900
+                    multipleOf: 100
+                  italic:
+                    type: boolean
+                  underline:
+                    type: boolean
+                required:
+                  - text
+                additionalProperties: false
+          required:
+            - type
+            - x
+            - y
+            - width
+            - height
+            - visible
+          additionalProperties: false
+        - type: object
+          properties:
+            type:
+              type: string
+              const: location
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            x:
+              type: number
+              minimum: 0
+              maximum: 100
+            y:
+              type: number
+              minimum: 0
+              maximum: 100
+            width:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            height:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            visible:
+              type: boolean
+            layer:
+              type: integer
+              minimum: 0
+              maximum: 31
+            autoWidth:
+              type: boolean
+            fontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            minFontSizeMm:
+              type: number
+              exclusiveMinimum: 0
+              maximum: 100
+            fontFamily:
+              type: string
+              enum:
+                - sans
+                - serif
+                - monospace
+                - rounded
+                - barlow-semi-condensed
+                - inter
+                - roboto
+                - roboto-condensed
+                - nunito-sans
+            fontWeight:
+              type: integer
+              minimum: 100
+              maximum: 900
+              multipleOf: 100
+            letterSpacingEm:
+              type: number
+              minimum: -0.1
+              maximum: 1
+            lineHeight:
+              type: number
+              minimum: 0.8
+              maximum: 3
+            align:
+              type: string
+              enum:
+                - left
+                - center
+                - right
+            verticalAlign:
+              type: string
+              enum:
+                - top
+                - middle
+                - bottom
+            textOverflow:
+              type: string
+              enum:
+                - ellipsis
+                - shrink
+            content:
+              maxItems: 500
+              type: array
+              items:
+                type: object
+                properties:
+                  text:
+                    type: string
+                    maxLength: 8000
+                  weight:
+                    type: integer
+                    minimum: 100
+                    maximum: 900
+                    multipleOf: 100
+                  italic:
+                    type: boolean
+                  underline:
+                    type: boolean
+                required:
+                  - text
+                additionalProperties: false
+          required:
+            - type
+            - x
+            - y
+            - width
+            - height
+            - visible
+          additionalProperties: false
+      description: Normalized percentage box; x + width and y + height must not exceed 100. Text content
+        totals at most 8000 characters. Optional IDs distinguish multiple elements of the same type.
     LabelElements:
+      maxItems: 32
       type: array
-      maxItems: 8
-      description: At most one element of each type. A visible object image may not overlap a visible QR code. The custom background is stored as a data URL; the object image prints the resource cover image; QR and URL elements use the compact resource link.
-      items: { $ref: "#/components/schemas/LabelElement" }
+      items:
+        $ref: "#/components/schemas/LabelElement"
+      description: Up to 32 elements with unique identities (id, or type for legacy elements). Visible
+        images must not overlap visible QR codes. At most one text element may use autoWidth to control
+        the physical label length.
     LabelSetupInput:
       type: object
-      required: [name, widthMm, heightMm, elements]
-      additionalProperties: false
       properties:
-        name: { type: string, minLength: 1, maxLength: 160 }
-        widthMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
-        heightMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
-        elements: { $ref: "#/components/schemas/LabelElements" }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        widthMm:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000
+        heightMm:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000
+        elements:
+          $ref: "#/components/schemas/LabelElements"
+        inverted:
+          type: boolean
+      required:
+        - name
+        - widthMm
+        - heightMm
+        - elements
+      additionalProperties: false
     LabelSetupPatch:
       type: object
-      required: [revision]
-      minProperties: 2
-      additionalProperties: false
-      description: The last observed revision plus at least one changed setup property.
       properties:
-        revision: { type: integer, minimum: 1 }
-        name: { type: string, minLength: 1, maxLength: 160 }
-        widthMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
-        heightMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
-        elements: { $ref: "#/components/schemas/LabelElements" }
+        revision:
+          type: integer
+          exclusiveMinimum: 0
+          maximum: 9007199254740991
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        widthMm:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000
+        heightMm:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000
+        elements:
+          $ref: "#/components/schemas/LabelElements"
+        inverted:
+          type: boolean
+      required:
+        - revision
+      additionalProperties: false
+      description: Supply the last observed revision and at least one changed property. A stale revision
+        returns 409.
     LabelSetup:
       type: object
-      required: [id, name, widthMm, heightMm, elements, revision, createdAt, updatedAt]
+      required:
+        - id
+        - name
+        - widthMm
+        - heightMm
+        - elements
+        - revision
+        - createdAt
+        - updatedAt
       additionalProperties: false
       properties:
-        id: { type: string, format: uuid }
-        name: { type: string, minLength: 1, maxLength: 160 }
-        widthMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
-        heightMm: { type: number, exclusiveMinimum: 0, maximum: 1000 }
-        elements: { $ref: "#/components/schemas/LabelElements" }
-        revision: { type: integer, minimum: 1, description: Incremented by every successful update. }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        widthMm:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000
+        heightMm:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000
+        elements:
+          $ref: "#/components/schemas/LabelElements"
+        revision:
+          type: integer
+          minimum: 1
+          description: Incremented by every successful update.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        inverted:
+          type: boolean
     InventoryCount:
       type: object
       required: [count, confidence, detectedItem, isExact, explanation, warnings, markers, model]
@@ -8683,9 +11496,13 @@ components:
         units: { type: array, items: { $ref: "#/components/schemas/StockUnit" } }
     ResourceInput:
       type: object
-      required: [name]
+      required:
+        - name
       properties:
-        name: { type: string, minLength: 1, maxLength: 240 }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 240
         slugs:
           type: array
           maxItems: 20
@@ -8694,47 +11511,116 @@ components:
             type: string
             minLength: 1
             maxLength: 80
-            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
-          description: Ordered organization-scoped URL slugs. The first value is the standard slug; remaining values are aliases. Values are normalized to lowercase; `new` and UUID-shaped values are reserved.
-        description: { type: string, maxLength: 20000 }
-        type: { $ref: "#/components/schemas/InventoryTypeKey" }
-        status: { type: string, enum: [available, in-use, maintenance, archived] }
-        sku: { type: [string, "null"], maxLength: 80 }
-        barcode: { type: [string, "null"], maxLength: 180 }
-        quantity: { type: integer, minimum: 0, description: Opening quantity; later changes use stock movements. }
-        location: { type: [string, "null"] }
-        serialNumber: { type: [string, "null"] }
-        valueCents: { type: [integer, "null"], minimum: 0 }
-        currency: { type: string, minLength: 3, maxLength: 3 }
-        priority: { type: integer, minimum: 1, maximum: 5 }
-        tags: { type: array, items: { type: string } }
+            pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+          description: Ordered organization-scoped URL slugs. The first value is the standard slug; remaining
+            values are aliases. Values are normalized to lowercase; `new` and UUID-shaped values are
+            reserved.
+        description:
+          type: string
+          maxLength: 20000
+        type:
+          $ref: "#/components/schemas/InventoryTypeKey"
+        status:
+          type: string
+          enum:
+            - available
+            - in-use
+            - maintenance
+            - archived
+        sku:
+          type:
+            - string
+            - "null"
+          maxLength: 80
+        barcode:
+          type:
+            - string
+            - "null"
+          maxLength: 180
+        quantity:
+          type: integer
+          minimum: 0
+          description: Opening quantity; later changes use stock movements.
+        location:
+          type:
+            - string
+            - "null"
+        serialNumber:
+          type:
+            - string
+            - "null"
+        valueCents:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+        tags:
+          type: array
+          items:
+            type: string
         categories:
           type: array
           items:
             type: object
-            required: [name]
+            required:
+              - name
             properties:
-              name: { type: string }
-              color: { type: string }
+              name:
+                type: string
+              color:
+                type: string
         relatedResourceIds:
           type: array
           maxItems: 100
-          items: { type: string, format: uuid }
+          items:
+            type: string
+            format: uuid
           description: Legacy undirected related-item ids. Prefer typed resource relationships for new integrations.
-        gpsLatitude: { type: [number, "null"], minimum: -90, maximum: 90 }
-        gpsLongitude: { type: [number, "null"], minimum: -180, maximum: 180 }
-        gpsAltitude: { type: [number, "null"] }
+        gpsLatitude:
+          type:
+            - number
+            - "null"
+          minimum: -90
+          maximum: 90
+        gpsLongitude:
+          type:
+            - number
+            - "null"
+          minimum: -180
+          maximum: 180
+        gpsAltitude:
+          type:
+            - number
+            - "null"
         mapFeatures:
           type: array
           maxItems: 100
-          items: { $ref: "#/components/schemas/ResourceMapFeature" }
-        notes: { type: string }
-        customFields: { $ref: "#/components/schemas/CustomFieldValues" }
+          items:
+            $ref: "#/components/schemas/ResourceMapFeature"
+        notes:
+          type: string
+        customFields:
+          $ref: "#/components/schemas/CustomFieldValues"
+        subtitle:
+          type: string
+          maxLength: 240
+          description: Optional subtitle used by label templates. Empty string clears it.
     ResourcePatch:
       type: object
       description: Any subset of the writable resource fields.
       properties:
-        name: { type: string, minLength: 1, maxLength: 240 }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 240
         slugs:
           type: array
           maxItems: 20
@@ -8743,41 +11629,103 @@ components:
             type: string
             minLength: 1
             maxLength: 80
-            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
-          description: Replaces the ordered URL slugs for this resource. The first value becomes the standard slug; remaining values are aliases.
-        description: { type: string, maxLength: 20000 }
-        type: { $ref: "#/components/schemas/InventoryTypeKey" }
-        status: { type: string, enum: [available, in-use, maintenance, archived] }
-        sku: { type: [string, "null"], maxLength: 80 }
-        barcode: { type: [string, "null"], maxLength: 180 }
-        location: { type: [string, "null"] }
-        serialNumber: { type: [string, "null"] }
-        valueCents: { type: [integer, "null"], minimum: 0 }
-        currency: { type: string, minLength: 3, maxLength: 3 }
-        priority: { type: integer, minimum: 1, maximum: 5 }
-        tags: { type: array, items: { type: string } }
+            pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+          description: Replaces the ordered URL slugs for this resource. The first value becomes the standard
+            slug; remaining values are aliases.
+        description:
+          type: string
+          maxLength: 20000
+        type:
+          $ref: "#/components/schemas/InventoryTypeKey"
+        status:
+          type: string
+          enum:
+            - available
+            - in-use
+            - maintenance
+            - archived
+        sku:
+          type:
+            - string
+            - "null"
+          maxLength: 80
+        barcode:
+          type:
+            - string
+            - "null"
+          maxLength: 180
+        location:
+          type:
+            - string
+            - "null"
+        serialNumber:
+          type:
+            - string
+            - "null"
+        valueCents:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 5
+        tags:
+          type: array
+          items:
+            type: string
         categories:
           type: array
           items:
             type: object
-            required: [name]
+            required:
+              - name
             properties:
-              name: { type: string }
-              color: { type: string }
+              name:
+                type: string
+              color:
+                type: string
         relatedResourceIds:
           type: array
           maxItems: 100
-          items: { type: string, format: uuid }
+          items:
+            type: string
+            format: uuid
           description: Legacy undirected related-item ids. Prefer typed resource relationships for new integrations.
-        gpsLatitude: { type: [number, "null"], minimum: -90, maximum: 90 }
-        gpsLongitude: { type: [number, "null"], minimum: -180, maximum: 180 }
-        gpsAltitude: { type: [number, "null"] }
+        gpsLatitude:
+          type:
+            - number
+            - "null"
+          minimum: -90
+          maximum: 90
+        gpsLongitude:
+          type:
+            - number
+            - "null"
+          minimum: -180
+          maximum: 180
+        gpsAltitude:
+          type:
+            - number
+            - "null"
         mapFeatures:
           type: array
           maxItems: 100
-          items: { $ref: "#/components/schemas/ResourceMapFeature" }
-        notes: { type: string }
-        customFields: { $ref: "#/components/schemas/CustomFieldValues" }
+          items:
+            $ref: "#/components/schemas/ResourceMapFeature"
+        notes:
+          type: string
+        customFields:
+          $ref: "#/components/schemas/CustomFieldValues"
+        subtitle:
+          type: string
+          maxLength: 240
+          description: Optional subtitle used by label templates. Empty string clears it.
     ResourceFamilyVariantInput:
       type: object
       additionalProperties: false

@@ -1,6 +1,6 @@
 # Shared Office label printing
 
-Users select **Shared Office printer** on `/inventory/labels`. Their browser renders
+Users select **Shared Office printer** in the Labels view. Their browser renders
 labels and submits a bounded job over HTTPS. A Windows agent pulls that printer's
 jobs and writes RAW data to the locally installed PT-P710BT queue. Users need
 neither a local printer driver nor QZ Tray, including when outside the office.
@@ -38,6 +38,18 @@ The Windows PC must remain awake, online and connected to the powered-on printer
    service, SYSTEM and administrators. No inbound firewall rule is needed.
 4. Verify **Online** in Inventory and send one test label. Remove the temporary
    copy of `config.json` and any temporary transfer share after installation.
+
+## Saved lists and API authentication
+
+Prepared label lists and destination preferences are saved per user and
+organization. Reloading the page restores them. Each prepared label retains its
+layout, text, preview and raster snapshot; later template edits do not alter it.
+
+`/api/v1/label-workspace`, `/api/v1/label-printers`, and
+`/api/v1/label-print-jobs` require a browser session. The `iprt_` credential from
+`config.json` only authenticates `/api/v1/label-print-agent/claim` and
+`/api/v1/label-print-agent/ack`; it is not an inventory API token. The OpenAPI
+specification documents these separate authentication methods and job statuses.
 
 ## Access and job behavior
 

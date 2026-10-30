@@ -97,10 +97,19 @@ choose **Print as a series**. The list clears only after QZ accepts the single
 job; on failure it stays available for inspection. Do not retry before checking
 the physical output, because acceptance is not a device completion signal.
 
-The list is held in memory in the current Labels view, not saved to the server
-or browser storage. Navigating away or reloading discards it; this is stated in
-the interface. Direct printing of multiple selected labels uses the same series
-encoding. Browser-dialog printing is unchanged.
+Prepared labels and destination preferences are saved on the server for the
+current user and organization through `/api/v1/label-workspace`. Reloading or
+returning to Labels restores the list. Wait for a successful save; a failed
+preference save is shown in the interface. Queue edits include a revision so a
+stale browser cannot overwrite a newer list (HTTP 409). The list supports up to
+100 prepared labels and a 24 MiB workspace request, in addition to the 4 MB RAW
+print-job limit. Direct printing of multiple selected labels uses the same
+series encoding. Browser-dialog printing remains available.
+
+The shared Office destination uses the same prepared labels. See
+[Windows print-agent setup](../scripts/print-agent/README.md). The browser submits
+a job over HTTPS; the printer PC pulls it without an inbound firewall rule.
+Printer and job administration requires a browser session, not a normal API token.
 
 ## QZ approval prompts and optional signing
 
@@ -147,4 +156,23 @@ The label designer exposes Subtitle as an independent text element with position
 
 In the label selection, Title and Subtitle can be overridden for each resource or stock-unit target. These overrides affect preview, browser printing and prepared P-touch jobs only; they never update the resource. “Use item text” restores the selected article's text. Copies share the selection's overrides.
 
-Prepared labels retain their resource and template snapshot. “Edit label text” opens a preview and regenerates the stored raster when applied, including the QR validation; cancelling or a rendering error preserves the prior label. The queue still exists only for the lifetime of the open label page.
+Prepared labels retain their resource and template snapshot. “Edit label text” opens a preview and regenerates the stored raster when applied, including the QR validation; cancelling or a rendering error preserves the prior label. The updated label is saved back to the personal print list.
+
+
+## Individual units and current layout controls
+
+Select a resource or one of its serialized units. A unit label uses the unit code
+and a short resource URL with a `unit` query parameter derived from its UUID.
+Editing the human-readable code does not change that URL. Title and subtitle
+overrides still affect only the printed label.
+
+Templates support up to 32 uniquely identified elements, including repeated text
+or image elements, rich text, subtitle, custom images, fonts, alignment, tracking,
+line height, image cropping and an inverted output option. A visible image must
+not overlap a visible QR code. A single text element can use `autoWidth` to adjust
+the physical label length to its rendered content; check the preview and media fit
+before printing. The same computed dimensions are used for preview, browser and
+P-touch output. Drafts can be test-printed before saving or saved as a new template.
+
+Each selected target has an explicit copy count. Copies count toward the 100-label
+series limit. Keep one tape width per series; lengths and layouts may differ.
