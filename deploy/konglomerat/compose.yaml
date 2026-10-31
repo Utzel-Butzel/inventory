@@ -1,6 +1,6 @@
 services:
   inventory:
-    image: konglo-openinventory:video-preview-20261031
+    image: konglo-openinventory:supabase-sso-20261031
     pull_policy: never
     restart: unless-stopped
     init: true
@@ -29,6 +29,11 @@ services:
       AUTH_OIDC_CLIENT_ID: ${AUTH_OIDC_CLIENT_ID:-}
       AUTH_OIDC_CLIENT_SECRET: ${AUTH_OIDC_CLIENT_SECRET:-}
       AUTH_OIDC_SCOPES: ${AUTH_OIDC_SCOPES:-openid email profile}
+      AUTH_SUPABASE_URL: ${AUTH_SUPABASE_URL:-}
+      AUTH_SUPABASE_ANON_KEY: ${AUTH_SUPABASE_ANON_KEY:-}
+      AUTH_SUPABASE_CLIENT_ID: ${AUTH_SUPABASE_CLIENT_ID:-}
+      AUTH_SUPABASE_CLIENT_SECRET: ${AUTH_SUPABASE_CLIENT_SECRET:-}
+      AUTH_SUPABASE_PROVIDER_NAME: ${AUTH_SUPABASE_PROVIDER_NAME:-Supabase}
       MCP_ENABLED: ${MCP_ENABLED:-false}
       MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-}
       MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}

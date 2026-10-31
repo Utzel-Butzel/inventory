@@ -85,7 +85,8 @@
     "test:printing": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/label-document.test.mjs && python3 tests/print-agent-test.py",
     "test:shared-printing": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/shared-label-printing*.test.mjs",
     "qa:bulk-count": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs scripts/benchmark-bulk-count.mjs",
-    "test:bulk-3d": "node --experimental-test-module-mocks --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/inventory-bulk-3d.test.mjs tests/inventory-bulk-3d-route.test.mjs tests/inventory-bulk-3d-jobs.test.mjs"
+    "test:bulk-3d": "node --experimental-test-module-mocks --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/inventory-bulk-3d.test.mjs tests/inventory-bulk-3d-route.test.mjs tests/inventory-bulk-3d-jobs.test.mjs",
+    "test:sso": "node --experimental-strip-types --experimental-loader ./tests/support/auth-loader.mjs --test tests/auth-provider-config.test.mjs tests/supabase-auth.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.42.0",

@@ -15,6 +15,7 @@ export function LoginForm({
   demoHighlighted = false,
   callbackUrl = "/inventory",
   demoCallbackUrl = "/demo/inventory",
+  initialError = null,
 }: {
   passwordEnabled?: boolean;
   externalProviders?: ExternalAuthProviderOption[];
@@ -22,12 +23,13 @@ export function LoginForm({
   demoHighlighted?: boolean;
   callbackUrl?: string;
   demoCallbackUrl?: string;
+  initialError?: string | null;
 }) {
   const { t } = useT("auth");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [pendingSignIn, setPendingSignIn] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const isSubmitting = pendingSignIn !== null;
   const hasAccountProviders = passwordEnabled || externalProviders.length > 0;
   const rememberMeField = (

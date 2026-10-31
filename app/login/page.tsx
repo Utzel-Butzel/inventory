@@ -58,6 +58,7 @@ export default async function LoginPage({
   searchParams: Promise<{
     callbackUrl?: string | string[];
     demo?: string | string[];
+    error?: string | string[];
   }>;
 }) {
   const [identity, translation, resolvedSearchParams] = await Promise.all([
@@ -110,6 +111,11 @@ export default async function LoginPage({
 
               <div className="mt-8 animate-fade-up animation-delay-1">
                 <LoginForm
+                  initialError={resolvedSearchParams.error
+                    ? resolvedSearchParams.error === "AccessDenied"
+                      ? "form.errors.accessDenied"
+                      : "form.errors.externalCallback"
+                    : null}
                   passwordEnabled={passwordAuthEnabled}
                   externalProviders={externalAuthProviders}
                   demoEnabled={demoAccessEnabled}

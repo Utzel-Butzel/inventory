@@ -139,11 +139,34 @@ if (oidcIssuer) {
     errors.push("AUTH_OIDC_ISSUER must be a valid absolute URL.");
   }
 }
+const supabaseValues = ["AUTH_SUPABASE_URL", "AUTH_SUPABASE_ANON_KEY", "AUTH_SUPABASE_CLIENT_ID", "AUTH_SUPABASE_CLIENT_SECRET"].map(value);
+const supabaseConfigured = supabaseValues.every(Boolean);
+if (supabaseValues.some(Boolean) && !supabaseConfigured) {
+  errors.push("Supabase configuration is incomplete; set AUTH_SUPABASE_URL, AUTH_SUPABASE_ANON_KEY, AUTH_SUPABASE_CLIENT_ID, and AUTH_SUPABASE_CLIENT_SECRET.");
+}
+if (supabaseValues[0]) {
+  try {
+    const url = new URL(supabaseValues[0]);
+    const localHost = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+    if ((url.protocol !== "https:" && !(url.protocol === "http:" && localHost)) || url.pathname !== "/" || url.search || url.hash || url.username || url.password) {
+      errors.push("AUTH_SUPABASE_URL must be an HTTPS origin without a path, query, fragment, or credentials (HTTP is allowed on localhost).");
+    }
+  } catch {
+    errors.push("AUTH_SUPABASE_URL must be a valid absolute URL.");
+  }
+}
+if (value("AUTH_SUPABASE_PROVIDER_NAME").length > 64) {
+  errors.push("AUTH_SUPABASE_PROVIDER_NAME must contain at most 64 characters.");
+}
+if (supabaseConfigured && oidcConfigured && oidcProviderId === "supabase") {
+  errors.push("The generic OIDC provider cannot use the ID supabase while Supabase OAuth is configured.");
+}
 if (
   passwordAuthEnabled === "false" &&
   demoAccessEnabled !== "true" &&
   !hasAnyAuth0Setting &&
-  !oidcConfigured
+  !oidcConfigured &&
+  !supabaseConfigured
 ) {
   errors.push(
     "At least one authentication provider must be enabled. Enable password login, Auth0, OIDC, or demo access.",

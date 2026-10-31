@@ -14,12 +14,14 @@ Dedicated production instance on the existing Konglomerat Dokploy server.
 
 `compose.yaml` is the raw Compose definition stored in Dokploy. Secrets are
 stored in Dokploy's Environment settings; they are not part of this repository.
-The app runs the tested local image `konglo-openinventory:video-preview-20261031`,
-image ID `sha256:95044c1bf6b2e7f2589573b859c854f28faaece73f79124f7c1fa375487e612b`.
-It is built from commit `60dadb70c1e3acde4e83fdae478d1a926554793a` plus the
-video-preview changes, excluding unrelated local changes. `pull_policy: never`
-keeps Dokploy from replacing this local release. The image archive and a
-reproducible source-change bundle are kept with the migration backups below.
+The app runs `konglo-openinventory:supabase-sso-20261031`, image ID
+`sha256:f1116ba4b868606c2ff137c0a669d9184934f95d2b0ffc5c47e5e71fef099c2f`.
+The release adds the scoped Supabase SSO changes to the previously tested
+`video-preview-20261031` source (base commit
+`60dadb70c1e3acde4e83fdae478d1a926554793a` plus the video-preview overlay).
+It excludes unrelated local development changes. `pull_policy: never` keeps
+Dokploy from replacing the local release. Both images and reproducible source
+overlays are retained for rollback.
 
 ## Access and bootstrap
 
@@ -67,8 +69,8 @@ service in Dokploy.
 
 The app has a 768 MiB memory limit and PostgreSQL 384 MiB. Docker logs rotate at
 10 MiB with three files. Password login is enabled; demo access and general
-organization creation are disabled. No external AI credentials or SSO providers
-have been configured.
+organization creation are disabled. No external AI credentials are configured.
+Supabase SSO is enabled alongside password login, as described below.
 
 ## Verification
 
@@ -149,3 +151,48 @@ self-referencing previews, exercised public delivery and revocation, and checked
 transaction refusal on a repeated import. Production checks confirmed all records,
 file hashes, health, admin login, anonymous media denial, preview byte ranges,
 and the visible inventory. Video playback was also verified in the browser.
+
+## Supabase SSO, 2026-10-31
+
+The login page offers **Mit Konglomerat fortfahren**. It uses the existing
+Supabase identity and Digital consent page, with a separate confidential client:
+
+- Client name: `Konglomerat Inventar`.
+- Client ID: `bb8462ea-45fb-47ff-8beb-383691006428`.
+- Exact callback: `https://inventar.konglomerat.org/api/auth/callback/supabase`.
+- Authorization code with S256 PKCE and state; `client_secret_basic`.
+- Scopes: `email profile`; the provider checks UserInfo and verified email.
+- No shared JWT signing secret, ID-token dependency, or discovery rewrite.
+- Credentials live in Dokploy's `AUTH_SUPABASE_*` environment variables.
+
+Only existing active Inventory users with an active organization membership can
+sign in. Supabase does not create memberships or import CMS roles. The confirmed
+personal account has an Inventory administrator membership (identity recorded
+in the private operator artifacts); the technical admin and existing API
+integration token remain available.
+Inventory sign-out affects only its own session.
+
+Digital recognizes this exact client via `OPENINVENTORY_OAUTH_CLIENT_ID`; its
+consent UI delegates Inventory permissions to Inventory. New CMS consent still
+requires `backend.login`, and Payload continues checking its own roles on every
+request. The Digital release branch remains `codex/openinventory-display`.
+
+Private operator artifacts live in
+`~/.config/openinventory/sso-konglomerat-20261031/`: the before/after deployment
+configuration, OAuth registration response, pre-change database dump, release
+image and source overlay. The server image is retained under
+`/root/openinventory-sso-20261031/`. These files contain credentials and must not
+be committed. To reproduce, apply `source-changes.tar.gz` over the previous
+video-preview release source and build the normal Dockerfile for `linux/amd64`.
+
+For a code rollback, restore the prior Compose definition and environment from
+`inventory-before.json` and deploy the retained video-preview image. This does
+not require rolling back the database or removing the new user. Only restore a
+database backup after separately preserving subsequent edits.
+
+Verification of this release: both production builds, TypeScript, focused lint,
+and automated auth/access/consent tests passed. The live browser reused the
+existing Digital session, displayed the consent screen and returned to Inventory
+with the intended personal administrator and all 596 items. The technical password
+login, database/storage health, anonymous API/media denial and video byte-range
+responses passed after deployment. The temporary build swap was removed.
