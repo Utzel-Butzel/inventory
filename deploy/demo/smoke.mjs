@@ -45,6 +45,9 @@ async function checkDenied(label) {
   console.log(`${label}: 11 write/upload/AI/worker requests blocked`);
 }
 
+const landing = await request('/');
+assert.equal(landing.status, 302);
+assert.equal(new URL(landing.headers.get('location'), base).href, `${base.origin}/login?demo=1`);
 await checkDenied('Unauthenticated');
 const csrf = await request('/api/auth/csrf');
 assert.equal(csrf.status, 200);
