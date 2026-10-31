@@ -1,5 +1,7 @@
 "use client";
 
+import { VideoMedia } from "@/components/video-media";
+import { videoGalleryMedia } from "@/lib/video-preview";
 import { ResourceTitle } from "@/components/resource-title";
 import { ResourceItemNavigation } from "@/components/resource-item-navigation";
 
@@ -266,15 +268,19 @@ function RoomScanSummary({
 
 function MediaCard({
   item,
+  media,
   kindLabel,
   onOpenImage,
 }: {
   item: ClientMedia;
+  media: ClientMedia[];
   kindLabel: string;
   onOpenImage: (imageId: string) => void;
 }) {
   const { t } = useT("inventory");
   const Icon = item.kind === "document" ? FileText : Paperclip;
+
+  if (item.kind === "video") return <VideoMedia item={item} media={media} />;
 
   if (isUsdzMedia(item)) {
     return (
@@ -704,7 +710,7 @@ export function ResourceDetails({
   const mediaKindLabel = (value: string) =>
     t(`mediaKinds.${value}`, { defaultValue: humanize(value) });
   const { model: objectModel, gallery: galleryMedia } =
-    getObjectCapturePresentation(resource.media, resource.cover?.id ?? null);
+    getObjectCapturePresentation(videoGalleryMedia(resource.media), resource.cover?.id ?? null);
   const galleryImages = galleryMedia.filter((item) => item.kind === "image");
   const roomGuideImage = roomScan?.assets.find(
     (asset) => asset.kind === "guide_image",
@@ -997,6 +1003,7 @@ export function ResourceDetails({
                   <MediaCard
                     key={item.id}
                     item={item}
+                    media={resource.media}
                     kindLabel={mediaKindLabel(item.kind)}
                     onOpenImage={setLightboxImageId}
                   />

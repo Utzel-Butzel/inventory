@@ -1,3 +1,5 @@
+import { VideoMedia } from "@/components/video-media";
+import { videoGalleryMedia } from "@/lib/video-preview";
 import { ResourceTitle } from "@/components/resource-title";
 import Link from "next/link";
 import {
@@ -337,8 +339,10 @@ export async function PublicResourceView({
               <section className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
                 <h2 className="text-sm font-semibold text-foreground">{t("resource.media")}</h2>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {resource.media.map((item) =>
-                    isUsdzMedia(item) ? (
+                  {videoGalleryMedia(resource.media).map((item) =>
+                    item.kind === "video" ? (
+                      <VideoMedia key={item.id} item={item} media={resource.media} />
+                    ) : isUsdzMedia(item) ? (
                       <UsdzModelViewer
                         key={item.id}
                         src={item.url}

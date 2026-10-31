@@ -32,7 +32,11 @@ import { repeatLabelCopies } from "@/lib/label-print-copies";
 import { LabelTextFields } from "@/components/label-text-fields";
 import { LabelRenderer } from "@/components/label-renderer";
 import { automaticLabelText } from "@/lib/label-dynamic-layout";
-import { readyLabelDimensions } from "@/lib/label-print-dimensions";
+import { DEFAULT_PRINT_MEDIA, printMediaSchema, layoutLabelPages, type PrintMedia, type LabelSnapshot } from "@/lib/label-document";
+import { captureLabel, preparedSnapshot, ptouchSnapshot, printLabelDocument } from "@/lib/label-document-client";
+import { LabelPrintMedia } from "@/components/label-print-media";
+import { LabelDocumentPreview } from "@/components/label-document-preview";
+import type { SharedPrinter } from "@/lib/shared-label-print-contract";
 import { Button, Card, Skeleton } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 import {
@@ -43,10 +47,10 @@ import {
 } from "@/lib/label-setup-contract";
 import { applyLabelTextOverride, type LabelTextOverride, labelTargetKey, labelTargetName, labelTargetUrl, type LabelResource, type LabelStockUnit } from "@/lib/label-target";
 import { LabelStockUnitPicker } from "@/components/label-stock-unit-picker";
-import { combinePtouchLabels, PTOUCH_TAPES, PTOUCH_PIXELS_PER_MM, ptouchPrintableDots, type PtouchTape } from "@/lib/ptouch-raster";
+import { PTOUCH_TAPES, PTOUCH_PIXELS_PER_MM, ptouchPrintableDots, type PtouchTape } from "@/lib/ptouch-raster";
 
 import { SharedLabelPrinter } from "@/components/shared-label-printer";
-import { sendSharedLabels } from "@/lib/shared-label-print-client";
+import { sendSharedLabels, sendSharedDocument } from "@/lib/shared-label-print-client";
 import { mediaImageVariantUrl } from "@/lib/media-image";
 import { serializePreparedLabel, deserializePreparedLabel, type PreparedLabel } from "@/lib/label-workspace-client";
 import type { LabelWorkspace } from "@/lib/label-workspace-contract";
@@ -110,7 +114,10 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   const [printer, setPrinter] = useState("");
   const [sharedPrinter, setSharedPrinter] = useState("");
   const selectedPrinter = printTarget === "shared" ? sharedPrinter : printer;
-  const isRasterPrint = printTarget !== "browser";
+  const [sharedProfile, setSharedProfile] = useState<SharedPrinter | null>(null);
+  const isRasterPrint = printTarget === "ptouch" || (printTarget === "shared" && sharedProfile?.kind === "ptouch");
+  const [media, setMedia] = useState<PrintMedia>(DEFAULT_PRINT_MEDIA);
+  const [documentPreview, setDocumentPreview] = useState<{ labels: LabelSnapshot[]; media: PrintMedia; printer: SharedPrinter | null } | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [printSuccess, setPrintSuccess] = useState(false);
   const [seriesCopies, setSeriesCopies] = useState(1);
@@ -149,6 +156,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           const old = localStorage.getItem("inventory.labelPrintTarget");
           if (old === "ptouch" || old === "shared") { setPrintTarget(old); if (!prefs.setupId) setSetupId("ptouch-preset"); }
         } catch { /* Optional migration from the old browser preference. */ } }
+        if (prefs.media) setMedia(prefs.media);
         if (prefs.tape) setTape(prefs.tape as PtouchTape);
         if (prefs.printer) setPrinter(prefs.printer);
         if (prefs.sharedPrinter) setSharedPrinter(prefs.sharedPrinter);
@@ -159,7 +167,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
 
   useEffect(() => {
     if (!workspaceReady || setupsLoading) return;
-    const preferences = { setupId, printTarget, tape, printer, sharedPrinter };
+    const preferences = { setupId, printTarget, tape, printer, sharedPrinter, ...(printMediaSchema.safeParse(media).success ? { media } : {}) };
     const key = JSON.stringify(preferences) + preferenceRetry;
     if (key === preferenceKey.current) return;
     preferenceKey.current = key;
@@ -172,7 +180,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       } catch (error) { if (preferenceKey.current === key) setPreferenceError(String(error)); }
       finally { if (preferenceKey.current === key) setSavingPreferences(false); }
     });
-  }, [workspaceReady, setupsLoading, setupId, printTarget, tape, printer, sharedPrinter, preferenceRetry]);
+  }, [workspaceReady, setupsLoading, setupId, printTarget, tape, printer, sharedPrinter, media, preferenceRetry]);
 
   const saveQueue = async (labels: PreparedLabel[]) => {
     if (!workspaceReady || queueLock.current) throw new Error(t("workspace.busy"));
@@ -504,11 +512,38 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   };
 
   const batchError = (error: unknown) => {
+    if (error && typeof error === "object" && "issues" in error) return t("paper.invalid");
     const message = error instanceof Error ? error.message : String(error);
     if (message === "PTOUCH_BATCH_SIZE") return t("queue.tooLarge");
     if (message === "PTOUCH_BATCH_COUNT") return t("direct.limit");
     if (message === "PTOUCH_BATCH_MEDIA") return t("queue.sameTape");
+    if (message === "Label dimensions do not fit the P-touch print area.") return t("paper.ptouchFit");
+    if (message.startsWith("PRINT_")) return t(`paper.errors.${message}`);
     return message;
+  };
+
+  const showDocument = (snapshots: LabelSnapshot[]) => {
+    if (printTarget === "shared" && (!sharedProfile || sharedProfile.id !== sharedPrinter)) throw new Error(t("shared.choose"));
+    const pages = layoutLabelPages(snapshots, media);
+    if (printTarget === "shared" && pages.some(page => page.width !== pages[0].width || page.height !== pages[0].height)) throw new Error(t("paper.remoteSameSize"));
+    if (printTarget === "shared" && pages.some(page => page.width > sharedProfile!.maxWidthMm || page.height > sharedProfile!.maxHeightMm)) throw new Error(t("paper.printerFit"));
+    setDocumentPreview({ labels: snapshots, media: structuredClone(media), printer: printTarget === "shared" ? sharedProfile : null });
+  };
+  const calibrationPage = () => {
+    try {
+      const widthMm = media.mode === "sheet" ? media.cellWidthMm : (activeSetup?.widthMm ?? 80);
+      const heightMm = media.mode === "sheet" ? media.cellHeightMm : (activeSetup?.heightMm ?? 40);
+      if (widthMm < 10 || heightMm < 10 || widthMm > 300 || heightMm > 300) throw new Error(t("paper.testSize"));
+      const canvas = document.createElement("canvas");
+      const scale = 300 / 25.4; canvas.width = Math.round(widthMm * scale); canvas.height = Math.round(heightMm * scale);
+      const ctx = canvas.getContext("2d")!; ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(scale, scale); ctx.strokeStyle = "black"; ctx.lineWidth = 0.2;
+      ctx.strokeRect(1, 1, widthMm - 2, heightMm - 2);
+      ctx.font = "2px sans-serif"; ctx.fillStyle = "black";
+      for (let x = 5; x <= widthMm - 5; x += 5) { ctx.beginPath(); ctx.moveTo(x, 3); ctx.lineTo(x, 6); ctx.stroke(); if (x % 10 === 0) ctx.fillText(String(x), x - 1, 9); }
+      ctx.fillText("mm · 100%", 3, heightMm - 3);
+      showDocument([{ png: canvas.toDataURL("image/png"), widthMm, heightMm }]);
+    } catch (error) { setPrintError(batchError(error)); }
   };
 
   const printDesignerSample = async (node: HTMLElement, setup: LabelSetupDto, resource: LabelResource, copies: number) => {
@@ -533,8 +568,12 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error(t("errors.imageRender"))), 8000)),
       ]);
       if (!isRasterPrint) {
-        const { printBrowserLabel } = await import("@/lib/label-browser-print");
-        await printBrowserLabel(node, setup.widthMm, setup.heightMm, copies);
+        const snapshot = await captureLabel(node, setup.widthMm, setup.heightMm, qrEnabled ? labelTargetUrl(origin, resource) : undefined);
+        const snapshots = repeatLabelCopies([snapshot], copies);
+        if (printTarget === "shared") {
+          if (!sharedProfile || sharedProfile.id !== sharedPrinter) throw new Error(t("shared.choose"));
+          await sendSharedDocument(sharedPrinter, { labels: snapshots, media });
+        } else await printLabelDocument(snapshots, media);
         return;
       }
       const { renderPtouchLabel, sendPtouchLabels } = await import("@/lib/qz-label-printer");
@@ -547,24 +586,28 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
 
   const printPrepared = async () => {
     if (!preparedLabels.length || printLock.current || editingPrepared) return;
-    if (!selectedPrinter) { setPrintError(t(printTarget === "shared" ? "shared.choose" : "direct.connectFirst")); return; }
-    if (preparedLabels.some(label => label.tape !== tape)) {
-      setPrintError(t("queue.loadTape", { tape: preparedLabels[0].tape }));
-      return;
-    }
+    if (printTarget !== "browser" && !selectedPrinter) { setPrintError(t(printTarget === "shared" ? "shared.choose" : "direct.connectFirst")); return; }
     printLock.current = true;
     setPreparingPrint(true);
     setPrintError(null);
     setPrintSuccess(false);
     setQueueNotice(null);
+    let dispatching = false;
     try {
       const latest = await fetchJson<LabelWorkspace>("/api/v1/label-workspace", { cache: "no-store" });
       if (latest.revision !== queueRevision.current) {
         setWorkspaceError(t("workspace.changed"));
         return;
       }
+      if (!isRasterPrint) {
+        showDocument(repeatLabelCopies(preparedLabels.map(preparedSnapshot), effectiveSeriesCopies));
+        return;
+      }
       const { sendPtouchLabels } = await import("@/lib/qz-label-printer");
-      const printData = repeatLabelCopies(preparedLabels.map(label => label.data), effectiveSeriesCopies);
+      const rasters: Uint8Array[] = [];
+      for (const label of preparedLabels) rasters.push(await ptouchSnapshot(label, tape));
+      const printData = repeatLabelCopies(rasters, effectiveSeriesCopies);
+      dispatching = true;
       if (printTarget === "shared") await sendSharedLabels(sharedPrinter, tape, printData);
       else await sendPtouchLabels(printer, printData);
       // Printing has already been acknowledged. A cleanup failure must never be presented as a failed print.
@@ -577,7 +620,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       setQueueNotice(t(printTarget === "shared" ? "shared.sent" : "queue.sent"));
     } catch (error) {
       // Retain the list on failure; never automatically repeat a physical job.
-      setPrintError(t("direct.printError", { detail: batchError(error) }));
+      setPrintError(t(dispatching ? "direct.printError" : "paper.prepareError", { detail: batchError(error) }));
     } finally {
       printLock.current = false;
       setPreparingPrint(false);
@@ -588,10 +631,9 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
     if (!labels.length || !activeSetup || printLock.current) return;
     setPrintError(null);
     setPrintSuccess(false);
+    if (labels.length + (prepare ? preparedLabels.length : 0) > 100) { setPrintError(t("direct.limit")); return; }
     if (isRasterPrint) {
       if (!prepare && !selectedPrinter) { setPrintError(t(printTarget === "shared" ? "shared.choose" : "direct.connectFirst")); return; }
-      if (labels.length + (prepare ? preparedLabels.length : 0) > 100) { setPrintError(t("direct.limit")); return; }
-      if (prepare && preparedLabels.some(label => label.tape !== tape)) { setPrintError(t("queue.sameTape")); return; }
       if (Math.round(activeSetup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || (!automaticLabelText(activeSetup.elements) && (activeSetup.widthMm > 996 || activeSetup.widthMm < 1))) {
         setPrintError(t("direct.tooLarge", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) }));
         return;
@@ -641,6 +683,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
 
     printLock.current = true;
     setPreparingPrint(true);
+    let dispatching = false;
     try {
       if (imageEnabled) {
         setImageRetryToken((current) => current + 1);
@@ -698,39 +741,35 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         return;
       }
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      if (isRasterPrint) {
-        const { renderPtouchLabel, sendPtouchLabels } = await import("@/lib/qz-label-printer");
-        const nodes = Array.from(document.querySelectorAll<HTMLElement>(`.${styles.printSurface} > article`));
-        if (nodes.length !== labels.length) throw new Error(t("direct.renderError"));
-        const rendered: PreparedLabel[] = [];
-        // Prepare every label before submitting any job, including image/QR checks.
-        for (let index = 0; index < nodes.length; index += 1) {
-          const result = await renderPtouchLabel(nodes[index], activeSetup.widthMm, activeSetup.heightMm, tape,
-            qrEnabled ? labelTargetUrl(origin, labels[index].resource) : undefined);
-          rendered.push({ ...result, id: crypto.randomUUID(), name: labelTargetName(labels[index].resource),
-            template: activeSetup.name, tape, widthMm: result.widthMm,
-            resource: structuredClone(labels[index].resource),
-            original: structuredClone(selected.get(labelTargetKey(labels[index].resource))!),
-            setup: structuredClone(activeSetup) });
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>(`.${styles.printSurface} > article`));
+      if (nodes.length !== labels.length) throw new Error(t("direct.renderError"));
+      const rendered: PreparedLabel[] = [];
+      for (let index = 0; index < nodes.length; index += 1) {
+        const snapshot = await captureLabel(nodes[index], activeSetup.widthMm, activeSetup.heightMm,
+          qrEnabled ? labelTargetUrl(origin, labels[index].resource) : undefined);
+        let data = new Uint8Array(0) as Uint8Array;
+        let preview = snapshot.png;
+        if (isRasterPrint) {
+          const { renderPtouchLabel } = await import("@/lib/qz-label-printer");
+          const raster = await renderPtouchLabel(nodes[index], snapshot.widthMm, snapshot.heightMm, tape, snapshot.expectedQr);
+          data = raster.data; preview = raster.preview;
         }
-        if (prepare) {
-          const next = [...preparedLabels, ...rendered];
-          combinePtouchLabels(next.map(label => label.data));
-          await saveQueue(next);
-          setQueueNotice(t("queue.added", { count: rendered.length }));
-          clearSelection();
-        } else {
-          if (printTarget === "shared") await sendSharedLabels(sharedPrinter, tape, rendered.map(label => label.data));
-          else await sendPtouchLabels(printer, rendered.map(label => label.data));
-          setPrintSuccess(true);
-        }
-      } else {
-        await Promise.all(Array.from(document.querySelectorAll<HTMLElement>(`.${styles.printSurface} > article`),
-          node => readyLabelDimensions(node, activeSetup.widthMm, activeSetup.heightMm)));
-        window.print();
+        rendered.push({ snapshot, data, preview, id: crypto.randomUUID(), name: labelTargetName(labels[index].resource),
+          template: activeSetup.name, tape, widthMm: snapshot.widthMm,
+          resource: structuredClone(labels[index].resource), original: structuredClone(selected.get(labelTargetKey(labels[index].resource))!), setup: structuredClone(activeSetup) });
       }
+      if (prepare) {
+        await saveQueue([...preparedLabels, ...rendered]);
+        setQueueNotice(t("queue.added", { count: rendered.length })); clearSelection();
+      } else if (isRasterPrint) {
+        const { sendPtouchLabels } = await import("@/lib/qz-label-printer");
+        dispatching = true;
+        if (printTarget === "shared") await sendSharedLabels(sharedPrinter, tape, rendered.map(label => label.data));
+        else await sendPtouchLabels(printer, rendered.map(label => label.data));
+        setPrintSuccess(true);
+      } else showDocument(rendered.map(preparedSnapshot));
     } catch (error) {
-      setPrintError(t(prepare ? "queue.prepareError" : "direct.printError", { detail: batchError(error) }));
+      setPrintError(t(prepare ? "queue.prepareError" : dispatching ? "direct.printError" : "paper.prepareError", { detail: batchError(error) }));
     } finally {
       printLock.current = false;
       setPreparingPrint(false);
@@ -757,7 +796,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           </p>
           <p role="status" className="mt-1 text-xs text-muted">{t(!workspaceReady ? "workspace.loading" : savingQueue || savingPreferences ? "workspace.saving" : preferenceError ? "workspace.unsaved" : "workspace.saved")}</p>
         </div>
-        {(isRasterPrint || preparedLabels.length > 0) ? <a href="#prepared-labels" className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium">{t("queue.title")} · {preparedLabels.length}</a> : null}
+        {(workspaceReady || preparedLabels.length > 0) ? <a href="#prepared-labels" className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium">{t("queue.title")} · {preparedLabels.length}</a> : null}
       </div>
 
       <Card className="mb-5 p-4">
@@ -768,8 +807,8 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
               onChange={(event) => {
                 const target = event.target.value as "browser" | "ptouch" | "shared";
                 setPrintTarget(target);
-                if (target === "browser" && setupId === "ptouch-preset") setSetupId(setups[0]?.id ?? "");
-                else if (!setupId && target !== "browser") setSetupId("ptouch-preset");
+                if (target !== "ptouch" && setupId === "ptouch-preset") setSetupId(setups[0]?.id ?? "");
+                else if (!setupId && target === "ptouch") setSetupId("ptouch-preset");
               }}>
               <option value="browser">{t("direct.browser")}</option>
               <option value="shared">{t("shared.destination")}</option>
@@ -795,7 +834,8 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           </> : null}
         </div>
         {printTarget === "ptouch" ? <details className="mt-3 text-xs leading-5 text-muted"><summary className="cursor-pointer">{t("printer.title")}</summary><p>{t("direct.help", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) })} <a href="https://qz.io/download/" target="_blank" rel="noreferrer" className="underline">{t("direct.download")}</a></p></details> : null}
-        {printTarget === "shared" ? <SharedLabelPrinter canManage={canManagePrinters} printerId={sharedPrinter} tape={tape} disabled={preparingPrint} onSelect={p=>{setSharedPrinter(p.id);setTape(p.tape);}} /> : null}
+        {printTarget === "shared" ? <SharedLabelPrinter canManage={canManagePrinters} printerId={sharedPrinter} disabled={preparingPrint} onSelect={p=>{setSharedProfile(p); if (p) { setSharedPrinter(p.id); if (p.kind === "ptouch") setTape(p.tape); } else setSharedPrinter("");}} /> : null}
+        {!isRasterPrint ? <LabelPrintMedia value={media} onChange={setMedia} disabled={preparingPrint} onTest={calibrationPage} /> : null}
         {printSuccess ? <p role="status" className="mt-3 text-sm text-brand">{t(printTarget === "shared" ? "shared.sent" : "direct.sent")}</p> : null}
       </Card>
 
@@ -823,7 +863,6 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         onCancel={() => setEditingPrepared(null)}
         onSave={async (updated) => {
           const next = preparedLabels.map(label => label.id === updated.id ? updated : label);
-          combinePtouchLabels(next.map(label => label.data));
           await saveQueue(next);
           setEditingPrepared(null);
         }} /> : null}
@@ -1178,10 +1217,10 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
             </Card>
           ) : null}
         <div className="flex flex-wrap gap-2">
-        {isRasterPrint ? <Button size="lg" onClick={() => void printLabels(true)}
+        {<Button size="lg" onClick={() => void printLabels(true)}
           disabled={!labels.length || !activeSetup || preparingPrint || connecting || setupHasQrImageOverlap}>
           <Plus size={17} aria-hidden="true" /> {t("queue.prepare", { count: labels.length })}
-        </Button> : null}
+        </Button>}
         <Button
           size="lg"
           variant={isRasterPrint ? "secondary" : "primary"}
@@ -1191,7 +1230,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
             !activeSetup ||
             preparingPrint ||
             connecting ||
-            (isRasterPrint && !selectedPrinter) ||
+            (printTarget !== "browser" && !selectedPrinter) ||
             setupHasQrImageOverlap
           }
         >
@@ -1208,7 +1247,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         </div>
       </div>
 
-      {(isRasterPrint || preparedLabels.length > 0) ? (
+      {(workspaceReady || preparedLabels.length > 0) ? (
         <Card id="prepared-labels" className="mt-5 scroll-mt-4 overflow-hidden" aria-label={t("queue.title")}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
             <div>
@@ -1219,15 +1258,15 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
               {preparedLabels.length > 0 ? <LabelCopyCount label={t("queue.seriesCopies")} value={effectiveSeriesCopies} max={maxSeriesCopies} onChange={setSeriesCopies} disabled={preparingPrint || connecting} /> : null}
               <Button variant="secondary" disabled={!preparedLabels.length || preparingPrint || connecting}
                 onClick={() => removePrepared(preparedLabels.map(label => label.id))}>{t("queue.clear")}</Button>
-              <Button disabled={!isRasterPrint || !preparedLabels.length || !selectedPrinter || preparingPrint || connecting || !!editingPrepared || preparedLabels[0]?.tape !== tape}
+              <Button disabled={!preparedLabels.length || (printTarget !== "browser" && !selectedPrinter) || preparingPrint || connecting || !!editingPrepared}
                 onClick={() => void printPrepared()}><Printer size={16} aria-hidden="true" />{t("queue.print", { count: preparedLabels.length * effectiveSeriesCopies })}</Button>
             </div>
           </div>
           {queueNotice ? <p role="status" className="px-4 pt-3 text-sm text-brand">{queueNotice}</p> : null}
           {preparedLabels.length ? <>
-            <p className="px-4 pt-3 text-xs text-muted">{t("queue.summary", { tape: preparedLabels[0].tape,
-              length: Math.ceil(preparedLabels.reduce((sum, label) => sum + label.widthMm + 4, 0) * effectiveSeriesCopies + 25) })}</p>
-            {preparedLabels[0].tape !== tape ? <p role="alert" className="px-4 pt-2 text-sm text-warning">{t("queue.loadTape", { tape: preparedLabels[0].tape })}</p> : null}
+            {isRasterPrint ? <p className="px-4 pt-3 text-xs text-muted">{t("queue.summary", { tape: preparedLabels[0].tape,
+              length: Math.ceil(preparedLabels.reduce((sum, label) => sum + label.widthMm + 4, 0) * effectiveSeriesCopies + 25) })}</p> : null}
+            {isRasterPrint && preparedLabels.some(label => !label.snapshot && label.tape !== tape) ? <p role="alert" className="px-4 pt-2 text-sm text-warning">{t("queue.loadTape", { tape: preparedLabels[0].tape })}</p> : null}
             <ol className="max-h-96 divide-y divide-border overflow-y-auto p-4">
               {preparedLabels.map((label, index) => <li key={label.id} className="flex flex-wrap items-center gap-3 py-3">
                 <span className="text-xs text-muted">{index + 1}.</span>
@@ -1254,6 +1293,14 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           <p className="border-t border-border px-4 py-3 text-xs text-muted">{t("queue.session")}</p>
         </Card>
       ) : null}
+
+      {documentPreview ? <LabelDocumentPreview labels={documentPreview.labels} media={documentPreview.media}
+        destination={documentPreview.printer?.name ?? t("direct.browser")}
+        onClose={() => setDocumentPreview(null)}
+        onPrint={async () => {
+          if (documentPreview.printer) await sendSharedDocument(documentPreview.printer.id, { labels: documentPreview.labels, media: documentPreview.media });
+          else await printLabelDocument(documentPreview.labels, documentPreview.media);
+        }} /> : null}
 
       {designerDraft ? (
         <LabelDesigner
@@ -1308,10 +1355,11 @@ function PreparedLabelEditor({ label, origin, onSave, onCancel }: {
         Promise.all(images.map(image => image.decode())),
         new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(t("errors.imageRender"))), 8000)),
       ]);
-      const { renderPtouchLabel } = await import("@/lib/qz-label-printer");
-      const rendered = await renderPtouchLabel(node, label.setup.widthMm, label.setup.heightMm, label.tape,
-        label.setup.elements.some(element => element.type === "qr" && element.visible) ? labelTargetUrl(origin, resource) : undefined);
-      await onSave({ ...label, ...rendered, resource, name: labelTargetName(resource) });
+      const expectedQr = label.setup.elements.some(element => element.type === "qr" && element.visible) ? labelTargetUrl(origin, resource) : undefined;
+      const snapshot = await captureLabel(node, label.setup.widthMm, label.setup.heightMm, expectedQr);
+      const rendered = label.data.length ? await (await import("@/lib/qz-label-printer")).renderPtouchLabel(node, snapshot.widthMm, snapshot.heightMm, label.tape, expectedQr)
+        : { data: new Uint8Array(0), preview: snapshot.png, widthMm: snapshot.widthMm };
+      await onSave({ ...label, ...rendered, snapshot, resource, name: labelTargetName(resource) });
     } catch (error) {
       setError(t("text.error", { detail: error instanceof Error ? error.message : String(error) }));
     } finally {

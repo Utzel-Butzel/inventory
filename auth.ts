@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { getAuthProviderConfiguration } from "@/lib/auth-provider-config";
 import { normalizeUserRole } from "@/lib/auth-roles";
+import { DEFAULT_SESSION_MAX_AGE, withSessionLifetime } from "@/lib/auth-session";
 import { db } from "@/lib/db";
 import { authenticateLocalUser } from "@/lib/local-auth";
 import {
@@ -187,7 +188,7 @@ export const authConfig = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 60 * 60 * 12,
+    maxAge: DEFAULT_SESSION_MAX_AGE,
   },
   trustHost: true,
   callbacks: {
@@ -239,4 +240,6 @@ export const authConfig = {
   },
 } satisfies NextAuthConfig;
 
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+export const { handlers, auth, signIn, signOut } = NextAuth((request) =>
+  withSessionLifetime(authConfig, request),
+);

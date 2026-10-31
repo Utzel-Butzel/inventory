@@ -25,6 +25,7 @@ final class AppState: ObservableObject {
     @Published var selectedTab: RootTab = .inventory
     @Published var presentedTool: PresentedTool?
     @Published var pendingScanCode: String?
+    @Published var pendingInventoryLink: InventoryLink?
     @Published var pendingCaptureCode: String?
 
     let intakeQueue = IntakeQueue()

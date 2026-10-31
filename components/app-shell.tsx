@@ -3,7 +3,7 @@
 import { resourceTitleText } from "@/lib/resource-title";
 import { ResourceTitle } from "@/components/resource-title";
 import { useEffect, useId, useRef, useState } from "react";
-import { signOut } from "next-auth/react";
+import { SessionProvider, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { useT } from "next-i18next/client";
 import {
@@ -861,6 +861,7 @@ export function AppShell({
   }, [mobileOpen]);
 
   return (
+    <SessionProvider refetchInterval={60 * 60} refetchWhenOffline={false}>
     <InventoryBreadcrumbProvider setItem={setInventoryItemBreadcrumb}>
       <OfflineSupportProvider ownerKey={offlineOwnerKey}>
       <OrganizationRoutingProvider
@@ -1114,5 +1115,6 @@ export function AppShell({
       </OrganizationRoutingProvider>
       </OfflineSupportProvider>
     </InventoryBreadcrumbProvider>
+    </SessionProvider>
   );
 }

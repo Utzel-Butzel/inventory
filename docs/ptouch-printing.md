@@ -176,3 +176,7 @@ P-touch output. Drafts can be test-printed before saving or saved as a new templ
 
 Each selected target has an explicit copy count. Copies count toward the 100-label
 series limit. Keep one tape width per series; lengths and layouts may differ.
+
+## Other printers and shared PDF printing
+
+See [General printing](printing.md) for system-driver printers, PDF export, A4/Letter sheets, and the multi-printer Windows/macOS/Linux agent. Existing P-touch installations remain supported.

@@ -4,6 +4,7 @@ import type { AiPromptCollection } from "@/lib/ai-prompt-templates";
 import type { ChainAction } from "@/lib/action-chain-contract";
 import type { ListViewCollection } from "@/lib/list-view-contract";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -3687,6 +3688,8 @@ export const media = pgTable(
     resourceId: uuid("resource_id")
       .notNull()
       .references(() => resources.id, { onDelete: "cascade" }),
+    previewMediaId: uuid("preview_media_id").references((): AnyPgColumn => media.id, { onDelete: "set null" }),
+    posterMediaId: uuid("poster_media_id").references((): AnyPgColumn => media.id, { onDelete: "set null" }),
     storageKey: text("storage_key").notNull(),
     url: text("url").notNull(),
     name: varchar("name", { length: 280 }).notNull(),
@@ -3713,6 +3716,10 @@ export const media = pgTable(
     }).onDelete("cascade"),
     index("media_resource_id_idx").on(table.resourceId),
     index("media_resource_position_idx").on(table.resourceId, table.position),
+    index("media_preview_media_id_idx").on(table.previewMediaId).where(sql`${table.previewMediaId} is not null`),
+    index("media_poster_media_id_idx").on(table.posterMediaId).where(sql`${table.posterMediaId} is not null`),
+    check("media_video_preview_not_self", sql`${table.previewMediaId} is distinct from ${table.id}`),
+    check("media_video_poster_not_self", sql`${table.posterMediaId} is distinct from ${table.id}`),
   ],
 );
 
@@ -4939,6 +4946,10 @@ export type ResourceSpatialPlacementRecord =
 export const labelPrinters = pgTable("label_printers", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: organizationIdColumn(),
+  kind: varchar("kind", { length: 16 }).notNull().default("ptouch"),
+  location: varchar("location", { length: 120 }).notNull().default(""),
+  maxWidthMm: doublePrecision("max_width_mm").notNull().default(1000),
+  maxHeightMm: doublePrecision("max_height_mm").notNull().default(1000),
   name: varchar("name", { length: 120 }).notNull(),
   tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
   enabled: boolean("enabled").notNull().default(true),
@@ -4952,6 +4963,9 @@ export const labelPrintJobs = pgTable("label_print_jobs", {
   printerId: uuid("printer_id").notNull().references(() => labelPrinters.id, { onDelete: "cascade" }),
   createdBy: text("created_by").notNull(),
   labelCount: integer("label_count").notNull(),
+  format: varchar("format", { length: 16 }).notNull().default("ptouch"),
+  pageWidthMm: doublePrecision("page_width_mm"),
+  pageHeightMm: doublePrecision("page_height_mm"),
   payload: text("payload"),
   payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
   status: varchar("status", { length: 16 }).notNull().default("queued"),

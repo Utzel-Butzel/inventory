@@ -4,6 +4,10 @@ Native SwiftUI companion app for the Inventory server in this repository. It
 uses AVFoundation directly for low-latency photos and QR/barcode recognition;
 WebRTC is not required for app-to-server uploads.
 
+QR labels open the web app, which offers an **Open in app** button on iPhone/iPad.
+See [iOS app links](../../docs/ios-app-links.md) for self-hosted instances,
+deployment and device verification.
+
 ## Features
 
 - One native rear-camera session for fast still photos, code recognition, and

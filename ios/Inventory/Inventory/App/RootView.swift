@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var state: AppState
     @State private var searchQuery = ""
+    @State private var presentedInventoryLink: InventoryLink?
 
     var body: some View {
         Group {
@@ -14,12 +15,28 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.22), value: state.isConfigured)
         .background(KeyboardDismissalView())
+        .onChange(of: state.pendingInventoryLink?.id, initial: true) { _, _ in
+            if state.presentedTool != nil {
+                // Wait for an active camera presentation to finish dismissing.
+                state.presentedTool = nil
+            } else {
+                presentedInventoryLink = state.pendingInventoryLink
+            }
+        }
+        .sheet(item: $presentedInventoryLink, onDismiss: {
+            state.pendingInventoryLink = nil
+        }) { link in
+            InventoryLinkView(link: link)
+                .id(link.id)
+        }
     }
 
     private var configuredContent: some View {
         configuredTabs
             .id(state.organizationContextIdentifier)
-            .fullScreenCover(isPresented: toolIsPresented) {
+            .fullScreenCover(isPresented: toolIsPresented, onDismiss: {
+                presentedInventoryLink = state.pendingInventoryLink
+            }) {
                 presentedTool
             }
     }

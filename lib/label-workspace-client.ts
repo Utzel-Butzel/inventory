@@ -3,7 +3,10 @@ import type { LabelResource } from "@/lib/label-target";
 import type { PtouchTape } from "@/lib/ptouch-raster";
 import type { SavedLabel } from "@/lib/label-workspace-contract";
 
+import type { LabelSnapshot } from "@/lib/label-document";
+
 export type PreparedLabel = {
+  snapshot?: LabelSnapshot;
   id: string; name: string; template: string; tape: PtouchTape; widthMm: number;
   data: Uint8Array; preview: string; resource: LabelResource; original: LabelResource; setup: LabelSetupDto;
 };

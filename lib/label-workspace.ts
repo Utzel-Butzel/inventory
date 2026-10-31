@@ -1,4 +1,5 @@
 import "server-only";
+import { snapshotPng } from "@/lib/label-document-pdf";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { PrintFailure } from "@/lib/shared-label-printing";
@@ -13,9 +14,12 @@ export async function updateLabelWorkspace(organizationId: string, userId: strin
   if (mutation.action === "queue" && mutation.labels.length) {
     if (Buffer.byteLength(JSON.stringify(mutation.labels)) > LABEL_WORKSPACE_LIMIT) throw new PrintFailure("Die Druckliste ist zu groß.", 413);
     try {
-      validateSharedRasters(mutation.labels.map(label => Buffer.from(label.data, "base64")), mutation.labels[0].tape);
-      if (mutation.labels.some(label => label.tape !== mutation.labels[0].tape)) throw new Error("Mixed tape");
-    } catch { throw new PrintFailure("Ungültige Druckdaten oder unterschiedliche Bandbreiten.", 422); }
+      for (const label of mutation.labels) {
+        if (label.data) validateSharedRasters([Buffer.from(label.data, "base64")], label.tape);
+        if (label.snapshot) await snapshotPng(label.snapshot);
+        else if (!label.data) throw new Error("Missing print data");
+      }
+    } catch { throw new PrintFailure("Ungültige oder beschädigte Druckdaten.", 422); }
   }
   return db.transaction(async tx => {
     await tx.execute(sql`INSERT INTO label_workspaces (organization_id,user_id) VALUES (${organizationId},${userId}) ON CONFLICT DO NOTHING`);

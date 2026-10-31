@@ -1,3 +1,4 @@
+import { mediaByteResponse } from "@/lib/media-byte-response";
 import { getActivePublicShare, getPublicSharedMedia } from "@/lib/public-shares";
 import {
   publicShareSessionIsValid,
@@ -79,8 +80,7 @@ export async function GET(request: Request, context: Context) {
     }
     const bytes = await readMediaBytes(item);
     const safeInline = isInlinePublicMediaType(item.mimeType);
-    return new Response(bytes, {
-      headers: {
+    return mediaByteResponse(bytes, request.headers.get("Range"), {
         "Content-Type": item.mimeType || "application/octet-stream",
         "Content-Length": String(bytes.length),
         "Content-Disposition": `${safeInline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(item.name)}`,
@@ -89,7 +89,6 @@ export async function GET(request: Request, context: Context) {
         "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
         "X-Robots-Tag": "noindex, nofollow",
-      },
     });
   } catch {
     return unavailable();

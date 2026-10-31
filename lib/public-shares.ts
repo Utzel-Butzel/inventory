@@ -81,6 +81,8 @@ export type PublicMedia = Pick<
   | "height"
   | "position"
   | "altText"
+  | "previewMediaId"
+  | "posterMediaId"
 > & { url: string };
 
 export type PublicResource = Pick<
@@ -158,6 +160,8 @@ function attachPublicMedia(
       height: item.height,
       position: item.position,
       altText: item.altText,
+      previewMediaId: item.previewMediaId,
+      posterMediaId: item.posterMediaId,
       url: shareUrl,
     };
     const entries = grouped.get(item.resourceId) ?? [];

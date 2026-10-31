@@ -11,9 +11,8 @@ struct InventoryApp: App {
                 .environmentObject(state)
                 .preferredColorScheme(.light)
                 .onOpenURL { url in
-                    guard ResourceCodeParser.parse(url.absoluteString).resourceID != nil else { return }
-                    state.pendingScanCode = url.absoluteString
-                    state.presentedTool = .scanner
+                    guard let link = InventoryLink(url: url) else { return }
+                    state.pendingInventoryLink = link
                 }
         }
         .onChange(of: scenePhase) { _, phase in

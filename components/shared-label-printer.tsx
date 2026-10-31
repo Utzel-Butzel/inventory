@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useT } from "next-i18next/client";
 import { fetchJson } from "@/lib/client-types";
 import type {
@@ -10,14 +10,12 @@ import { Button } from "@/components/ui";
 
 export function SharedLabelPrinter({
   printerId,
-  tape,
   onSelect,
   disabled = false,
   canManage = false,
 }: {
   printerId: string;
-  tape?: number;
-  onSelect: (printer: SharedPrinter) => void;
+  onSelect: (printer: SharedPrinter | null) => void;
   disabled?: boolean;
   canManage?: boolean;
 }) {
@@ -27,6 +25,12 @@ export function SharedLabelPrinter({
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newKind, setNewKind] = useState<"system" | "ptouch">("system");
+  const [queueName, setQueueName] = useState("");
+  const [location, setLocation] = useState("");
+  const [newTape, setNewTape] = useState(24);
+  const [maxWidth, setMaxWidth] = useState(210), [maxHeight, setMaxHeight] = useState(297);
+  const selectionKey = useRef("");
   const [creating, setCreating] = useState(false);
   const [download, setDownload] = useState<string | null>(null);
   useEffect(
@@ -40,19 +44,20 @@ export function SharedLabelPrinter({
     setError("");
     try {
       const result = await fetchJson<{
-        printer: { id: string; name: string; tape: number };
+        printer: SharedPrinter;
         token: string;
       }>("/api/v1/label-printers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, tape: 24 }),
+        body: JSON.stringify({ name: newName, kind: newKind, location, tape: newTape, maxWidthMm: newKind === "ptouch" ? 1000 : maxWidth, maxHeightMm: newKind === "ptouch" ? 1000 : maxHeight }),
       });
       const blob = new Blob(
         [
           JSON.stringify(
             {
               server: window.location.origin,
-              printer: "Brother PT-P710BT Inventory",
+              printer: queueName.trim(),
+              kind: newKind,
               token: result.token,
             },
             null,
@@ -62,6 +67,8 @@ export function SharedLabelPrinter({
         { type: "application/json" },
       );
       setDownload(URL.createObjectURL(blob));
+      setPrinters(all => [...all, { ...result.printer, online: false, enabled: true }]);
+      onSelect({ ...result.printer, online: false, enabled: true });
       setNewName("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -105,9 +112,11 @@ export function SharedLabelPrinter({
     };
   }, [t]);
   useEffect(() => {
-    const selected = printers.find((p) => p.id === printerId) ?? printers[0];
-    if (selected && (selected.id !== printerId || (tape !== undefined && selected.tape !== tape))) onSelect(selected);
-  }, [printers, printerId, tape, onSelect]);
+    if (!loaded) return;
+    const selected = printers.find(p => p.id === printerId) ?? null;
+    const key = JSON.stringify(selected);
+    if (key !== selectionKey.current) { selectionKey.current = key; onSelect(selected); }
+  }, [printers, printerId, loaded, onSelect]);
   const selected = printers.find((p) => p.id === printerId);
   return (
     <div className="mt-3 space-y-3">
@@ -120,17 +129,13 @@ export function SharedLabelPrinter({
           disabled={disabled || !printers.length}
           onChange={(e) => {
             const p = printers.find((p) => p.id === e.target.value);
-            if (p) onSelect(p);
+            onSelect(p ?? null);
           }}
         >
-          {!printers.length ? (
-            <option value="">
-              {t(loaded ? "shared.empty" : "shared.loading")}
-            </option>
-          ) : null}
+          <option value="">{t(!loaded ? "shared.loading" : printers.length ? "shared.choose" : "shared.empty")}</option>
           {printers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name} · {p.tape} mm ·{" "}
+              {p.name}{p.location ? ` · ${p.location}` : ""} · {p.kind === "ptouch" ? `${p.tape} mm` : t("shared.system")} ·{" "}
               {t(p.online ? "shared.online" : "shared.offline")}
             </option>
           ))}
@@ -160,10 +165,21 @@ export function SharedLabelPrinter({
               onChange={(e) => setNewName(e.target.value)}
             />
           </label>
+          <div className="my-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <label className="grid min-w-0 gap-1 text-sm">{t("shared.kind")}<select value={newKind} onChange={event => setNewKind(event.target.value as "system" | "ptouch")} className="min-w-0 w-full rounded-lg border border-border bg-surface p-2">
+              <option value="system">{t("shared.system")}</option><option value="ptouch">Brother PT-P710BT</option>
+            </select></label>
+            <label className="grid min-w-0 gap-1 text-sm">{t("shared.queueName")}<input value={queueName} maxLength={200} onChange={event => setQueueName(event.target.value)} className="min-w-0 w-full rounded-lg border border-border bg-surface p-2" /></label>
+            <label className="grid min-w-0 gap-1 text-sm">{t("shared.location")}<input value={location} maxLength={120} onChange={event => setLocation(event.target.value)} className="min-w-0 w-full rounded-lg border border-border bg-surface p-2" /></label>
+            {newKind === "system" ? <>
+              <label className="grid min-w-0 gap-1 text-sm">{t("shared.maxWidth")}<input type="number" min={1} max={1000} value={maxWidth} onChange={event => setMaxWidth(event.target.valueAsNumber || 0)} className="min-w-0 w-full rounded-lg border border-border bg-surface p-2" /></label>
+              <label className="grid min-w-0 gap-1 text-sm">{t("shared.maxHeight")}<input type="number" min={1} max={1000} value={maxHeight} onChange={event => setMaxHeight(event.target.valueAsNumber || 0)} className="min-w-0 w-full rounded-lg border border-border bg-surface p-2" /></label>
+            </> : <label className="grid min-w-0 gap-1 text-sm">{t("direct.tape")}<select value={newTape} onChange={event => setNewTape(Number(event.target.value))} className="min-w-0 w-full rounded-lg border border-border bg-surface p-2">{[3.5,6,9,12,18,24].map(width => <option key={width} value={width}>{width} mm</option>)}</select></label>}
+          </div>
           <Button
             className="ml-2"
             size="sm"
-            disabled={creating || !newName.trim()}
+            disabled={creating || !newName.trim() || !queueName.trim() || (newKind === "system" && (maxWidth <= 0 || maxWidth > 1000 || maxHeight <= 0 || maxHeight > 1000))}
             onClick={() => void createPrinter()}
           >
             {t("shared.create")}

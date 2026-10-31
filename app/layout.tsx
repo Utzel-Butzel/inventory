@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { cookies, headers } from "next/headers";
 
 import { UI_LANGUAGE_HEADER, UI_LANGUAGES } from "@/i18n.config";
+import { NativeAppBanner } from "@/components/native-app-banner";
 
 import "@mdxeditor/editor/style.css";
 import "./globals.css";
@@ -65,7 +67,12 @@ export default async function RootLayout({
 
   return (
     <html lang={language} data-theme={theme} suppressHydrationWarning>
-      <body className="min-h-dvh antialiased">{children}</body>
+      <body className="min-h-dvh antialiased">
+        <Suspense fallback={null}>
+          <NativeAppBanner language={language as "de" | "en"} />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }

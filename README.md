@@ -26,7 +26,7 @@ stock workflows, mobile capture, maps, optional AI, a scoped REST API, and an
 opt-in Model Context Protocol (MCP) endpoint.
 
 Your data stays on infrastructure you control. The web app, API, migrations,
-and native iOS app live in this repository; the public website and product
+and native iOS and Android apps live in this repository; the public website and product
 content live in [open-inventory-website](https://github.com/Utzel-Butzel/open-inventory-website).
 
 ## Features
@@ -255,6 +255,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run db:tunnel` | Open an SSH tunnel to a remote PostgreSQL server |
 | `npm run auth:hash -- "password"` | Generate a bcrypt password hash |
 | `npm run deploy` | Build and upload the native iOS app to TestFlight |
+| `npm run android:check` | Run Android unit tests and lint, and build the native debug APK |
+| `npm run android:install` | Install the Android app on a connected device or emulator |
 
 Focused contract and integration test commands are listed in
 [`package.json`](package.json).
@@ -311,6 +313,7 @@ authorization layer instead of distributing long-lived Inventory tokens.
 
 - [OpenAPI specification](public/openapi.yaml)
 - [Native iOS app and setup guide](ios/Inventory/README.md)
+- [Native Android app, setup and feature parity](android/README.md)
 - Outgoing webhooks are configured under **Settings → Webhooks**
 
 ## Project structure
@@ -322,6 +325,7 @@ authorization layer instead of distributing long-lived Inventory tokens.
 | `lib/` | Domain logic and integrations |
 | `db/` | Drizzle schema and PostgreSQL migrations |
 | `ios/Inventory/` | Native SwiftUI client |
+| `android/` | Native Kotlin / Jetpack Compose / Material 3 client |
 | `deploy/` | Dokploy and Coolify templates |
 | `public/openapi.yaml` | REST API contract |
 
