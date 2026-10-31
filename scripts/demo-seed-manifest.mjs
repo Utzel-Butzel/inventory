@@ -1,4 +1,4 @@
-export const DEMO_SEED_VERSION = 1;
+export const DEMO_SEED_VERSION = 2;
 
 export const DEMO_ORGANIZATION = Object.freeze({
   id: "d3e00000-0000-4000-8000-000000000001",
@@ -740,32 +740,50 @@ export const DEMO_LABEL_SETUP = Object.freeze({
 
 export const DEMO_MEDIA = Object.freeze([
   {
-    id: "d3e00000-0000-4000-8000-000000000a01",
-    resourceId: "d3e00000-0000-4000-8000-000000000201",
-    filename: "trades-tool-case.webp",
-    sha256: "ea0a0b4061ec22e1163b70c3d70b1a9d6bfa7c9309e5b3bd0df94a0556b1d02a",
-    width: 1800,
-    height: 1202,
-    altText: "Kontextfoto eines geöffneten Werkzeugkoffers; nicht das konkrete Inventarobjekt.",
+    "id": "d3e00000-0000-4000-8000-000000000a01",
+    "resourceId": "d3e00000-0000-4000-8000-000000000201",
+    "filename": "generated-drill.webp",
+    "sha256": "5bd6c0c691b07d0e09c4d4d9cec1374ef75820b988a6418019801a6add86632b",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild eines Akku-Bohrschraubers im Werkzeugkoffer."
   },
   {
-    id: "d3e00000-0000-4000-8000-000000000a02",
-    resourceId: "d3e00000-0000-4000-8000-000000000202",
-    filename: "electronics-soldering.webp",
-    sha256: "74487813e265cb1405c28a7f4143775550bd05154a910ad7252b77c98572d3c2",
-    width: 1800,
-    height: 1200,
-    altText: "Kontextfoto eines Elektronikarbeitsplatzes; nicht die konkrete Lötstation.",
+    "id": "d3e00000-0000-4000-8000-000000000a02",
+    "resourceId": "d3e00000-0000-4000-8000-000000000202",
+    "filename": "generated-soldering.webp",
+    "sha256": "2696d5a6d0793c06a3f7a9647a972d7b76d456b2f3d9fe195dbe156cabc3c5f8",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild einer Lötstation am Elektronikarbeitsplatz."
   },
   {
-    id: "d3e00000-0000-4000-8000-000000000a03",
-    resourceId: "d3e00000-0000-4000-8000-000000000204",
-    filename: "parts-storage-bins.webp",
-    sha256: "5938f8efcdca22510ec1ce159c38f42a8df0e1fdd11b4eae01ee15f058366d29",
-    width: 1800,
-    height: 1202,
-    altText: "Kontextfoto von Kleinteilebehältern; nicht der konkrete Lagerbestand.",
+    "id": "d3e00000-0000-4000-8000-000000000a03",
+    "resourceId": "d3e00000-0000-4000-8000-000000000204",
+    "filename": "generated-screws.webp",
+    "sha256": "ede69a989c0f34c6d38f6de21db1ffa639209110b2c56989b8289728346d100e",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild von Schrauben in Kleinteilebehältern."
   },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a04",
+    "resourceId": "d3e00000-0000-4000-8000-000000000203",
+    "filename": "generated-multimeter.webp",
+    "sha256": "a32bfa1c3afa7c9d1f5a16dca969868831b0659bd32cba05dcfa1d7f8408e011",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild eines Digitalmultimeters mit Messleitungen."
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a05",
+    "resourceId": "d3e00000-0000-4000-8000-000000000205",
+    "filename": "generated-cable-ties.webp",
+    "sha256": "e4526c0648744e79bc40651e3d2dc96c0af85c941dae41f4152103881f7f476f",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild schwarzer Kabelbinder in einer Ablageschale."
+  }
 ]);
 
 const UUID_PATTERN =

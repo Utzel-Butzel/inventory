@@ -1,0 +1,114 @@
+services:
+  secrets:
+    image: node:22-bookworm-slim
+    network_mode: none
+    restart: "no"
+    volumes:
+      - demo_secrets:/secrets
+    command:
+      - node
+      - -e
+      - |
+        const fs = require('node:fs');
+        const crypto = require('node:crypto');
+        for (const name of ['postgres-password', 'auth-secret']) {
+          const file = '/secrets/' + name;
+          if (!fs.existsSync(file)) fs.writeFileSync(file, crypto.randomBytes(48).toString('hex'), { mode: 0o444 });
+        }
+
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: inventory_demo
+      POSTGRES_USER: inventory_demo
+      POSTGRES_PASSWORD_FILE: /run/demo-secrets/postgres-password
+    volumes:
+      - demo_postgres:/var/lib/postgresql/data
+      - demo_secrets:/run/demo-secrets:ro
+    networks: [isolated]
+    depends_on:
+      secrets:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U inventory_demo -d inventory_demo]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  inventory:
+    build:
+      context: ../..
+      target: runner
+    restart: unless-stopped
+    init: true
+    networks: [isolated]
+    environment:
+      AUTH_URL: https://demo.openinventory.polyxo.de
+      AUTH_TRUST_HOST: "true"
+      AUTH_PASSWORD_ENABLED: "false"
+      DEMO_ACCESS_ENABLED: "true"
+      DEMO_ORGANIZATION_SLUG: demo
+      DEMO_USER_EMAIL: demo@inventory.invalid
+      USERS_CAN_CREATE_ORGANIZATIONS: "false"
+      MCP_ENABLED: "false"
+      NOTIFICATION_WORKER_ENABLED: "false"
+      TRANSLATION_WORKER_ENABLED: "false"
+      WEBHOOK_WORKER_ENABLED: "false"
+      STORAGE_PROVIDER: local
+      STORAGE_LOCAL_PATH: /app/data/uploads
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - demo_uploads:/app/data/uploads
+      - demo_secrets:/run/demo-secrets:ro
+    command:
+      - node
+      - --input-type=module
+      - -e
+      - |
+        import { readFileSync } from 'node:fs';
+        const secret = name => readFileSync('/run/demo-secrets/' + name, 'utf8').trim();
+        process.env.AUTH_SECRET = secret('auth-secret');
+        process.env.DATABASE_URL = 'postgresql://inventory_demo:' + secret('postgres-password') + '@db:5432/inventory_demo';
+        await import('./scripts/start-production.mjs');
+    depends_on:
+      db:
+        condition: service_healthy
+
+  gateway:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    networks: [isolated, dokploy-network]
+    configs:
+      - source: demo_nginx
+        target: /etc/nginx/conf.d/default.conf
+    depends_on:
+      inventory:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.openinventory-demo.rule=Host(`demo.openinventory.polyxo.de`)
+      - traefik.http.routers.openinventory-demo.entrypoints=websecure
+      - traefik.http.routers.openinventory-demo.tls.certresolver=letsencrypt
+      - traefik.http.routers.openinventory-demo.service=openinventory-demo
+      - traefik.http.services.openinventory-demo.loadbalancer.server.port=8080
+      - traefik.http.routers.openinventory-demo-http.rule=Host(`demo.openinventory.polyxo.de`)
+      - traefik.http.routers.openinventory-demo-http.entrypoints=web
+      - traefik.http.routers.openinventory-demo-http.middlewares=openinventory-demo-https
+      - traefik.http.middlewares.openinventory-demo-https.redirectscheme.scheme=https
+
+configs:
+  demo_nginx:
+    file: ./nginx.conf
+
+networks:
+  isolated:
+    internal: true
+  dokploy-network:
+    external: true
+
+volumes:
+  demo_secrets:
+  demo_postgres:
+  demo_uploads:

@@ -678,7 +678,7 @@ async function seedDemo(transaction, configuration, preparedMedia) {
           ${DEMO_ORGANIZATION.id}, ${media.id}, ${media.resourceId},
           ${storageKey}, ${`/api/files/${storageKey}`}, ${media.filename},
           'image/webp', 'image', ${media.size}, ${media.width}, ${media.height},
-          0, ${media.altText}, 'demo-context'
+          0, ${media.altText}, 'demo-imagegen'
         )
         ON CONFLICT (id) DO UPDATE SET
           resource_id = excluded.resource_id,

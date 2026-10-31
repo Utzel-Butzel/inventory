@@ -12,7 +12,7 @@ from an older demo cannot remain public:
 
 - organization: `Werkstatt Nord · Demo` with the reserved slug `demo`
 - dedicated user: `demo@inventory.invalid`, active viewer, exactly one membership
-- five workshop items and three places with stock history, serialized units,
+- five workshop items with Imagegen-generated pictures and three places with stock history, serialized units,
   one active checkout, one maintenance case, one low-stock case, and one order
 - one 62 × 35 mm label layout
 - fixed UUIDs and a transaction-scoped PostgreSQL advisory lock
@@ -23,7 +23,7 @@ Application-level read-only enforcement remains mandatory; the seed flag alone
 must never be treated as an authorization boundary.
 
 With local storage, the startup seed verifies and copies the bundled context
-photos into the persistent upload volume before inserting their media records.
+images into the persistent upload volume before inserting their media records.
 For non-local storage providers, the data seed still succeeds but omits those
 media rows because uploading to an external service would require provider-
 specific write behavior.
@@ -48,6 +48,8 @@ npm run db:seed:demo:remove
 Cleanup locks and verifies the fixed organization by ID, expected name,
 configured slug, read-only flag, and sole active viewer membership. It never
 deletes by slug. The fixed demo user is removed only if it has no other
-membership, and only the three exact `demo/*.webp` media paths are unlinked.
+membership, and only the exact `demo/*.webp` media paths in the manifest are unlinked.
 
-See [`assets/README.md`](assets/README.md) for photo sources and licensing.
+See [`assets/README.md`](assets/README.md) for image provenance and prompts.
+The dedicated isolated deployment is documented in
+[`../deploy/demo/README.md`](../deploy/demo/README.md).
