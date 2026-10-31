@@ -48,7 +48,7 @@ until its data is no longer needed. No production service needs modification.
 - Dokploy project: `Open Inventory Demo`, environment `production`.
 - Compose ID: `hrfnQxCpETSuGEKnSFf90`.
 - Compose project: `open-inventory-demo-demo-0oyjjw`.
-- Source: `codex/isolated-public-demo`; deployed app commit `759f503`.
+- Source: `codex/isolated-public-demo`; deployed app commit `b998fae`.
 - Deployment completed successfully. App and database are healthy; gateway
   is running; the one-time secrets initializer exited successfully.
 - Verified in the running app container: only the isolated network is attached,
@@ -57,10 +57,21 @@ until its data is no longer needed. No production service needs modification.
 - Ran `smoke.mjs` through the internal gateway: demo authentication and viewer
   role, read-only organization, eight records, five image checksums, 22 denied
   requests before/after login, Server Action denial, inventory page and CSP pass.
-- Public DNS/HTTPS remain pending: 1blu requires the owner's login before the
-  A record can be created. The public origin has not yet been browser-tested.
+- Public DNS is configured at 1blu: `demo.openinventory` A `89.167.19.103`.
+  Both authoritative nameservers and public resolvers confirm the record.
+- HTTPS uses a valid Let's Encrypt certificate for the demo hostname. HTTP
+  redirects to HTTPS; the landing-page redirect stays on the public origin.
+- The complete smoke test also passes externally over verified HTTPS, including
+  all 22 denied requests and all five image checksums. A process-local DNS
+  override selected the verified server IP because the owner's router retained
+  the previous negative DNS answer. TLS validation was not disabled. Browser
+  verification on that connection remains subject to the DNS cache expiring.
 
-After DNS and HTTPS are available, repeat the external checks with:
+After changing the mounted Nginx config, restart only the `gateway` container
+after deployment. Compose does not necessarily recreate it when file contents
+change. This also refreshes its upstream address after an app replacement.
+
+Repeat the external checks with:
 
 ```sh
 node deploy/demo/smoke.mjs
