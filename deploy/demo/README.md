@@ -42,3 +42,26 @@ Validation after deployment:
 
 For rollback, stop this dedicated Compose service. Keep its three named volumes
 until its data is no longer needed. No production service needs modification.
+
+## Deployment status, 2026-10-31
+
+- Dokploy project: `Open Inventory Demo`, environment `production`.
+- Compose ID: `hrfnQxCpETSuGEKnSFf90`.
+- Compose project: `open-inventory-demo-demo-0oyjjw`.
+- Source: `codex/isolated-public-demo`; deployed app commit `759f503`.
+- Deployment completed successfully. App and database are healthy; gateway
+  is running; the one-time secrets initializer exited successfully.
+- Verified in the running app container: only the isolated network is attached,
+  no default gateway, external connection blocked, no paid-provider settings,
+  all three workers disabled, gateway health HTTP 200.
+- Ran `smoke.mjs` through the internal gateway: demo authentication and viewer
+  role, read-only organization, eight records, five image checksums, 22 denied
+  requests before/after login, Server Action denial, inventory page and CSP pass.
+- Public DNS/HTTPS remain pending: 1blu requires the owner's login before the
+  A record can be created. The public origin has not yet been browser-tested.
+
+After DNS and HTTPS are available, repeat the external checks with:
+
+```sh
+node deploy/demo/smoke.mjs
+```
