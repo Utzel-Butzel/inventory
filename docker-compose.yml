@@ -42,6 +42,8 @@ services:
       DATABASE_URL: postgresql://inventory:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD to a strong database password}@db:5432/inventory
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET to at least 32 random characters}
       AUTH_URL: ${AUTH_URL:?Set AUTH_URL to the public HTTPS URL}
+      APP_NAME: ${APP_NAME:-}
+      APP_LOGO_URL: ${APP_LOGO_URL:-}
       AUTH_TRUST_HOST: "true"
       AUTH_PASSWORD_ENABLED: ${AUTH_PASSWORD_ENABLED:-true}
       SIMPLE_AUTH_EMAIL: ${SIMPLE_AUTH_EMAIL:-admin@inventory.local}

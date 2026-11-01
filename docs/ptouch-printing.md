@@ -5,6 +5,10 @@ and a local USB print queue. The printer does not need P-touch Editor for this
 workflow. The web server can run remotely; QZ Tray and the printer must be on
 the computer running the browser.
 
+Start with the [QZ Tray installation guide](printing.md#install-and-connect)
+for Windows, macOS and Linux. The macOS printer-queue setup below was tested
+with the PT-P710BT.
+
 ## macOS setup
 
 1. Install [QZ Tray](https://qz.io/download/) from the official installer and

@@ -56,7 +56,7 @@ export function removeListView(collection: ListViewCollection, id: string): List
   return { views: collection.views.filter((view) => view.id !== id), defaultId: collection.defaultId === id ? null : collection.defaultId };
 }
 
-export function saveListView(collections: ListViewCollections, view: SavedListView, visibility: ListViewVisibility, previous?: ScopedListView): ListViewCollections {
+export function saveListView(collections: ListViewCollections, view: SavedListView, visibility: ListViewVisibility, previous?: ScopedListView, makeDefault?: boolean): ListViewCollections {
   const target = collections[visibility];
   const replacing = previous?.visibility === visibility;
   if (!view.name.trim() || view.name.trim().length > 80 || target.views.some((entry) => entry.id !== (replacing ? previous.id : null) && entry.name.toLocaleLowerCase() === view.name.trim().toLocaleLowerCase())) throw new Error("name");
@@ -66,6 +66,7 @@ export function saveListView(collections: ListViewCollections, view: SavedListVi
   next[visibility] = {
     ...target,
     views: replacing ? target.views.map((entry) => entry.id === previous.id ? view : entry) : [...target.views, view],
+    defaultId: makeDefault === true ? view.id : makeDefault === false && target.defaultId === view.id ? null : target.defaultId,
   };
   return next;
 }

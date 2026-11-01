@@ -10,6 +10,8 @@ services:
       DATABASE_URL: postgresql://inventory:${POSTGRES_PASSWORD}@postgres:5432/inventory
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${AUTH_URL}
+      APP_NAME: ${APP_NAME:-}
+      APP_LOGO_URL: ${APP_LOGO_URL:-}
       AUTH_TRUST_HOST: "true"
       AUTH_PASSWORD_ENABLED: ${AUTH_PASSWORD_ENABLED:-true}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}

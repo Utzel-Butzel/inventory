@@ -45,7 +45,7 @@ import {
   type LabelElement,
   type LabelSetupDto,
 } from "@/lib/label-setup-contract";
-import { applyLabelTextOverride, type LabelTextOverride, labelTargetKey, labelTargetName, labelTargetUrl, type LabelResource, type LabelStockUnit } from "@/lib/label-target";
+import { applyLabelTextOverride, type LabelTextOverride, labelTargetKey, labelTargetName, labelQrUrl, type LabelResource, type LabelStockUnit } from "@/lib/label-target";
 import { LabelStockUnitPicker } from "@/components/label-stock-unit-picker";
 import { PTOUCH_TAPES, PTOUCH_PIXELS_PER_MM, ptouchPrintableDots, type PtouchTape } from "@/lib/ptouch-raster";
 
@@ -336,7 +336,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       ),
     [copies, selectedResources, textOverrides],
   );
-  const setupHasQrImageOverlap = activeSetup
+  const setupHasQrImageOverlap = activeSetup && !activeSetup.layout
     ? hasVisibleQrImageOverlap(activeSetup.elements)
     : false;
 
@@ -416,6 +416,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         heightMm: activeSetup?.heightMm ?? 35,
         elements: structuredClone(activeSetup?.elements ?? DEFAULT_ELEMENTS),
         inverted: activeSetup?.inverted ?? false,
+        layout: activeSetup?.layout ?? null,
       });
     } catch {
       setSetupError(t("errors.loadSetups"));
@@ -451,6 +452,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         heightMm: designerDraft.heightMm,
         elements: designerDraft.elements,
         inverted: designerDraft.inverted ?? false,
+        layout: designerDraft.layout ?? null,
       };
       const result = designerDraft.id && !asNew
         ? await fetchJson<{ labelSetup: LabelSetupDto }>(
@@ -549,15 +551,15 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   const printDesignerSample = async (node: HTMLElement, setup: LabelSetupDto, resource: LabelResource, copies: number) => {
     if (printLock.current) throw new Error(t("workspace.busy"));
     if (!Number.isInteger(copies) || copies < 1 || copies > 100) throw new Error(t("direct.limit"));
-    if (!labelSetupCreateSchema.safeParse({ name: setup.name || "Test", widthMm: setup.widthMm, heightMm: setup.heightMm, elements: setup.elements, inverted: setup.inverted }).success)
+    if (!labelSetupCreateSchema.safeParse({ name: setup.name || "Test", widthMm: setup.widthMm, heightMm: setup.heightMm, elements: setup.elements, inverted: setup.inverted, layout: setup.layout }).success)
       throw new Error(t("designer.invalidSample"));
     if (labelNeedsProductImage(setup.elements) && !resource.cover?.url)
       throw new Error(t("errors.missingImages", { count: 1, examples: resource.name }));
     const qrEnabled = setup.elements.some(element => element.type === "qr" && element.visible);
-    if (qrEnabled && !canEncodeQr(labelTargetUrl(origin, resource))) throw new Error(t("errors.urlTooLong"));
+    if (setup.elements.some(element => element.type === "qr" && element.visible && !element.useShortcode) && !canEncodeQr(labelQrUrl(origin, resource))) throw new Error(t("errors.urlTooLong"));
     if (isRasterPrint) {
       if (!selectedPrinter) throw new Error(t(printTarget === "shared" ? "shared.choose" : "direct.connectFirst"));
-      if (Math.round(setup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || (!automaticLabelText(setup.elements) && setup.widthMm > 996))
+      if (Math.round(setup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || (!setup.layout && !automaticLabelText(setup.elements) && setup.widthMm > 996))
         throw new Error(t("direct.tooLarge", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) }));
     }
     printLock.current = true;
@@ -568,7 +570,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error(t("errors.imageRender"))), 8000)),
       ]);
       if (!isRasterPrint) {
-        const snapshot = await captureLabel(node, setup.widthMm, setup.heightMm, qrEnabled ? labelTargetUrl(origin, resource) : undefined);
+        const snapshot = await captureLabel(node, setup.widthMm, setup.heightMm, qrEnabled ? labelQrUrl(origin, resource) : undefined);
         const snapshots = repeatLabelCopies([snapshot], copies);
         if (printTarget === "shared") {
           if (!sharedProfile || sharedProfile.id !== sharedPrinter) throw new Error(t("shared.choose"));
@@ -577,7 +579,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         return;
       }
       const { renderPtouchLabel, sendPtouchLabels } = await import("@/lib/qz-label-printer");
-      const rendered = await renderPtouchLabel(node, setup.widthMm, setup.heightMm, tape, qrEnabled ? labelTargetUrl(origin, resource) : undefined);
+      const rendered = await renderPtouchLabel(node, setup.widthMm, setup.heightMm, tape, qrEnabled ? labelQrUrl(origin, resource) : undefined);
       const printData = repeatLabelCopies([rendered.data], copies);
       if (printTarget === "shared") await sendSharedLabels(sharedPrinter, tape, printData);
       else await sendPtouchLabels(printer, printData);
@@ -634,7 +636,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
     if (labels.length + (prepare ? preparedLabels.length : 0) > 100) { setPrintError(t("direct.limit")); return; }
     if (isRasterPrint) {
       if (!prepare && !selectedPrinter) { setPrintError(t(printTarget === "shared" ? "shared.choose" : "direct.connectFirst")); return; }
-      if (Math.round(activeSetup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || (!automaticLabelText(activeSetup.elements) && (activeSetup.widthMm > 996 || activeSetup.widthMm < 1))) {
+      if (Math.round(activeSetup.heightMm * PTOUCH_PIXELS_PER_MM) > ptouchPrintableDots(tape) || (!activeSetup.layout && !automaticLabelText(activeSetup.elements) && (activeSetup.widthMm > 996 || activeSetup.widthMm < 1))) {
         setPrintError(t("direct.tooLarge", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) }));
         return;
       }
@@ -648,9 +650,9 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       (element) => element.type === "qr" && element.visible,
     );
     if (
-      qrEnabled &&
+      activeSetup.elements.some(element => element.type === "qr" && element.visible && !element.useShortcode) &&
       labels.some(({ resource }) =>
-        !canEncodeQr(labelTargetUrl(origin, resource)),
+        !canEncodeQr(labelQrUrl(origin, resource)),
       )
     ) {
       setPrintError(t("errors.urlTooLong"));
@@ -746,7 +748,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       const rendered: PreparedLabel[] = [];
       for (let index = 0; index < nodes.length; index += 1) {
         const snapshot = await captureLabel(nodes[index], activeSetup.widthMm, activeSetup.heightMm,
-          qrEnabled ? labelTargetUrl(origin, labels[index].resource) : undefined);
+          qrEnabled ? labelQrUrl(origin, labels[index].resource) : undefined);
         let data = new Uint8Array(0) as Uint8Array;
         let preview = snapshot.png;
         if (isRasterPrint) {
@@ -1355,7 +1357,7 @@ function PreparedLabelEditor({ label, origin, onSave, onCancel }: {
         Promise.all(images.map(image => image.decode())),
         new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(t("errors.imageRender"))), 8000)),
       ]);
-      const expectedQr = label.setup.elements.some(element => element.type === "qr" && element.visible) ? labelTargetUrl(origin, resource) : undefined;
+      const expectedQr = label.setup.elements.some(element => element.type === "qr" && element.visible) ? labelQrUrl(origin, resource) : undefined;
       const snapshot = await captureLabel(node, label.setup.widthMm, label.setup.heightMm, expectedQr);
       const rendered = label.data.length ? await (await import("@/lib/qz-label-printer")).renderPtouchLabel(node, snapshot.widthMm, snapshot.heightMm, label.tape, expectedQr)
         : { data: new Uint8Array(0), preview: snapshot.png, widthMm: snapshot.widthMm };

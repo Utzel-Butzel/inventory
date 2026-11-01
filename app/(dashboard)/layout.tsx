@@ -10,6 +10,7 @@ import type {
 } from "@/components/organization-switcher";
 import { UiI18nProvider } from "@/components/ui-i18n-provider";
 import { getSessionIdentity } from "@/lib/api-auth";
+import { getAppBranding } from "@/lib/app-branding";
 import {
   organizationPath,
   organizationReferenceFromPathname,
@@ -22,15 +23,16 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT("shell");
-  const title = t("metadata.title");
+  const branding = getAppBranding();
+  const title = branding.name ?? t("metadata.title");
   const description = t("metadata.description");
   return {
     title: {
       default: title,
-      template: t("metadata.template"),
+      template: branding.name ? `%s · ${branding.name}` : t("metadata.template"),
     },
     description,
-    applicationName: t("brand"),
+    applicationName: branding.name ?? t("brand"),
     robots: { index: false, follow: false },
     openGraph: { title, description, type: "website" },
     twitter: { card: "summary", title, description },
@@ -90,6 +92,7 @@ export default async function DashboardLayout({
   return (
     <UiI18nProvider language={translation.lng} resources={resources}>
       <AppShell
+        branding={getAppBranding()}
         offlineOwnerKey={offlineOwnerKey}
         organization={organizationIdentity.organization}
         organizations={organizations}

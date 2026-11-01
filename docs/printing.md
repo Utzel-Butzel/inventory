@@ -5,6 +5,54 @@ Windows, macOS and Linux. The existing PT-P710BT raster adapter and PowerShell
 agent remain compatible. Apply migration `0074_general_printing.sql` before
 running this version (`npm run db:migrate`). Existing printers default to P-touch.
 
+## Recommended desktop helper: QZ Tray
+
+For Inventory's direct P-touch printing, we recommend
+[QZ Tray](https://qz.io/), a ready-made desktop application connecting the browser
+to the computer's print queues. Install it on the computer where you open
+Inventory and connect the printer, not on the printer itself. Inventory's web
+server can be hosted elsewhere. This path needs neither the Inventory Python
+agent nor SumatraPDF.
+
+Inventory currently uses QZ Tray for **Brother PT-P710BT · USB / QZ Tray**.
+Although QZ itself supports PDF and other system printers, Inventory's QZ
+integration does not yet expose those features. For other printers, use
+**Print from this computer** and the normal browser print dialog; that needs no
+QZ installation. QZ does not automatically fetch Inventory's shared-printer jobs.
+
+### Install and connect
+
+1. Download the installer for your operating system from the official
+   [QZ Tray download page](https://qz.io/download/).
+2. Install and start QZ Tray:
+   - **Windows:** run the Windows installer, then launch QZ Tray from the Start
+     menu. Its icon appears in the notification area, possibly under hidden icons.
+   - **macOS:** open the downloaded installer, follow its prompts, then launch
+     QZ Tray from Applications. Its icon appears in the menu bar.
+   - **Linux:** run the downloaded Linux installer from a terminal, follow its
+     prompts, then launch QZ Tray from the applications menu.
+3. Connect and switch on the P-touch. Set up a queue that passes its RAW commands
+   unchanged. Follow our [tested macOS setup](ptouch-printing.md#macos-setup);
+   for other systems, consult QZ's
+   [Windows](https://qz.io/docs/setting-up-a-raw-printer-in-windows) or
+   [Linux](https://qz.io/docs/setting-up-a-raw-printer-in-ubuntu-linux) queue guide.
+4. Open Inventory in the browser on that computer. In **Labels**, choose
+   **Brother PT-P710BT · USB / QZ Tray**, set the loaded tape width, and click
+   **Connect to QZ Tray**. Approve Inventory's connection request and select the
+   correct printer queue.
+5. Print one label and check its size and QR code before printing a batch.
+   Keep QZ Tray running while printing; enable its automatic startup if desired.
+
+If the connection fails, check that QZ Tray is running on the same computer as
+the browser and that Inventory has not been blocked in QZ's site permissions.
+If a printer is missing, check its operating-system queue first. QZ's official
+[getting-started guide](https://qz.io/docs/getting-started) includes a demo for
+checking the connection separately from Inventory.
+
+Approval prompts are normal without trusted signing. See
+[approval prompts and optional signing](ptouch-printing.md#qz-approval-prompts-and-optional-signing)
+for the administrator setup needed for silent printing.
+
 ## Print from this computer
 
 Choose **Print from this computer** in Labels. Select an individual label/roll or
@@ -162,3 +210,47 @@ Set `TEST_DATABASE_URL` to a disposable PostgreSQL database to run the queue
 integration test (it creates and removes an isolated schema). Agent tests mock
 network and spool submission; they do not print. Before production rollout, test
 one physical page on each OS/driver combination and measure/scan the output.
+
+### QR shortcodes
+
+Each QR element has an optional **Use shortcode / Shortcode verwenden** setting, saved with the template. The default continues to encode the existing `/r/<compact-UUID>` link, now with `src=qr`. Text URL fields remain unchanged.
+
+Shortcodes encode `/q/<8-character-code>` and are allocated by the authenticated `POST /api/v1/labels/shortcodes` endpoint. Creation requires label access and read access to the resource (and stock access for unit labels). Migration `0075_label_shortcodes.sql` adds permanent reservations per organization, resource and optional stock unit. Unique indexes make retries and concurrent printing idempotent. Reservations survive target deletion and are never reassigned. The resolver checks that the organization, resource and unit still exist and that the unit still belongs to the resource.
+
+By default, the short URL redirects to the stored organization's item or unit page, adding `src=qr` only at that point. Login callbacks and canonical item redirects retain the marker. Destination pages retain their normal access checks. The marker identifies a QR-originated link, not proof of a physical scan. Existing `/r/` labels remain supported. The resource lookup API used by scanners also resolves `/q/` URLs within the active organization; bare eight-character input remains an ordinary SKU/barcode. Native-app links from the destination or login page keep the source marker.
+
+Preview and printing wait for shortcode allocation and show a retry action on failure. The designer's fictional sample cannot receive a stored shortcode: select a real item to preview or print one. Snapshot regions retain their individual QR payloads, including templates mixing normal and short codes, so later P-touch conversions validate every QR against the correct content.
+
+Run `npm run test:label-shortcodes`. Set `TEST_DATABASE_URL` to run the database integration test, which uses and removes an isolated schema.
+
+### Organization-wide QR destination
+
+Under **Settings → Organization → Edit**, administrators can set **Label QR code destination** to a complete HTTP(S) URL, for example `https://digital.konglomerat.org/slack`. All `/r/` and `/q/` label links belonging to that organization then redirect directly to this URL without requiring an inventory login. The destination receives `src=qr`; its existing query parameters and fragment are retained. No resource or unit identifiers are appended.
+
+This also updates already printed labels, without changing their QR contents or stored shortcodes. Clearing the field restores normal inventory navigation and access checks. The organization is determined from the label's resource, independently of the scanner's active session. The internal resource-lookup API still resolves the inventory item for scan workflows. Apply migration `0076_label_qr_redirect.sql` before deploying.
+
+### Automatic length and element controls
+
+When a text element controls automatic label length, **Additional right margin / Zusätzlicher rechter Rand** adds a saved physical margin in millimeters to the finished label's right edge. Its default is zero, so existing templates retain their layout. The margin is applied after the minimum length required by all other visible content; it does not move or scale text, QR codes or images. It is stored as `autoWidthRightMarginMm` on the controlling text element and applies consistently in previews, captured print documents and reprints.
+
+Automatic text width only locks horizontal resizing. A vertical handle beneath the selected text allows changing its height, and the height field remains editable. Alignment and layer actions are always visible as icon buttons with descriptive hover titles and accessible names.
+
+## Auto Layout for labels
+
+In the label designer, select **Layout → Auto layout · Horizontal row**. The
+label keeps its configured height and grows horizontally to fit all visible
+elements. Text defaults to **Hug contents**; choose **Fixed width** for a bounded
+text box. Images, barcodes and QR codes keep their dimensions in millimeters.
+Set the gap, four padding values and vertical alignment in the left panel.
+
+Drag an element to reorder it, use the left/right icon buttons, or press the
+left/right arrow keys with an element selected. Resize handles and the height
+field still work for content-sized text. Hidden elements occupy no space; the
+background covers the entire resulting label. Free-layout coordinates are kept
+when switching modes. Auto Layout settings are stored with the template and
+prepared labels, and the same measured geometry is used for preview and print.
+
+Elements plus vertical padding must fit the fixed label height. Printing rejects
+invalid heights and labels longer than 1000 mm; printer-specific limits still
+apply. Apply migration `0077_label_auto_layout.sql` with `npm run db:migrate`
+before using this version. Existing templates continue in free layout.

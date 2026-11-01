@@ -1,4 +1,5 @@
 import { readyLabelDimensions } from "@/lib/label-print-dimensions";
+import { readyLabelQr } from "@/lib/label-qr-ready";
 import { waitForLabelImageCrops } from "@/lib/label-image-crop";
 import { labelFontEmbedCss } from "@/lib/label-fonts";
 import { labelSnapshotSchema, layoutLabelPages, type LabelSnapshot, type PrintMedia } from "@/lib/label-document";
@@ -6,6 +7,7 @@ import type { PreparedLabel } from "@/lib/label-workspace-client";
 import type { PtouchTape } from "@/lib/ptouch-raster";
 
 export async function captureLabel(node: HTMLElement, widthMm: number, heightMm: number, expectedQr?: string): Promise<LabelSnapshot> {
+  expectedQr = await readyLabelQr(node, expectedQr);
   await waitForLabelImageCrops(node);
   await Promise.all(Array.from(node.querySelectorAll("img"), image => image.decode()));
   ({ widthMm, heightMm } = await readyLabelDimensions(node, widthMm, heightMm));
@@ -21,6 +23,7 @@ export async function captureLabel(node: HTMLElement, widthMm: number, heightMm:
     const box = element.getBoundingClientRect();
     const clamp = (n: number) => Math.min(1, Math.max(0, n));
     return { type: element.hasAttribute("data-label-qr") ? "qr" as const : "photo" as const,
+      ...(element.dataset.labelQrValue ? { expectedQr: element.dataset.labelQrValue } : {}),
       x: clamp((box.left - bounds.left) / bounds.width), y: clamp((box.top - bounds.top) / bounds.height),
       width: clamp(box.width / bounds.width), height: clamp(box.height / bounds.height),
       optimization: element.dataset.labelPhotoOptimization === "standard" ? "standard" as const : "auto" as const };
@@ -49,7 +52,10 @@ export async function ptouchSnapshot(label: PreparedLabel, tape: PtouchTape): Pr
   for (const region of snapshot.regions ?? []) {
     const marker = document.createElement("div");
     Object.assign(marker.style, { position: "absolute", left: `${region.x * 100}%`, top: `${region.y * 100}%`, width: `${region.width * 100}%`, height: `${region.height * 100}%` });
-    if (region.type === "qr") marker.dataset.labelQr = "true";
+    if (region.type === "qr") {
+      marker.dataset.labelQr = "true";
+      if (region.expectedQr) marker.dataset.labelQrValue = region.expectedQr;
+    }
     else { marker.className = "printable-label-image"; marker.dataset.labelPhotoOptimization = region.optimization ?? "auto"; }
     node.append(marker);
   }

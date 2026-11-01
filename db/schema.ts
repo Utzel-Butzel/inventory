@@ -43,7 +43,7 @@ import {
   type CustomFieldType,
   type CustomFieldValues,
 } from "@/lib/custom-field-contract";
-import type { LabelElement } from "@/lib/label-setup-contract";
+import type { LabelElement, LabelRowLayout } from "@/lib/label-setup-contract";
 import type { RoomScene, SpatialMatrix4 } from "@/lib/room-scene-contract";
 import type { RoomAiAnalysis } from "@/lib/room-ai-analysis-contract";
 import type {
@@ -97,6 +97,7 @@ export const organizations = pgTable(
     slug: varchar("slug", { length: 80 }).notNull(),
     isReadOnly: boolean("is_read_only").notNull().default(false),
     allowNegativeStock: boolean("allow_negative_stock").notNull().default(false),
+    labelQrRedirectUrl: varchar("label_qr_redirect_url", { length: 2048 }),
     aiMonthlyBudgetMicros: bigint("ai_monthly_budget_micros", {
       mode: "number",
     }),
@@ -1856,6 +1857,19 @@ export const labelWorkspaces = pgTable("label_workspaces", {
   check("label_workspaces_labels_check", sql`jsonb_typeof(${table.labels}) = 'array' AND jsonb_array_length(${table.labels}) <= 100`),
 ]);
 
+// Permanent code reservations intentionally have no cascading foreign keys.
+export const labelShortcodes = pgTable("label_shortcodes", {
+  code: varchar("code", { length: 8 }).primaryKey(),
+  organizationId: uuid("organization_id").notNull(),
+  resourceId: uuid("resource_id").notNull(),
+  stockUnitId: uuid("stock_unit_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check("label_shortcodes_code_check", sql`${table.code} ~ '^[A-Za-z0-9_-]{8}$'`),
+  uniqueIndex("label_shortcodes_resource_unique").on(table.organizationId, table.resourceId).where(sql`${table.stockUnitId} IS NULL`),
+  uniqueIndex("label_shortcodes_unit_unique").on(table.organizationId, table.resourceId, table.stockUnitId).where(sql`${table.stockUnitId} IS NOT NULL`),
+]);
+
 export const labelSetups = pgTable(
   "label_setups",
   {
@@ -1865,6 +1879,7 @@ export const labelSetups = pgTable(
     widthMm: doublePrecision("width_mm").notNull(),
     heightMm: doublePrecision("height_mm").notNull(),
     elements: jsonb("elements").$type<LabelElement[]>().notNull(),
+    layout: jsonb("layout").$type<LabelRowLayout>(),
     inverted: boolean("inverted").notNull().default(false),
     revision: integer("revision").notNull().default(1),
     createdBy: varchar("created_by", { length: 320 }),

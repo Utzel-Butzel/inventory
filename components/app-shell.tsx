@@ -40,7 +40,8 @@ import {
   type OrganizationMembershipSummary,
 } from "@/components/organization-switcher";
 import { cn } from "@/components/ui";
-import { BrandMark } from "@/components/brand-mark";
+import { AppLogo } from "@/components/app-logo";
+import type { AppBranding } from "@/lib/app-branding";
 import type { UserRole } from "@/db/schema";
 import type { ApiScope, AppPermission } from "@/lib/access-control-contract";
 import { disableOfflineModeBeforeSignOut } from "@/lib/offline-support-client";
@@ -405,6 +406,7 @@ function CreateMenu({
 }
 
 function SidebarContent({
+  branding,
   pathname,
   user,
   organization,
@@ -413,6 +415,7 @@ function SidebarContent({
   showCreateMenu = true,
 }: {
   pathname: string;
+  branding: AppBranding;
   user: ShellUser;
   organization: ActiveOrganization;
   organizations: OrganizationMembershipSummary[];
@@ -497,11 +500,11 @@ function SidebarContent({
         <Link
           href="/inventory"
           onClick={onNavigate}
-          className="flex items-center gap-2.5 rounded-lg text-foreground"
+          className="flex min-w-0 items-center gap-2.5 rounded-lg text-foreground"
         >
-          <BrandMark className="size-8 shrink-0" aria-hidden="true" />
-          <span className="text-[16px] font-semibold">
-            {t("brand")}
+          <AppLogo logoUrl={branding.logoUrl} className="size-8 shrink-0" />
+          <span title={branding.name ?? t("brand")} className="truncate text-[16px] font-semibold">
+            {branding.name ?? t("brand")}
           </span>
         </Link>
       </div>
@@ -706,6 +709,7 @@ function SidebarContent({
 }
 
 export function AppShell({
+  branding,
   children,
   offlineOwnerKey,
   user,
@@ -714,6 +718,7 @@ export function AppShell({
   websiteUrl,
 }: {
   children: React.ReactNode;
+  branding: AppBranding;
   offlineOwnerKey: string;
   user: ShellUser;
   organization: ActiveOrganization;
@@ -873,6 +878,7 @@ export function AppShell({
       <div className="min-h-dvh bg-background">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[244px] border-r border-border lg:block">
         <SidebarContent
+          branding={branding}
           pathname={scopedPathname}
           user={user}
           organization={organization}
@@ -905,6 +911,7 @@ export function AppShell({
               <X className="size-4" aria-hidden="true" />
             </button>
             <SidebarContent
+              branding={branding}
               pathname={scopedPathname}
               user={user}
               organization={organization}

@@ -148,6 +148,9 @@
       "slugOptional": "URL-Slug (optional)",
       "slugHint": "Wird für kurze Arbeitsbereich-URLs verwendet. Leer lassen, um ihn aus dem Namen zu erzeugen; erlaubt sind Kleinbuchstaben, Zahlen und Bindestriche.",
       "slugEditHint": "Eine Änderung aktualisiert die Arbeitsbereich-Links. Bestehende UUID-Links funktionieren weiterhin.",
+      "qrRedirectUrl": "Weiterleitungsziel für Label-QR-Codes (optional)",
+      "qrRedirectHint": "Alle normalen Label-QR-Codes und Shortcodes dieser Organisation öffnen diese Webseite ohne Inventar-Anmeldung – auch auf bereits gedruckten Labels. Die Zieladresse erhält src=qr. Leer lassen, um wieder den jeweiligen Inventarartikel zu öffnen.",
+      "qrRedirectInvalid": "Bitte eine vollständige HTTP- oder HTTPS-Adresse ohne Zugangsdaten eingeben.",
       "allowNegativeStock": "Negativbestand erlauben",
       "allowNegativeStockHint": "Erlaubt, dass Buchungen, Zuordnungen und Fertigungsverbrauch für Mengenbestand unter null fallen. Serialisierter Bestand benötigt weiterhin identifizierbare Einheiten."
     },

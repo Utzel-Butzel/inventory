@@ -12,6 +12,7 @@ export const labelSnapshotSchema = z.object({
     type: z.enum(["qr", "photo"]), x: z.number().min(0).max(1), y: z.number().min(0).max(1),
     width: z.number().positive().max(1), height: z.number().positive().max(1),
     optimization: z.enum(["auto", "standard"]).optional(),
+    expectedQr: z.string().max(8192).optional(),
   }).strict()).max(32).optional(),
 }).strict();
 export type LabelSnapshot = z.infer<typeof labelSnapshotSchema>;

@@ -27,6 +27,7 @@ export function nativeAppLink(pageUrl: string): string | null {
     // Do not forward unrelated query parameters (tokens, callback URLs, etc.).
     const destination = new URL(target.pathname, page.origin);
     if (unit !== null) destination.searchParams.set("unit", unit);
+    if (target.searchParams.get("src") === "qr") destination.searchParams.set("src", "qr");
     return `inventory://open?url=${encodeURIComponent(destination.href)}`;
   } catch {
     return null;

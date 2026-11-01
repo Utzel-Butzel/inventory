@@ -148,6 +148,9 @@
       "slugOptional": "URL slug (optional)",
       "slugHint": "Used in short workspace URLs. Leave blank to generate it from the name; use lowercase letters, numbers, and dashes.",
       "slugEditHint": "Changing this updates workspace links. Existing UUID links continue to work.",
+      "qrRedirectUrl": "Label QR code destination (optional)",
+      "qrRedirectHint": "All standard label QR codes and shortcodes in this organization open this website without an inventory login, including labels already printed. The destination receives src=qr. Leave blank to open each inventory item again.",
+      "qrRedirectInvalid": "Enter a complete HTTP or HTTPS URL without credentials.",
       "allowNegativeStock": "Allow negative stock",
       "allowNegativeStockHint": "Permit bulk stock bookings, assignments, and assembly consumption to continue below zero. Serialized stock still requires identifiable units."
     },

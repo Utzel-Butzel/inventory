@@ -34,6 +34,28 @@ its one-time flag have been removed from the running configuration. This file
 therefore expects the existing database volume; for a new installation, follow
 the bootstrap procedure in `../dokploy/README.md` first.
 
+## App name and logo
+
+The repository's Compose definition forwards `APP_NAME` and `APP_LOGO_URL` to
+the `inventory` service. Once an application image with branding support is
+deployed, configure these optional values in Dokploy's **Environment** settings:
+
+```dotenv
+APP_NAME="Konglomerat Inventar"
+APP_LOGO_URL=https://example.com/logo.png
+```
+
+Replace the example URL with the actual publicly accessible HTTPS logo URL.
+Update an older Compose definition with both environment mappings from
+[`compose.yaml`](compose.yaml), then redeploy. Later branding changes require
+only a redeploy, without rebuilding the image. The settings apply to navigation
+and sign-in for the whole installation; the name also appears in browser
+titles. Empty values restore the built-in branding. This example documents
+configuration only and does not indicate that branding has been deployed.
+
+See the [branding configuration guide](https://docs.openinventory.polyxo.de/configuration#app-name-and-logo)
+for URL requirements and fallback behavior.
+
 ## Final domain
 
 Configured on 2026-10-31 in the existing INWX `konglomerat.org` zone:

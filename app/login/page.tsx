@@ -6,12 +6,13 @@ import {
   externalAuthProviders,
   passwordAuthEnabled,
 } from "@/auth";
-import { BrandMark } from "@/components/brand-mark";
+import { AppLogo } from "@/components/app-logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { LoginForm } from "@/components/login-form";
 import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { UiI18nProvider } from "@/components/ui-i18n-provider";
 import { getSessionIdentity } from "@/lib/api-auth";
+import { getAppBranding } from "@/lib/app-branding";
 import { organizationPath } from "@/lib/organization-path";
 import { getResources, getT } from "@/lib/ui-i18n/server";
 
@@ -78,16 +79,18 @@ export default async function LoginPage({
   );
   const resources = getResources(translation.i18n, ["auth", "common"]);
   const { t } = translation;
+  const branding = getAppBranding();
+  const brandName = branding.name ?? t("brand");
 
   return (
     <UiI18nProvider language={translation.lng} resources={resources}>
       <main className="min-h-dvh bg-surface-subtle">
         <div className="safe-area-page mx-auto flex min-h-dvh w-full max-w-5xl flex-col">
           <header className="flex items-center justify-between gap-4 text-foreground">
-            <div className="flex items-center gap-2.5">
-              <BrandMark className="size-8 shrink-0" aria-hidden="true" />
-              <span className="text-[16px] font-semibold">
-                {t("brand")}
+            <div className="flex min-w-0 items-center gap-2.5">
+              <AppLogo logoUrl={branding.logoUrl} className="size-8 shrink-0" />
+              <span title={brandName} className="truncate text-[16px] font-semibold">
+                {brandName}
               </span>
             </div>
             <div className="flex items-center gap-1">

@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 
 import { UI_LANGUAGE_HEADER, UI_LANGUAGES } from "@/i18n.config";
 import { NativeAppBanner } from "@/components/native-app-banner";
+import { getAppBranding } from "@/lib/app-branding";
 
 import "@mdxeditor/editor/style.css";
 import "./globals.css";
@@ -15,6 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
   const fallback = process.env.AUTH_URL ?? "http://localhost:3000";
   const metadataBase = new URL(host ? `${protocol}://${host}` : fallback);
+  const appName = getAppBranding().name ?? "Open Inventory";
   const locale = requestHeaders.get(UI_LANGUAGE_HEADER) === "de" ? "de" : "en";
   const description = locale === "de"
     ? "Die selbst gehostete Open-Inventory-Web-App."
@@ -23,15 +25,15 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase,
     title: {
-      default: "Open Inventory",
-      template: "%s · Open Inventory",
+      default: appName,
+      template: `%s · ${appName}`,
     },
     description,
-    applicationName: "Open Inventory",
+    applicationName: appName,
     appleWebApp: {
       capable: true,
       statusBarStyle: "default",
-      title: "Open Inventory",
+      title: appName,
     },
     formatDetection: { telephone: false },
     robots: { index: false, follow: false },

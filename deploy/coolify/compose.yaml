@@ -16,6 +16,8 @@ services:
       - DATABASE_URL=postgresql://inventory:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/inventory
       - AUTH_SECRET=${SERVICE_PASSWORD_64_AUTH}
       - AUTH_URL=https://${SERVICE_FQDN_INVENTORY}
+      - APP_NAME=${APP_NAME:-}
+      - APP_LOGO_URL=${APP_LOGO_URL:-}
       - AUTH_TRUST_HOST=true
       - AUTH_PASSWORD_ENABLED=${AUTH_PASSWORD_ENABLED:-true}
       - BOOTSTRAP_ADMIN_EMAIL=admin@inventory.local

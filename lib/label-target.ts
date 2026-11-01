@@ -10,7 +10,7 @@ export type LabelStockUnit = {
 export type LabelResource = Pick<
   ClientResource,
   "id" | "name" | "sku" | "barcode" | "location" | "type" | "quantity"
-> & { cover: { url: string; altText: string } | null; subtitle?: string; stockUnit?: LabelStockUnit };
+> & { cover: { url: string; altText: string } | null; subtitle?: string; stockUnit?: LabelStockUnit; previewOnly?: boolean };
 
 export type LabelTextOverride = { name?: string; subtitle?: string };
 
@@ -34,4 +34,10 @@ export const labelTargetUrl = (origin: string, resource: LabelResource) => {
   return resource.stockUnit
     ? `${url}?unit=${resourceShortCode(resource.stockUnit.id)}`
     : url;
+};
+
+// Keep text URL fields unchanged; only QR elements carry the scan-source marker.
+export const labelQrUrl = (origin: string, resource: LabelResource) => {
+  const url = labelTargetUrl(origin, resource);
+  return `${url}${url.includes("?") ? "&" : "?"}src=qr`;
 };

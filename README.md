@@ -172,6 +172,7 @@ until configured in `.env`.
 
 | Area | Main settings |
 | --- | --- |
+| Branding | `APP_NAME` for the displayed app name; `APP_LOGO_URL` for a custom logo |
 | Authentication | Local accounts by default; optional `AUTH0_*` and `AUTH_OIDC_*` providers; see [Authentication providers](AUTHPROVIDERS.md) |
 | Storage | Persistent local files or `OPENINARY_*` |
 | Maps | Token-free defaults or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` |
@@ -181,8 +182,26 @@ until configured in `.env`.
 
 See [`.env.example`](.env.example) for the complete, commented reference.
 
-For direct USB label printing from a desktop browser, see
-[Brother PT-P710BT with QZ Tray](docs/ptouch-printing.md).
+To customize the navigation and sign-in branding, set these optional values:
+
+```dotenv
+APP_NAME="Mein Inventar"
+APP_LOGO_URL=https://example.org/logo.png
+```
+
+`APP_NAME` also sets the application name in browser titles. The logo URL must
+be a publicly accessible HTTP(S) image URL; use HTTPS when serving the app over
+HTTPS. Logos are fitted without cropping. Empty values keep the built-in
+branding, and an invalid or unavailable logo falls back to the built-in icon.
+These are runtime settings, so no image rebuild is needed after the feature is
+installed. Restart the app after changing `.env.local`, or recreate the app
+container after changing its environment (for Docker Compose,
+`docker compose up -d --force-recreate app`; for Dokploy/Coolify, redeploy).
+
+For direct P-touch printing from a desktop browser, we recommend QZ Tray. See
+[installation and connection](docs/printing.md#install-and-connect) and the
+[Brother PT-P710BT setup](docs/ptouch-printing.md). Other system printers use the
+[normal browser print dialog or PDF export](docs/printing.md#print-from-this-computer).
 
 Organization administrators can configure photo-analysis and research models,
 output language, the number of input photos (1–3), overwrite behavior, and
@@ -281,11 +300,19 @@ interactive documentation.
 The built-in stateless MCP server lets trusted agents search inventory, read
 items and stock, list due counts, create or update items, and record stock
 movements or physical counts. It is disabled by default. Enable it and apply
-the database migration before connecting a client:
+the database migrations before connecting a client. Persist this setting in the
+application's runtime environment, then restart or redeploy the application:
 
-```bash
-MCP_ENABLED=true npm run db:migrate
+```dotenv
+MCP_ENABLED=true
 ```
+
+The production container applies migrations at startup. For a source
+installation, run `npm run db:migrate` with the intended database configuration.
+Setting `MCP_ENABLED` only on that command does not enable the running app.
+
+See the [technical MCP guide](https://docs.openinventory.polyxo.de/mcp) for client
+setup, the ten available tools, request examples, permissions and troubleshooting.
 
 The endpoint is `https://your-inventory.example/mcp`. Configure the client with
 an Inventory API token from **Settings → API access** as the bearer credential.

@@ -22,6 +22,28 @@ The service forwards the optional `AUTH0_*`, `AUTH_OIDC_*`, and
 redeploy as described in the root
 [authentication provider guide](../../README.md#authentication-providers).
 
+## App name and logo
+
+Add these optional values to the `inventory` service's environment and redeploy:
+
+```dotenv
+APP_NAME="My Inventory"
+APP_LOGO_URL=https://example.com/logo.png
+```
+
+The name and logo appear in navigation and on the sign-in page for all
+organizations; the name also appears in browser titles. Use a publicly
+accessible HTTPS image URL. Empty values keep the built-in branding, and
+unavailable images fall back to the built-in logo.
+
+The current [`compose.yaml`](compose.yaml) forwards both variables. Copy those
+two environment entries into older service definitions as well. After
+deploying a version with branding support, later changes only require a
+redeploy, without rebuilding the image. See the
+[branding configuration guide](https://docs.openinventory.polyxo.de/configuration#app-name-and-logo).
+
+## Demo access
+
 Set `DEMO_ACCESS_ENABLED=true` on the `inventory` service to reconcile the
 bundled read-only workshop demo after migrations. The matching optional values
 are `DEMO_ORGANIZATION_SLUG=demo` and

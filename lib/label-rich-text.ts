@@ -7,6 +7,10 @@ export const LABEL_TEXT_PLACEHOLDERS = [
 export type LabelTextPlaceholder = (typeof LABEL_TEXT_PLACEHOLDERS)[number];
 export type LabelTextFormat = Omit<LabelTextRun, "text">;
 
+export function labelTextDecoration(format: LabelTextFormat) {
+  return [format.underline && "underline", format.strikethrough && "line-through"].filter(Boolean).join(" ") || "none";
+}
+
 export function normalizeLabelText(runs: LabelTextRun[]): LabelTextRun[] {
   const result: LabelTextRun[] = [];
   for (const run of runs) {
@@ -16,9 +20,10 @@ export function normalizeLabelText(runs: LabelTextRun[]): LabelTextRun[] {
       ...(run.weight !== undefined ? { weight: run.weight } : {}),
       ...(run.italic ? { italic: true } : {}),
       ...(run.underline ? { underline: true } : {}),
+      ...(run.strikethrough ? { strikethrough: true } : {}),
     };
     const last = result.at(-1);
-    if (last && last.weight === normalized.weight && last.italic === normalized.italic && last.underline === normalized.underline) {
+    if (last && last.weight === normalized.weight && last.italic === normalized.italic && last.underline === normalized.underline && last.strikethrough === normalized.strikethrough) {
       last.text += normalized.text;
     } else result.push(normalized);
   }

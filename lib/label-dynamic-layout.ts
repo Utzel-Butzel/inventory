@@ -31,7 +31,7 @@ export function resolveLabelLayout(setup: LabelSetupDto, textWidthMm: number): L
   // A second row can set a lower bound. Never cut off other visible content.
   const widthMm = Math.max(1, setup.widthMm + delta, ...boxes
     .filter(box => box.element.visible && box.element.type !== "background")
-    .map(box => box.x + box.width));
+    .map(box => box.x + box.width)) + (text.autoWidthRightMarginMm ?? 0);
   return {
     ...setup,
     widthMm,

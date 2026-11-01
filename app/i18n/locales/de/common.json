@@ -77,6 +77,8 @@
     "unsetOrganizationDefault": "Org-Startansicht aufheben",
     "namePlaceholder": "z. B. Werkzeuge in Wartung",
     "setDefault": "Als Startansicht",
+    "useAsDefault": "Als Startansicht verwenden",
+    "useAsOrganizationDefault": "Als Startansicht für die Organisation verwenden",
     "unsetDefault": "Startansicht aufheben",
     "delete": "Ansicht löschen",
     "confirmDelete": "Löschen bestätigen",

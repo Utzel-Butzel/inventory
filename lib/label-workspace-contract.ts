@@ -17,7 +17,7 @@ export const savedLabelSchema = z.object({
   snapshot: labelSnapshotSchema.optional(),
   preview: z.string().max(3_000_000).regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/),
   resource: resourceSchema, original: resourceSchema,
-  setup: labelSetupCreateSchema.extend({ id: z.string().max(100), revision: z.number().int().positive(), createdAt: text, updatedAt: text }),
+  setup: labelSetupCreateSchema.safeExtend({ id: z.string().max(100), revision: z.number().int().positive(), createdAt: text, updatedAt: text }),
 });
 export const labelPreferencesSchema = z.object({
   media: printMediaSchema.optional(),

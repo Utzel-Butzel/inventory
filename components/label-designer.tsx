@@ -3,8 +3,15 @@
 import {
   AlignLeft, AlignCenter, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Keyboard,
   Barcode,
+  ArrowLeft,
+  ArrowRight,
   ArrowUp,
   ArrowDown,
+  ArrowUpDown,
+  BringToFront,
+  SendToBack,
+  AlignHorizontalJustifyCenter,
+  AlignVerticalJustifyCenter,
   Copy,
   Printer,
   LoaderCircle,
@@ -44,11 +51,14 @@ import {
 import { Button } from "@/components/ui";
 import { LabelCopyCount } from "@/components/label-copy-count";
 import { LabelNumberControl } from "@/components/label-number-control";
-import { LABEL_FONT_STACKS, LABEL_NAMED_FONTS, LABEL_FONT_WEIGHTS, defaultLabelFontSize, defaultLabelFontWeight, mmToPoints, pointsToMm } from "@/lib/label-typography";
+import { labelFontWeights, defaultLabelFontSize, defaultLabelFontWeight, mmToPoints, pointsToMm } from "@/lib/label-typography";
 import { labelNudge } from "@/lib/label-editor-keyboard";
+import { LabelFontSelect } from "@/components/label-font-select";
 import { LabelRichTextEditor } from "@/components/label-rich-text-editor";
 import { defaultLabelTextContent, labelPlaceholderValues } from "@/lib/label-rich-text";
 import { useLabelLayout } from "@/components/use-label-layout";
+import { hugsRowContent, isRowText, initializeLabelRow, orderedRowElements, moveRowElement } from "@/lib/label-auto-layout";
+import { labelRowHeightError, type LabelRowLayout } from "@/lib/label-setup-contract";
 import { automaticLabelText } from "@/lib/label-dynamic-layout";
 import { DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/lib/label-image-crop";
 import { placeNewLabelElement, duplicateLabelElement, moveLabelElement, orderedLabelElements } from "@/lib/label-element-layout";
@@ -58,7 +68,6 @@ import {
   MAX_LABEL_ELEMENTS,
   type LabelTextElement,
   type LabelElement,
-  type LabelFontFamily,
   type LabelSetupDto,
 } from "@/lib/label-setup-contract";
 
@@ -71,7 +80,7 @@ type PreviewScenario = "current" | "stress" | "missing";
 
 export type LabelSetupDraft = Pick<
   LabelSetupDto,
-  "name" | "widthMm" | "heightMm" | "elements" | "inverted"
+  "name" | "widthMm" | "heightMm" | "elements" | "inverted" | "layout"
 > &
   Partial<Pick<LabelSetupDto, "id" | "revision">>;
 
@@ -100,6 +109,7 @@ const BACKGROUND_FILE_TYPES = new Set([
 ]);
 
 const SAMPLE_RESOURCE: LabelResource = {
+  previewOnly: true,
   id: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
   name: "Cordless impact driver",
   sku: "TOOL-042",
@@ -219,6 +229,7 @@ function previewSetup(draft: LabelSetupDraft): LabelSetupDto {
     heightMm: draft.heightMm,
     elements: draft.elements,
     inverted: draft.inverted,
+    layout: draft.layout,
     revision: draft.revision ?? 1,
     createdAt: "",
     updatedAt: "",
@@ -300,6 +311,7 @@ export function LabelDesigner({
     startY: number;
     original: LabelElement;
     draftBefore: LabelSetupDraft;
+    layoutBefore: LabelSetupDto;
   } | null>(null);
 
   const selected =
@@ -379,8 +391,13 @@ export function LabelDesigner({
   const canvasWidth = previewLayout.widthMm * pixelsPerMm;
   const orderedElements = orderedLabelElements(value.elements);
   const selectedLayer = orderedElements.findIndex(element => labelElementKey(element) === selectedKey);
-  const autoText = automaticLabelText(value.elements);
-  const qrImageOverlap = hasVisibleQrImageOverlap(value.elements);
+  const rowLayout = value.layout;
+  const rowItems = orderedRowElements(value.elements);
+  const autoText = rowLayout ? undefined : automaticLabelText(value.elements);
+  const qrImageOverlap = !rowLayout && hasVisibleQrImageOverlap(value.elements);
+  const rowHeightError = labelRowHeightError(value);
+  const rowWidthError = !!rowLayout && previewLayout.widthMm > 1000;
+  const layoutInvalid = qrImageOverlap || rowHeightError || rowWidthError;
   const canUndo = historyState.past > 0;
   const canRedo = historyState.future > 0;
   const gridSpacingPx = gridSizeMm * pixelsPerMm;
@@ -413,6 +430,7 @@ export function LabelDesigner({
   const applyDraft = useCallback(
     (next: LabelSetupDraft, record = true) => {
       if (record) recordHistory(currentValueRef.current);
+      if (next.layout) next = initializeLabelRow(next);
       currentValueRef.current = next;
       onChange(next);
     },
@@ -464,11 +482,21 @@ export function LabelDesigner({
     [applyDraft],
   );
 
+  const updateRow = (patch: Partial<LabelRowLayout>, record = true) => {
+    const current = currentValueRef.current;
+    if (current.layout) applyDraft({ ...current, layout: { ...current.layout, ...patch } }, record);
+  };
+  const shiftRowElement = (key: string, direction: number) => {
+    const current = currentValueRef.current;
+    const index = orderedRowElements(current.elements).findIndex(element => labelElementKey(element) === key);
+    applyDraft({ ...current, elements: moveRowElement(current.elements, key, index + direction) });
+  };
+
   const addElement = (type: ElementType) => {
     const current = currentValueRef.current;
     if (current.elements.length >= MAX_LABEL_ELEMENTS) return;
     const element = placeNewLabelElement(newElement(type), current.elements);
-    applyDraft({ ...current, elements: [...current.elements, element] });
+    applyDraft({ ...current, elements: [...current.elements, { ...element, ...(current.layout ? { rowOrder: MAX_LABEL_ELEMENTS } : {}) }] });
     setSelectedKey(labelElementKey(element));
     setShowAddElements(false);
     addButtonRef.current?.focus();
@@ -563,6 +591,25 @@ export function LabelDesigner({
       const deltaY = ((event.clientY - interaction.startY) / rect.height) * 100;
       const original = interaction.original;
 
+      if (currentValueRef.current.layout && original.type !== "background") {
+        const current = currentValueRef.current;
+        if (interaction.mode === "move") {
+          const pointerX = (event.clientX - rect.left) / pixelsPerMm;
+          const items = orderedRowElements(interaction.layoutBefore.elements).filter(element => element.visible && labelElementKey(element) !== interaction.key);
+          const before = items.find(element => pointerX < (element.x + element.width / 2) / 100 * interaction.layoutBefore.widthMm);
+          const remaining = orderedRowElements(interaction.draftBefore.elements).filter(element => labelElementKey(element) !== interaction.key);
+          const index = before ? remaining.findIndex(element => labelElementKey(element) === labelElementKey(before)) : remaining.length;
+          const elements = moveRowElement(current.elements, interaction.key, index);
+          if (JSON.stringify(elements) !== JSON.stringify(current.elements)) applyDraft({ ...current, elements }, false);
+        } else {
+          const snapMm = (mm: number) => snapToGrid ? Math.round(mm / gridSizeMm) * gridSizeMm : roundMeasurement(mm);
+          updateElement(interaction.key, {
+            ...(hugsRowContent(original) ? {} : { rowWidthMm: clamp(snapMm((original.rowWidthMm ?? original.width / 100 * value.widthMm) + (event.clientX - interaction.startX) / pixelsPerMm), 0.1, 1000) }),
+            rowHeightMm: clamp(snapMm((original.rowHeightMm ?? original.height / 100 * value.heightMm) + (event.clientY - interaction.startY) / pixelsPerMm), 0.1, Math.max(0.1, value.heightMm - current.layout!.paddingTopMm - current.layout!.paddingBottomMm)),
+          }, false);
+        }
+        return;
+      }
       if (interaction.mode === "move") {
         const maximumX = 100 - original.width;
         const maximumY = 100 - original.height;
@@ -582,11 +629,11 @@ export function LabelDesigner({
         const minimumWidth = (0.1 / value.widthMm) * 100;
         const minimumHeight = (0.1 / value.heightMm) * 100;
         updateElement(interaction.key, {
-          width: clamp(
+          ...("autoWidth" in original && original.autoWidth ? {} : { width: clamp(
             snapCoordinate(original.width + deltaX, value.widthMm),
             minimumWidth,
             100 - original.x,
-          ),
+          ) }),
           height: clamp(
             snapCoordinate(original.height + deltaY, value.heightMm),
             minimumHeight,
@@ -597,16 +644,7 @@ export function LabelDesigner({
     };
     const handlePointerUp = (event: PointerEvent) => {
       if (event.pointerId !== interaction.pointerId) return;
-      const currentElement = currentValueRef.current.elements.find(
-        (element) => labelElementKey(element) === interaction.key,
-      );
-      if (
-        currentElement &&
-        (currentElement.x !== interaction.original.x ||
-          currentElement.y !== interaction.original.y ||
-          currentElement.width !== interaction.original.width ||
-          currentElement.height !== interaction.original.height)
-      ) {
+      if (JSON.stringify(currentValueRef.current.elements) !== JSON.stringify(interaction.draftBefore.elements)) {
         recordHistory(interaction.draftBefore);
       }
       setInteraction(null);
@@ -619,7 +657,7 @@ export function LabelDesigner({
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [interaction, recordHistory, snapCoordinate, updateElement, value.heightMm, value.widthMm, pixelsPerMm]);
+  }, [interaction, recordHistory, snapCoordinate, updateElement, value.heightMm, value.widthMm, pixelsPerMm, previewLayout, applyDraft, snapToGrid, gridSizeMm]);
 
   const beginInteraction = (
     event: ReactPointerEvent,
@@ -638,6 +676,7 @@ export function LabelDesigner({
       startY: event.clientY,
       original: currentValueRef.current.elements.find(item => labelElementKey(item) === labelElementKey(element)) ?? element,
       draftBefore: structuredClone(currentValueRef.current),
+      layoutBefore: previewLayout,
     });
   };
 
@@ -656,6 +695,11 @@ export function LabelDesigner({
       event.preventDefault();
       const forward = event.key === "]" || event.key === "}";
       applyDraft({ ...currentValueRef.current, elements: moveLabelElement(currentValueRef.current.elements, labelElementKey(selected), event.shiftKey ? (forward ? "front" : "back") : (forward ? "forward" : "backward")) });
+      return;
+    }
+    if (!mod && !event.altKey && selected && rowLayout && selected.type !== "background" && event.key.startsWith("Arrow")) {
+      event.preventDefault();
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") shiftRowElement(selectedKey, event.key === "ArrowLeft" ? -1 : 1);
       return;
     }
     if (!mod && !event.altKey && selected) {
@@ -692,7 +736,7 @@ export function LabelDesigner({
         const width = 30;
         const height = Math.min(80, Math.max(5, width * current.widthMm / current.heightMm * decoded.naturalHeight / decoded.naturalWidth));
         const element = placeNewLabelElement({ ...newElement("image"), type: "image", width, height, fit: "contain", source, altText: file.name.slice(0, 300) }, current.elements);
-        applyDraft({ ...current, elements: [...current.elements, element] });
+        applyDraft({ ...current, elements: [...current.elements, { ...element, ...(current.layout ? { rowOrder: MAX_LABEL_ELEMENTS } : {}) }] });
         setSelectedKey(labelElementKey(element));
       } else {
         const element = current.elements.find(element => labelElementKey(element) === key);
@@ -708,7 +752,7 @@ export function LabelDesigner({
     if (!selected || value.elements.length >= MAX_LABEL_ELEMENTS) return;
     const current = currentValueRef.current;
     const copy = duplicateLabelElement(selected, current.elements, crypto.randomUUID());
-    applyDraft({ ...current, elements: [...current.elements, copy] });
+    applyDraft({ ...current, elements: [...current.elements, { ...copy, ...(current.layout ? { rowOrder: MAX_LABEL_ELEMENTS } : {}) }] });
     setSelectedKey(labelElementKey(copy));
   };
   const testPrint = async () => {
@@ -827,7 +871,8 @@ export function LabelDesigner({
                     min="1"
                     max="1000"
                     step="0.1"
-                    value={value[key]}
+                    value={rowLayout && key === "widthMm" ? roundMeasurement(previewLayout.widthMm) : value[key]}
+                    disabled={!!rowLayout && key === "widthMm"}
                     onChange={(event) => {
                       const next = Number(event.target.value);
                       if (Number.isFinite(next)) {
@@ -840,6 +885,27 @@ export function LabelDesigner({
               ))}
             </div>
 
+            <label className="mt-4 block text-xs font-semibold text-muted">
+              {t("designer.layoutMode")}
+              <select value={rowLayout ? "row" : "free"} onChange={event => applyDraft(event.target.value === "row" ? initializeLabelRow(currentValueRef.current) : { ...currentValueRef.current, layout: null })}
+                className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-2 text-xs text-foreground">
+                <option value="free">{t("designer.freeLayout")}</option>
+                <option value="row">{t("designer.rowLayout")}</option>
+              </select>
+            </label>
+            {rowLayout ? <div className="mt-3 space-y-3">
+              <p className="text-xs leading-5 text-muted">{t("designer.rowHint")}</p>
+              {(["gapMm", "paddingTopMm", "paddingRightMm", "paddingBottomMm", "paddingLeftMm"] as const).map(key =>
+                <LabelNumberControl key={key} label={t(`designer.row.${key}`)} value={rowLayout[key]} min={0} max={1000} step={0.1} sliderMax={20}
+                  onChange={(number, record) => updateRow({ [key]: number }, record)} />)}
+              <label className="block text-xs font-semibold text-muted">{t("designer.row.align")}
+                <select value={rowLayout.align} onChange={event => updateRow({ align: event.target.value as LabelRowLayout["align"] })}
+                  className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-foreground">
+                  {(["top", "middle", "bottom"] as const).map(align => <option key={align} value={align}>{t(`designer.row.${align}`)}</option>)}
+                </select>
+              </label>
+              <p className="text-xs font-semibold text-brand">{t("designer.actualLength", { length: roundMeasurement(previewLayout.widthMm) })}</p>
+            </div> : <>
             <label className="mt-4 block text-xs font-semibold text-muted">
               {t("designer.autoLength")}
               <select value={autoText ? labelElementKey(autoText) : ""}
@@ -856,8 +922,15 @@ export function LabelDesigner({
               </select>
             </label>
             <p className="mt-2 text-[11px] leading-4 text-muted">{t("designer.autoLengthHint")}</p>
+            {autoText ? <div className="mt-3">
+              <LabelNumberControl label={t("designer.autoLengthRightMargin")} unit="mm"
+                value={autoText.autoWidthRightMarginMm ?? 0} min={0} max={1000} step={0.1} sliderMax={20}
+                onChange={(autoWidthRightMarginMm, record) => updateElement(labelElementKey(autoText), { autoWidthRightMarginMm }, record)} />
+              <p className="mt-1.5 text-[11px] leading-4 text-muted">{t("designer.autoLengthRightMarginHint")}</p>
+            </div> : null}
             {autoText ? <p className="mt-2 text-xs font-semibold text-brand">{t("designer.actualLength", { length: roundMeasurement(previewLayout.widthMm) })}</p> : null}
 
+            </>}
             <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs font-semibold">
               <input type="checkbox" checked={value.inverted ?? false} onChange={event => applyDraft({ ...currentValueRef.current, inverted: event.target.checked })} />
               {t("print.inverted")}
@@ -866,9 +939,9 @@ export function LabelDesigner({
 
             <div className="mt-6">
               <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
-                {t("designer.layersTitle")}
+                {t(rowLayout ? "designer.rowOrder" : "designer.layersTitle")}
               </p>
-              <p className="mt-1 text-[11px] text-muted">{t("designer.layersHint")}</p>
+              <p className="mt-1 text-[11px] text-muted">{t(rowLayout ? "designer.rowHint" : "designer.layersHint")}</p>
               <div className="mt-3" onKeyDown={event => {
                 if (event.key === "Escape" && showAddElements) {
                   event.preventDefault();
@@ -923,7 +996,7 @@ export function LabelDesigner({
               </label>
               {backgroundError ? <p role="alert" className="mt-2 text-xs text-danger">{backgroundError}</p> : null}
               <div className="mt-3 space-y-1.5">
-                {[...orderedElements].reverse().map(element => {
+                {(rowLayout ? [...rowItems, ...value.elements.filter(element => element.type === "background")] : [...orderedElements].reverse()).map(element => {
                   const key = labelElementKey(element);
                   const option = ELEMENT_OPTIONS.find(item => item.type === element.type)!;
                   const Icon = option.icon;
@@ -949,13 +1022,13 @@ export function LabelDesigner({
                         </span>
                       </button>
                       <div className="flex shrink-0 flex-col">
-                        <button type="button" title={t("designer.bringForward")} aria-label={t("designer.raiseElement", { element: name })}
-                          disabled={key === labelElementKey(orderedElements.at(-1)!)}
-                          onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, key, "forward") })}
+                        <button type="button" title={t(rowLayout ? "designer.rowEarlier" : "designer.bringForward")} aria-label={rowLayout ? `${name}: ${t("designer.rowEarlier")}` : t("designer.raiseElement", { element: name })}
+                          disabled={rowLayout ? element.type === "background" || element === rowItems[0] : key === labelElementKey(orderedElements.at(-1)!)}
+                          onClick={() => rowLayout ? shiftRowElement(key, -1) : applyDraft({ ...value, elements: moveLabelElement(value.elements, key, "forward") })}
                           className="rounded px-1 text-muted hover:text-brand disabled:opacity-25"><ArrowUp size={14} /></button>
-                        <button type="button" title={t("designer.sendBackward")} aria-label={t("designer.lowerElement", { element: name })}
-                          disabled={key === labelElementKey(orderedElements[0])}
-                          onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, key, "backward") })}
+                        <button type="button" title={t(rowLayout ? "designer.rowLater" : "designer.sendBackward")} aria-label={rowLayout ? `${name}: ${t("designer.rowLater")}` : t("designer.lowerElement", { element: name })}
+                          disabled={rowLayout ? element.type === "background" || element === rowItems.at(-1) : key === labelElementKey(orderedElements[0])}
+                          onClick={() => rowLayout ? shiftRowElement(key, 1) : applyDraft({ ...value, elements: moveLabelElement(value.elements, key, "backward") })}
                           className="rounded px-1 text-muted hover:text-brand disabled:opacity-25"><ArrowDown size={14} /></button>
                       </div>
                       <button
@@ -1079,7 +1152,7 @@ export function LabelDesigner({
                 ref={canvasRef}
                 role="application"
                 tabIndex={0}
-                aria-label={t("designer.canvas")}
+                aria-label={t(rowLayout ? "designer.rowCanvas" : "designer.canvas")}
                 className="relative shrink-0 touch-none outline-none focus-visible:ring-4 focus-visible:ring-focus/30"
                 style={{ width: canvasWidth, height: canvasHeight }}
                 onPointerDown={() => canvasRef.current?.focus()}
@@ -1130,7 +1203,15 @@ export function LabelDesigner({
                             <Grip size={9} aria-hidden="true" />
                             {elementName(element)}
                           </span>
-                          {!("autoWidth" in element && element.autoWidth) ? <button
+                          {(rowLayout ? hugsRowContent(element) : "autoWidth" in element && element.autoWidth) ? <button
+                            type="button"
+                            aria-label={t("designer.resizeElementHeight", { element: elementName(element) })}
+                            title={t("designer.resizeElementHeight", { element: elementName(element) })}
+                            className="absolute -bottom-2 left-1/2 grid h-4 w-6 -translate-x-1/2 cursor-ns-resize place-items-center rounded-sm border border-on-brand bg-brand-solid text-on-brand shadow"
+                            onPointerDown={event => beginInteraction(event, element, "resize")}
+                          >
+                            <ArrowUpDown size={11} aria-hidden="true" />
+                          </button> : <button
                             type="button"
                             aria-label={t("designer.resizeElement", {
                               element: elementName(element),
@@ -1139,7 +1220,7 @@ export function LabelDesigner({
                             onPointerDown={(event) => beginInteraction(event, element, "resize")}
                           >
                             <Maximize2 size={9} aria-hidden="true" />
-                          </button> : null}
+                          </button>}
                         </>
                       ) : null}
                     </div>
@@ -1176,19 +1257,49 @@ export function LabelDesigner({
                     <Trash2 size={15} aria-hidden="true" />
                   </button>
                 </div>
-                <details open className="mb-4 rounded-xl border border-border p-3">
-                  <summary className="cursor-pointer text-xs font-semibold text-muted">{t("designer.arrange")}</summary>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                  <Button className="px-2 text-xs" size="sm" variant="secondary" disabled={selectedLayer === orderedElements.length - 1} onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "forward") })}>{t("designer.bringForward")}</Button>
-                  <Button className="px-2 text-xs" size="sm" variant="secondary" disabled={selectedLayer === 0} onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "backward") })}>{t("designer.sendBackward")}</Button>
-                  <Button size="sm" variant="secondary" disabled={selectedLayer === orderedElements.length - 1} onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "front") })}>{t("designer.bringFront")}</Button>
-                  <Button size="sm" variant="secondary" disabled={selectedLayer === 0} onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, "back") })}>{t("designer.sendBack")}</Button>
-                  {selected.type !== "background" ? <>
-                    <Button className="col-span-2" size="sm" variant="secondary" onClick={() => updateElement(selectedKey, { x: clamp(selected.x + ((100 - (previewSelected?.width ?? selected.width)) / 2 - (previewSelected?.x ?? selected.x)) * previewLayout.widthMm / value.widthMm, 0, 100 - selected.width) })}>{t("designer.centerHorizontal")}</Button>
-                    <Button className="col-span-2" size="sm" variant="secondary" onClick={() => updateElement(selectedKey, { y: (100 - selected.height) / 2 })}>{t("designer.centerVertical")}</Button>
+                <div role="group" aria-label={t("designer.arrange")} className="mb-4 flex flex-wrap items-center gap-1 rounded-xl border border-border p-1.5">
+                  {rowLayout && selected.type !== "background" ? <>
+                    <button type="button" title={t("designer.rowEarlier")} aria-label={t("designer.rowEarlier")}
+                      disabled={selected === rowItems[0]} onClick={() => shiftRowElement(selectedKey, -1)}
+                      className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-hover disabled:opacity-30"><ArrowLeft size={17} /></button>
+                    <button type="button" title={t("designer.rowLater")} aria-label={t("designer.rowLater")}
+                      disabled={selected === rowItems.at(-1)} onClick={() => shiftRowElement(selectedKey, 1)}
+                      className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-hover disabled:opacity-30"><ArrowRight size={17} /></button>
+                  </> : <>{([
+                    ["forward", "bringForward", ArrowUp],
+                    ["backward", "sendBackward", ArrowDown],
+                    ["front", "bringFront", BringToFront],
+                    ["back", "sendBack", SendToBack],
+                  ] as const).map(([direction, label, Icon]) => (
+                    <span key={direction} title={t(`designer.${label}`)}>
+                      <button type="button" aria-label={t(`designer.${label}`)}
+                        disabled={direction === "front" || direction === "forward" ? selectedLayer === orderedElements.length - 1 : selectedLayer === 0}
+                        onClick={() => applyDraft({ ...value, elements: moveLabelElement(value.elements, selectedKey, direction) })}
+                        className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-focus disabled:opacity-30">
+                        <Icon size={17} aria-hidden="true" />
+                      </button>
+                    </span>
+                  ))}</>}
+                  {selected.type !== "background" && !rowLayout ? <>
+                    <span className="mx-0.5 h-6 border-l border-border" aria-hidden="true" />
+                    <button type="button" title={t("designer.centerHorizontal")} aria-label={t("designer.centerHorizontal")}
+                      className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-focus"
+                      onClick={() => updateElement(selectedKey, { x: clamp(selected.x + ((100 - (previewSelected?.width ?? selected.width)) / 2 - (previewSelected?.x ?? selected.x)) * previewLayout.widthMm / value.widthMm, 0, 100 - selected.width) })}>
+                      <AlignHorizontalJustifyCenter size={17} aria-hidden="true" />
+                    </button>
+                    <button type="button" title={t("designer.centerVertical")} aria-label={t("designer.centerVertical")}
+                      className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-focus"
+                      onClick={() => updateElement(selectedKey, { y: (100 - selected.height) / 2 })}>
+                      <AlignVerticalJustifyCenter size={17} aria-hidden="true" />
+                    </button>
                   </> : null}
-                  </div>
-                </details>
+                </div>
+                {rowLayout && isRowText(selected) ? <label className="mb-3 block text-xs font-semibold text-muted">{t("designer.rowSizing")}
+                  <select value={selected.rowSizing ?? "content"} onChange={event => updateElement(selectedKey, { rowSizing: event.target.value as "content" | "fixed", rowWidthMm: previewSelected!.width / 100 * previewLayout.widthMm })}
+                    className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-foreground">
+                    <option value="content">{t("designer.hugContent")}</option><option value="fixed">{t("designer.fixedSize")}</option>
+                  </select>
+                </label> : null}
                 {selected.type !== "background" ? (
                   <div className="grid grid-cols-2 gap-2">
                     {(["x", "y", "width", "height"] as const).map((key) => {
@@ -1212,10 +1323,10 @@ export function LabelDesigner({
                           <input
                             type="number"
                             min={displayedCoordinate(key, minimumNormalized)}
-                            max={displayedCoordinate(key, maximumNormalized)}
+                            max={rowLayout && (key === "width" || key === "height") ? displayedCoordinate(key, (key === "width" ? 1000 : value.heightMm - rowLayout.paddingTopMm - rowLayout.paddingBottomMm) / dimensionMm * 100) : displayedCoordinate(key, maximumNormalized)}
                             step={coordinateUnit === "mm" ? "0.1" : "0.01"}
                             value={displayedCoordinate(key, previewSelected?.[key] ?? selected[key])}
-                            disabled={key === "width" && "autoWidth" in selected && selected.autoWidth}
+                            disabled={rowLayout ? key === "x" || key === "y" || key === "width" && hugsRowContent(selected) : key === "width" && "autoWidth" in selected && selected.autoWidth}
                             onChange={(event) => {
                               const next = Number(event.target.value);
                               if (!Number.isFinite(next)) return;
@@ -1223,6 +1334,11 @@ export function LabelDesigner({
                                 coordinateUnit === "mm"
                                   ? (next / dimensionMm) * 100
                                   : next;
+                              if (rowLayout) {
+                                const mm = normalized / 100 * dimensionMm;
+                                if (key === "width" || key === "height") updateElement(selectedKey, { [key === "width" ? "rowWidthMm" : "rowHeightMm"]: clamp(mm, 0.1, key === "width" ? 1000 : Math.max(0.1, value.heightMm - rowLayout.paddingTopMm - rowLayout.paddingBottomMm)) });
+                                return;
+                              }
                               // Map the visible geometry back to the unchanged template coordinate system.
                               const baseNormalized = key === "x" || key === "width"
                                 ? selected[key] + (normalized - (previewSelected?.[key] ?? selected[key])) * previewLayout.widthMm / value.widthMm
@@ -1378,6 +1494,12 @@ export function LabelDesigner({
 
                 {selected.type === "qr" ? (
                   <div className="mt-4 space-y-4">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={selected.useShortcode ?? false}
+                        onChange={event => updateElement(labelElementKey(selected), { useShortcode: event.target.checked })} />
+                      {t("designer.useShortcode")}
+                    </label>
+                    <p className="text-xs text-muted">{t("designer.shortcodeHint")}</p>
                     <div className="grid grid-cols-2 gap-2">
                       {([
                         ["foregroundColor", "designer.qrForeground", "#000000"],
@@ -1428,15 +1550,15 @@ export function LabelDesigner({
                   <>
                     <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-subtle p-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">{t("designer.typography")}</p>
-                      <label className="block text-[11px] font-semibold text-muted">
-                        {t("designer.fontFamily")}
-                        <select value={(selected as TextElement).fontFamily ?? (["name", "subtitle", "text"].includes(selected.type) ? "sans" : "monospace")}
-                          onChange={event => updateElement(labelElementKey(selected), { fontFamily: event.target.value as LabelFontFamily })}
-                          className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-xs text-foreground">
-                          {LABEL_NAMED_FONTS.map(([key, name]) => <option key={key} value={key} style={{ fontFamily: LABEL_FONT_STACKS[key] }}>{name}</option>)}
-                          {(["sans", "serif", "monospace", "rounded"] as const).map(key => <option key={key} value={key}>{t(`designer.fontFamilies.${key}`)}</option>)}
-                        </select>
-                      </label>
+                      <LabelFontSelect
+                        value={(selected as TextElement).fontFamily ?? (["name", "subtitle", "text"].includes(selected.type) ? "sans" : "monospace")}
+                        onChange={fontFamily => {
+                          const weights = labelFontWeights(fontFamily);
+                          const currentWeight = (selected as TextElement).fontWeight;
+                          const fontWeight = currentWeight === undefined ? undefined : weights.reduce((nearest, weight) => Math.abs(weight - currentWeight) < Math.abs(nearest - currentWeight) ? weight : nearest);
+                          updateElement(labelElementKey(selected), { fontFamily, fontWeight });
+                        }}
+                      />
                       <label className="block text-[11px] font-semibold text-muted">
                         {t("designer.fontWeight")}
                         <select value={(selected as TextElement).fontWeight ?? ""} onChange={event => {
@@ -1444,7 +1566,7 @@ export function LabelDesigner({
                           updateElement(labelElementKey(selected), { fontWeight: weight, ...((selected as TextElement).content ? { content: (selected as TextElement).content!.map(run => ({ ...run, weight: undefined })) } : {}) });
                         }} className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-xs text-foreground">
                           <option value="">{t("designer.originalWeight", { weight: defaultLabelFontWeight({ ...selected, fontWeight: undefined } as TextElement) })}</option>
-                          {LABEL_FONT_WEIGHTS.filter(weight => (selected as TextElement).fontFamily !== "nunito-sans" || weight >= 200).map(weight => <option key={weight} value={weight}>{weight} · {t(`designer.weights.${weight}`)}</option>)}
+                          {labelFontWeights((selected as TextElement).fontFamily).map(weight => <option key={weight} value={weight}>{weight} · {t(`designer.weights.${weight}`)}</option>)}
                         </select>
                       </label>
                       <div className="flex items-center justify-between gap-2">
@@ -1479,6 +1601,8 @@ export function LabelDesigner({
                     <LabelRichTextEditor
                       key={labelElementKey(selected)}
                       value={defaultLabelTextContent(selected as TextElement)}
+                      fontFamily={(selected as TextElement).fontFamily ?? (["name", "subtitle", "text"].includes(selected.type) ? "sans" : "monospace")}
+                      fontWeight={defaultLabelFontWeight(selected as TextElement)}
                       placeholderValues={labelPlaceholderValues(previewResource, origin)}
                       onChange={content => updateElement(labelElementKey(selected), { content } as Partial<TextElement>)}
                     />
@@ -1489,7 +1613,7 @@ export function LabelDesigner({
                       {t("designer.textOverflow")}
                       <select
                         value={(selected as TextElement).textOverflow ?? "ellipsis"}
-                        disabled={(selected as TextElement).autoWidth}
+                        disabled={rowLayout ? hugsRowContent(selected) : (selected as TextElement).autoWidth}
                         onChange={(event) =>
                           updateElement(labelElementKey(selected), {
                             textOverflow: event.target.value as "ellipsis" | "shrink",
@@ -1532,7 +1656,7 @@ export function LabelDesigner({
                   </>
                 ) : null}
                 <p className="mt-5 text-[12px] leading-5 text-muted">
-                  {t("designer.instructions")}
+                  {t(rowLayout ? "designer.rowInstructions" : "designer.instructions")}
                 </p>
               </div>
             ) : (
@@ -1549,11 +1673,12 @@ export function LabelDesigner({
         <footer className="flex flex-col gap-3 border-t border-border bg-surface px-5 py-4 sm:px-6">
           <div>
             <button type="button" className="mb-2 inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground" aria-expanded={showShortcuts} onClick={() => setShowShortcuts(current => !current)}><Keyboard size={14} />{t("designer.shortcuts")}</button>
-            {showShortcuts ? <p className="mb-3 rounded-lg bg-surface-subtle px-3 py-2 text-xs leading-5 text-muted-strong">{t("designer.shortcutHelp")}</p> : null}
+            {showShortcuts ? <p className="mb-3 rounded-lg bg-surface-subtle px-3 py-2 text-xs leading-5 text-muted-strong">{t(rowLayout ? "designer.rowShortcutHelp" : "designer.shortcutHelp")}</p> : null}
             {testError ? <p role="alert" className="mb-2 text-xs font-medium text-danger">{testError}</p> : null}
             {testSent ? <p role="status" className="mb-2 text-xs font-medium text-brand">{testPrintSuccess}</p> : null}
             {onTestPrint ? <p className="mb-2 text-xs text-muted">{t("designer.testHint", { destination: testPrintDestination, count: testCopies })}</p> : null}
             {error ? <p role="alert" className="text-xs font-medium text-danger">{error}</p> : null}
+            {rowHeightError || rowWidthError ? <p role="alert" className="text-xs font-semibold text-danger">{t(rowHeightError ? "designer.rowHeightError" : "designer.rowWidthError")}</p> : null}
             {qrImageOverlap ? (
               <p role="alert" className="text-xs font-medium text-warning">
                 {t("designer.overlap")}
@@ -1567,7 +1692,7 @@ export function LabelDesigner({
           <div className="flex flex-wrap items-center justify-end gap-2">
             {onTestPrint ? <div className="mr-auto flex flex-wrap items-center gap-2">
               <LabelCopyCount label={t("copies.title")} value={testCopies} onChange={setTestCopies} disabled={saving || testPrinting || uploadingImage} />
-              <Button variant="secondary" onClick={() => void testPrint()} disabled={saving || testPrinting || uploadingImage || qrImageOverlap}>
+              <Button variant="secondary" onClick={() => void testPrint()} disabled={saving || testPrinting || uploadingImage || layoutInvalid}>
               {testPrinting ? <LoaderCircle size={15} className="animate-spin" /> : <Printer size={15} />}{t(testPrinting ? "designer.testPrinting" : "designer.testPrint", { count: testCopies })}
             </Button></div> : null}
             {onDelete ? (
@@ -1578,12 +1703,12 @@ export function LabelDesigner({
             <Button variant="secondary" onClick={onClose} disabled={saving || testPrinting || uploadingImage}>
               {t("designer.cancel")}
             </Button>
-            {onSaveAsNew && value.id ? <Button variant="secondary" onClick={onSaveAsNew} disabled={saving || testPrinting || uploadingImage || !value.name.trim() || qrImageOverlap}>
+            {onSaveAsNew && value.id ? <Button variant="secondary" onClick={onSaveAsNew} disabled={saving || testPrinting || uploadingImage || !value.name.trim() || layoutInvalid}>
               <Copy size={15} />{t("designer.saveAsNew")}
             </Button> : null}
             <Button
               onClick={onSave}
-              disabled={saving || testPrinting || uploadingImage || !value.name.trim() || qrImageOverlap}
+              disabled={saving || testPrinting || uploadingImage || !value.name.trim() || layoutInvalid}
             >
               {saving ? t("designer.saving") : t("designer.save")}
             </Button>
