@@ -21,6 +21,7 @@ export default defineConfig([
     "public/tesseract/**",
     "public/tesseract-core/**",
     "public/vendor/**",
+    "integrations/paperlesspaper/assets/paperless.iife.js",
     "next-env.d.ts",
   ]),
 ]);

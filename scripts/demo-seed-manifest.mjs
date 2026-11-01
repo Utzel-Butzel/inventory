@@ -1,4 +1,4 @@
-export const DEMO_SEED_VERSION = 2;
+export const DEMO_SEED_VERSION = 3;
 
 export const DEMO_ORGANIZATION = Object.freeze({
   id: "d3e00000-0000-4000-8000-000000000001",
@@ -216,7 +216,7 @@ export const DEMO_RESOURCES = Object.freeze([
   {
     id: "d3e00000-0000-4000-8000-000000000101",
     name: "Regal A2",
-    description: "Materialregal an der Nordwand, Felder A1 bis A4.",
+    description: "Zentrales Materialregal an der Nordwand der Werkstatt Nord. Hier lagern die Akku-Bohrschrauber mit Zubehör und das Kleinteilefach K3 für Schrauben und Kabelbinder.",
     type: "place",
     status: "available",
     sku: "ORT-REGAL-A2",
@@ -228,14 +228,14 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["lager", "nordwand"],
     categories: [{ name: "Lagerort", color: "#16a374" }],
     customFields: {},
-    notes: "Traglast je Fach: 120 kg.",
+    notes: "Werkzeugkoffer auf den unteren Böden abstellen, Kleinteile im Fach K3 einsortieren. Ausgeliehene Geräte nach der Rückgabe mit Akku und Zubehör auf Vollständigkeit prüfen. Traglast je Fach: 120 kg.",
     updatedDaysAgo: 21,
     kind: "place",
   },
   {
     id: "d3e00000-0000-4000-8000-000000000102",
     name: "Werkbank E1",
-    description: "Elektronikarbeitsplatz mit ESD-Matte und Absaugung.",
+    description: "Elektronikarbeitsplatz für Reparaturen und Prototypen mit ESD-Matte, Lötstationen und Absaugung. Hier ist auch das Digitalmultimeter für die nächste Kalibrierung hinterlegt.",
     type: "place",
     status: "available",
     sku: "ORT-WERKBANK-E1",
@@ -247,14 +247,14 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["elektronik", "esd"],
     categories: [{ name: "Arbeitsplatz", color: "#3b82f6" }],
     customFields: {},
-    notes: "Absaugung vor Lötarbeiten einschalten.",
+    notes: "Absaugung vor Lötarbeiten einschalten und die Arbeitsfläche nach Gebrauch freiräumen. Das Digitalmultimeter ist zur Kalibrierung vorgemerkt und bis zur Freigabe nicht verfügbar.",
     updatedDaysAgo: 18,
     kind: "place",
   },
   {
     id: "d3e00000-0000-4000-8000-000000000103",
     name: "Fach K3",
-    description: "Kleinteilefach im Regal A2.",
+    description: "Übersichtliches Kleinteilefach im Regal A2 mit blauen Sichtlagerkästen für Schrauben M4×20 und einer separaten Schale für schwarze Kabelbinder. Verbrauchsmaterial ist hier direkt griffbereit.",
     type: "place",
     status: "available",
     sku: "ORT-FACH-K3",
@@ -266,7 +266,7 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["kleinteile", "lager"],
     categories: [{ name: "Lagerort", color: "#16a374" }],
     customFields: {},
-    notes: "Behälter 3 bis 6.",
+    notes: "Schrauben und Kabelbinder getrennt einsortieren und Entnahmen im Bestand buchen. Die Kabelbinder liegen unter dem Mindestbestand; eine Nachbestellung über 100 Stück ist bereits unterwegs.",
     updatedDaysAgo: 14,
     kind: "place",
   },
@@ -783,6 +783,33 @@ export const DEMO_MEDIA = Object.freeze([
     "width": 1536,
     "height": 1024,
     "altText": "KI-generiertes Demobild schwarzer Kabelbinder in einer Ablageschale."
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a06",
+    "resourceId": "d3e00000-0000-4000-8000-000000000101",
+    "filename": "generated-shelf.webp",
+    "sha256": "fdc2bbd8f22bbdd685162d0d22210522e8162b1a4b9987f3486b5e66a8ddb176",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild von Regal A2 mit Werkzeugkoffern, Akkugeräten und blauen Kleinteilekästen."
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a07",
+    "resourceId": "d3e00000-0000-4000-8000-000000000102",
+    "filename": "generated-workbench.webp",
+    "sha256": "a4302c20cd8c35bbf5bb2988445f7070a886d0b51a382b9faec7741878649e62",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild von Werkbank E1 mit blauer ESD-Matte, Lötstation, Absaugung und Multimeter."
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a08",
+    "resourceId": "d3e00000-0000-4000-8000-000000000103",
+    "filename": "generated-parts-bin.webp",
+    "sha256": "6ee159ebeb2b68c58150061a6292751ec122abfc0830382ecb44e212ec1f8b52",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild von Fach K3 mit sortierten Schrauben, Muttern, Unterlegscheiben und Kabelbindern."
   }
 ]);
 
@@ -901,6 +928,10 @@ export function validateDemoSeedManifest() {
   for (const media of DEMO_MEDIA) {
     if (!resourceIds.has(media.resourceId)) errors.push(`Unknown media resource: ${media.id}`);
     if (!/^[0-9a-f]{64}$/.test(media.sha256)) errors.push(`Invalid media checksum: ${media.filename}`);
+  }
+  const picturedResourceIds = new Set(DEMO_MEDIA.map(({ resourceId }) => resourceId));
+  for (const resource of DEMO_RESOURCES) {
+    if (!picturedResourceIds.has(resource.id)) errors.push(`Missing demo image: ${resource.sku}`);
   }
 
   return errors;

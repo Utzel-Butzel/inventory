@@ -5,6 +5,8 @@
 
   <p><strong>Self-hosted inventory and stock management for teams, spaces, and physical things.</strong></p>
 
+  <p>Made by <a href="https://paperlesspaper.de">paperlesspaper</a> · Sponsored by <strong>WireWire GmbH</strong></p>
+
   <p>
     <a href="https://github.com/Utzel-Butzel/inventory/actions/workflows/deployment-check.yml"><img src="https://github.com/Utzel-Butzel/inventory/actions/workflows/deployment-check.yml/badge.svg" alt="Deployment check"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/github/license/Utzel-Butzel/inventory?color=665cff" alt="MIT License"></a>
@@ -12,50 +14,71 @@
   </p>
 
   <p>
-    <a href="#quick-start">Quick start</a> ·
-    <a href="#features">Features</a> ·
-    <a href="#api-and-integrations">API</a> ·
-    <a href="#local-development">Development</a> ·
-    <a href="#contributing">Contributing</a>
+    <a href="https://openinventory.polyxo.de">Website</a> ·
+    <a href="https://demo.openinventory.polyxo.de/login?demo=1">Live demo</a> ·
+    <a href="https://docs.openinventory.polyxo.de">Documentation</a> ·
+    <a href="#quick-start">Quick start</a>
   </p>
 </div>
 
-Open Inventory helps you catalog equipment, supplies, collections, rooms, and
-other physical assets. It combines flexible inventory records with auditable
-stock workflows, mobile capture, maps, optional AI, a scoped REST API, and an
-opt-in Model Context Protocol (MCP) endpoint.
+Open Inventory helps teams, makerspaces, and businesses keep track of equipment,
+supplies, and other physical assets. Catalog what you own, find where it is,
+and manage stock, reservations, and shared equipment on your own infrastructure.
 
-Your data stays on infrastructure you control. The web app, API, migrations,
-and native iOS and Android apps live in this repository; the public website and product
-content live in [open-inventory-website](https://github.com/Utzel-Butzel/open-inventory-website).
+Explore the [live demo](https://demo.openinventory.polyxo.de/login?demo=1) or visit
+[the website](https://openinventory.polyxo.de) for screenshots, use cases, and
+app downloads.
+
+<p align="center">
+  <a href="https://demo.openinventory.polyxo.de/login?demo=1">
+    <img src="https://openinventory.polyxo.de/marketing/screenshots/web-inventory-cards-demo.png" width="960" alt="Open Inventory demo showing tools, consumables, photos, locations, and stock quantities in a card view">
+  </a>
+</p>
 
 ## Features
 
 | | |
 | --- | --- |
-| **Flexible inventory** | Custom types and fields, relationships, tags, media, variants, translations, and CSV/Excel/PDF exchange |
-| **Traceable stock** | Bulk and serialized tracking, location balances, counts, assignments, reservations, bills of materials, and purchase orders |
-| **Fast capture** | Camera batches, QR and barcode workflows, printable labels, duplicate detection, and a native iPhone app |
-| **Maps and rooms** | GPS, GeoJSON points and polygons, spatial containment, LiDAR RoomPlan scans, and indoor 3D placement |
-| **Optional AI** | Image analysis, item recognition, photo counting, cover generation, and content translation |
-| **Built for teams** | Isolated organizations, custom roles, conditional access, Auth0, notifications, API tokens, and signed webhooks |
+| **Flexible inventory** | Custom types and fields, relationships, tags, photos, attachments, and variants |
+| **Stock management** | Quantities and serial numbers, location balances, inventory counts, reservations, bills of materials, and purchase orders |
+| **Mobile capture** | QR and barcode scanning, printable labels, photo batches, and native iOS and Android apps |
+| **Maps and rooms** | Geographic locations, indoor 3D placement, and LiDAR room scans through the iOS app |
+| **Team access** | Multiple organizations, configurable roles and permissions, and notifications |
+| **Integrations** | CSV/Excel/PDF exchange, a REST API, webhooks, and an opt-in MCP endpoint |
+| **Optional AI** | Item recognition, photo counting, image generation, and translations |
 
-### Organizations
+See the [feature overview](https://openinventory.polyxo.de/features) for more.
 
-Users can belong to multiple isolated organizations and have a different role
-in each one. Authenticated Webapp pages use a short, editable organization slug
-as the first URL segment, for example
-`https://inventory.example.com/workshop-berlin/inventory`. Legacy UUID URLs
-redirect to the current slug, so existing links remain valid.
-API and iOS clients select a membership with `X-Organization-ID`; standalone
-API tokens remain pinned to the organization that issued them. Manage and
-switch organizations under **Settings → Organization**.
+## A look inside
 
-Deployment superadmins configured with the comma-separated `SUPERADMIN_EMAILS`
-environment variable can review and edit every workspace under **Settings →
-All organizations**. Organization creation by regular signed-in users is off by
-default; set `USERS_CAN_CREATE_ORGANIZATIONS=true` to enable it. Superadmins can
-always create organizations from the deployment-wide page.
+Track stock levels and design scannable labels for your equipment and supplies.
+
+<table>
+  <tr>
+    <th width="50%">Stock at a glance</th>
+    <th width="50%">Printable QR labels</th>
+  </tr>
+  <tr>
+    <td><a href="https://openinventory.polyxo.de/marketing/screenshots/web-stock.png"><img src="https://openinventory.polyxo.de/marketing/screenshots/web-stock.png" width="480" alt="Stock overview with quantities, low-stock alerts, incoming orders, and estimated coverage"></a></td>
+    <td><a href="https://openinventory.polyxo.de/marketing/screenshots/web-label-designer.png"><img src="https://openinventory.polyxo.de/marketing/screenshots/web-label-designer.png" width="480" alt="Label designer with item selection and a printable QR-code label preview"></a></td>
+  </tr>
+</table>
+
+From the screen to the shelf: QR labels connect physical storage to your inventory.
+
+<table>
+  <tr>
+    <th width="60%">Find the right shelf</th>
+    <th width="40%">Identify individual parts bins</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://openinventory.polyxo.de/marketing/real-world/shelf-labels.webp"><img src="https://openinventory.polyxo.de/marketing/real-world/shelf-labels.webp" width="560" alt="Storage shelf with printed labels for AA and AAA batteries, including QR codes and item illustrations"></a></td>
+    <td align="center"><a href="https://openinventory.polyxo.de/marketing/real-world/parts-bin-label.webp"><img src="https://openinventory.polyxo.de/marketing/real-world/parts-bin-label.webp" width="280" alt="Blue storage bin filled with spacers and marked with a QR-code label and item image"></a></td>
+  </tr>
+</table>
+
+Photos and screenshots from the [Open Inventory website](https://openinventory.polyxo.de).
+Click the gallery images to view them at full size.
 
 ## Quick start
 
@@ -67,311 +90,51 @@ cd inventory
 ./scripts/install.sh
 ```
 
-The installer generates unique secrets, starts PostgreSQL and Open Inventory,
-runs migrations, waits for the health check, and prints the sign-in details.
-Open [http://localhost:3000](http://localhost:3000) unless you selected another
-URL.
+The installer generates secrets, starts the app and PostgreSQL, applies database
+migrations, and prints the sign-in details. By default, the app runs at
+[http://localhost:3000](http://localhost:3000).
 
 > [!IMPORTANT]
 > After the first sign-in, change the generated password under **Settings →
 > Users**. Then remove `BOOTSTRAP_ADMIN_PASSWORD` and
 > `BOOTSTRAP_ADMIN_PASSWORD_ONCE` from `.env` and restart the stack.
 
-Use a different port or public URL when needed:
-
-```bash
-APP_PORT=8080 ./scripts/install.sh
-AUTH_URL=https://inventory.example.com ./scripts/install.sh
-```
-
-The installer never overwrites an existing `.env`. Start an already configured
-installation with:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
-```
-
-PostgreSQL data and uploads use persistent Docker volumes. Avoid
-`docker compose down --volumes` unless you intend to delete both.
-
-## Deployment options
-
-### Docker Compose
-
-The [quick start](#quick-start) is the recommended setup for a single server.
-Put a TLS reverse proxy in front of it and set `AUTH_URL` to the exact public
-origin.
-
-### Dokploy
-
-Import the ready-made PostgreSQL and app bundle using the
-[Dokploy deployment guide](deploy/dokploy/README.md).
-
-### Coolify
-
-Paste the service definition from the
-[Coolify deployment guide](deploy/coolify/README.md).
-
-### iOS / TestFlight
-
-The native iOS app is deployed with the repository's pinned Fastlane version.
-After the one-time App Store Connect and Xcode signing setup described in the
-[iOS deployment guide](ios/Inventory/README.md#testflight-deployment), deploy a
-new build from the repository root with:
-
-```bash
-npm run deploy
-```
-
-This builds a signed IPA and uploads it to TestFlight. It does not submit an App
-Store version for review. Use `npm run ios:check` for a local configuration
-check of the project and shared scheme, or `npm run ios:build` to create the IPA
-without uploading it.
-
-Both platform templates include migrations, health checks, generated secrets,
-and persistent database and upload volumes. They use the published
-[`ghcr.io/utzel-butzel/inventory`](https://github.com/Utzel-Butzel/inventory/pkgs/container/inventory)
-image.
-
-<details>
-<summary><strong>Common operations</strong></summary>
-
-Verify the application and database are ready:
-
-```bash
-curl --fail http://localhost:3000/api/health
-docker compose -f docker-compose.yml -f docker-compose.local.yml ps
-```
-
-Update a checkout:
-
-```bash
-git pull --ff-only
-docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
-curl --fail http://localhost:3000/api/health
-```
-
-Back up the database and local uploads in the same maintenance window:
-
-```bash
-mkdir -p backups
-docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T db \
-  pg_dump -U inventory -d inventory -Fc > backups/inventory.dump
-docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T app \
-  tar -czf - -C /app/data/uploads . > backups/inventory-uploads.tar.gz
-```
-
-Store both backup files away from the Docker host and test restoring them.
-
-</details>
-
-## Configuration
-
-The installer creates the required values. Optional services remain disabled
-until configured in `.env`.
-
-| Area | Main settings |
-| --- | --- |
-| Branding | `APP_NAME` for the displayed app name; `APP_LOGO_URL` for a custom logo |
-| Authentication | Local accounts by default; optional `AUTH0_*` and `AUTH_OIDC_*` providers; see [Authentication providers](AUTHPROVIDERS.md) |
-| Storage | Persistent local files or `OPENINARY_*` |
-| Maps | Token-free defaults or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` |
-| AI | `OPENAI_API_KEY` for inventory and room-photo analysis; optional `REPLICATE_API_TOKEN` or `GOOGLE_AI_API_KEY` |
-| Notifications | In-app by default; optional SMTP, Web Push, Slack, Teams, or webhook delivery |
-| Integrations | Scoped API tokens and HMAC-signed outgoing webhooks |
-
-See [`.env.example`](.env.example) for the complete, commented reference.
-
-To customize the navigation and sign-in branding, set these optional values:
-
-```dotenv
-APP_NAME="Mein Inventar"
-APP_LOGO_URL=https://example.org/logo.png
-```
-
-`APP_NAME` also sets the application name in browser titles. The logo URL must
-be a publicly accessible HTTP(S) image URL; use HTTPS when serving the app over
-HTTPS. Logos are fitted without cropping. Empty values keep the built-in
-branding, and an invalid or unavailable logo falls back to the built-in icon.
-These are runtime settings, so no image rebuild is needed after the feature is
-installed. Restart the app after changing `.env.local`, or recreate the app
-container after changing its environment (for Docker Compose,
-`docker compose up -d --force-recreate app`; for Dokploy/Coolify, redeploy).
-
-For direct P-touch printing from a desktop browser, we recommend QZ Tray. See
-[installation and connection](docs/printing.md#install-and-connect) and the
-[Brother PT-P710BT setup](docs/ptouch-printing.md). Other system printers use the
-[normal browser print dialog or PDF export](docs/printing.md#print-from-this-computer).
-
-Organization administrators can configure photo-analysis and research models,
-output language, the number of input photos (1–3), overwrite behavior, and
-new-item analysis/research defaults under **Settings → AI** in the web app or
-**Settings → Organization AI defaults** in iOS. Both clients share these settings
-and the analysis/research prompt templates. Local iOS prompt overrides still take
-priority. Research defaults to off and adds a separate paid web-research step when
-enabled. Model IDs must be supported by the configured OpenAI-compatible endpoint;
-research requires web search and structured output. API keys remain server-side.
-Apply database migration `0068_inventory_ai_settings.sql` before deploying this
-version. Existing organizations inherit their environment defaults until saved.
-
-MapLibre's worker and its shared module are copied from the installed package
-into `public/vendor/maplibre/<version>/` by the `predev` and `prebuild` hooks.
-Use `npm run dev` / `npm run build` (or their pnpm equivalents). When invoking
-Next.js directly, run `node scripts/prepare-maplibre-assets.mjs` first.
-
-### Authentication providers
-
-Open Inventory uses Auth.js for browser sign-in and its own organization roles
-for authorization. Deployments can offer local passwords, Auth0, and one
-standards-based OpenID Connect provider such as Supabase or Keycloak.
-
-See [Authentication provider configuration](AUTHPROVIDERS.md) for callback
-URLs, environment variables, Docker instructions, account provisioning, safe
-rollout guidance, and troubleshooting.
-
-## Local development
-
-Requirements: Node.js 22.13+, npm, and PostgreSQL 15+.
-
-Create the development database once:
-
-```bash
-psql postgres -c "CREATE ROLE inventory LOGIN PASSWORD 'inventory';"
-createdb --owner=inventory inventory
-```
-
-Then install and start the app:
-
-```bash
-npm ci
-cp .env.example .env.local
-npm run db:migrate
-npm run db:seed       # optional sample data
-npm run dev
-```
-
-For a local password login, add these values to `.env.local`:
-
-```dotenv
-BOOTSTRAP_ADMIN_EMAIL=admin@inventory.local
-BOOTSTRAP_ADMIN_NAME=Inventory admin
-BOOTSTRAP_ADMIN_PASSWORD=choose-a-local-only-password
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-### Useful commands
-
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the development server |
-| `npm run build` | Create a production build |
-| `npm run lint` | Run ESLint |
-| `npm run typecheck` | Run generated-route and TypeScript checks |
-| `npm run db:migrate` | Apply checked-in migrations |
-| `npm run db:seed` | Add sample records to an empty workspace |
-| `npm run db:generate` | Generate a Drizzle migration |
-| `npm run db:tunnel` | Open an SSH tunnel to a remote PostgreSQL server |
-| `npm run auth:hash -- "password"` | Generate a bcrypt password hash |
-| `npm run deploy` | Build and upload the native iOS app to TestFlight |
-| `npm run android:check` | Run Android unit tests and lint, and build the native debug APK |
-| `npm run android:install` | Install the Android app on a connected device or emulator |
-
-Focused contract and integration test commands are listed in
-[`package.json`](package.json).
-
-## API and integrations
-
-Create a scoped token under **Settings → API access**, then use it as a bearer
-credential:
-
-```bash
-curl "http://localhost:3000/api/v1/resources?pageSize=25" \
-  -H "Authorization: Bearer inv_your_token"
-```
-
-Tokens can receive `read`, `write`, and `ai` scopes and can be revoked at any
-time. A running installation exposes the machine-readable contract at
-`/openapi.json`; set `WEBSITE_URL` to link the app to the separate website's
-interactive documentation.
-
-### Model Context Protocol (MCP)
-
-The built-in stateless MCP server lets trusted agents search inventory, read
-items and stock, list due counts, create or update items, and record stock
-movements or physical counts. It is disabled by default. Enable it and apply
-the database migrations before connecting a client. Persist this setting in the
-application's runtime environment, then restart or redeploy the application:
-
-```dotenv
-MCP_ENABLED=true
-```
-
-The production container applies migrations at startup. For a source
-installation, run `npm run db:migrate` with the intended database configuration.
-Setting `MCP_ENABLED` only on that command does not enable the running app.
-
-See the [technical MCP guide](https://docs.openinventory.polyxo.de/mcp) for client
-setup, the ten available tools, request examples, permissions and troubleshooting.
-
-The endpoint is `https://your-inventory.example/mcp`. Configure the client with
-an Inventory API token from **Settings → API access** as the bearer credential.
-Do not add `X-Organization-ID`: MCP tokens are always pinned to the organization
-that issued them. Grant only the token scopes and role permissions the agent
-needs, and prefer a short expiry for external clients.
-
-Every request is authenticated anew. Reads and writes have independent durable
-rate limits, writes require an explicit confirmation argument, creation and
-ledger writes require UUID idempotency keys, and item updates require the last
-observed `updatedAt` value. The audit trail stores the tool, principal, result,
-targets, timing, and a hash of the arguments—never the raw arguments or token.
-
-`MCP_ALLOWED_HOSTS` defaults to the host in `AUTH_URL`. Browser-originated MCP
-requests are rejected unless their exact origins are present in
-`MCP_ALLOWED_ORIGINS`; normal server-to-server clients do not need that setting.
-Use `MCP_REQUEST_RATE_LIMIT_PER_MINUTE`, `MCP_READ_RATE_LIMIT_PER_MINUTE`, and
-`MCP_WRITE_RATE_LIMIT_PER_MINUTE` to adjust the defaults of 240, 120, and 30.
-Audit argument fingerprints are HMAC-protected with `AUTH_SECRET`; set a
-separate `MCP_AUDIT_HASH_SECRET` for independent key rotation.
-
-This bearer-token mode is intended for trusted, self-hosted clients. A public
-ChatGPT connector or marketplace distribution should add an OAuth 2.1/PKCE
-authorization layer instead of distributing long-lived Inventory tokens.
-
-- [OpenAPI specification](public/openapi.yaml)
-- [Native iOS app and setup guide](ios/Inventory/README.md)
-- [Native Android app, setup and feature parity](android/README.md)
-- Outgoing webhooks are configured under **Settings → Webhooks**
-
-## Project structure
-
-| Path | Contents |
-| --- | --- |
-| `app/` | Next.js pages and API routes |
-| `components/` | Web interface components |
-| `lib/` | Domain logic and integrations |
-| `db/` | Drizzle schema and PostgreSQL migrations |
-| `ios/Inventory/` | Native SwiftUI client |
-| `android/` | Native Kotlin / Jetpack Compose / Material 3 client |
-| `deploy/` | Dokploy and Coolify templates |
-| `public/openapi.yaml` | REST API contract |
-
-The main stack is Next.js, React, TypeScript, Tailwind CSS, PostgreSQL, and
-Drizzle ORM. Spatial views use MapLibre and Three.js.
-
-## Contributing
-
-Contributions and bug reports are welcome.
-
-1. Create a focused branch.
-2. Make the change and add or update relevant tests.
-3. Run `npm run lint`, `npm run typecheck`, and the affected test suites.
-4. Open a pull request with a concise description and verification notes.
-
-For larger changes, opening an
-[issue](https://github.com/Utzel-Butzel/inventory/issues) first helps align the
-scope.
+For production setup and deployment options, follow the
+[installation guide](https://docs.openinventory.polyxo.de/installation) or the
+[website's deployment guide](https://openinventory.polyxo.de/docs), including
+Docker Compose, Dokploy, and Coolify.
+
+## Documentation
+
+The full documentation lives at
+**[docs.openinventory.polyxo.de](https://docs.openinventory.polyxo.de)**.
+
+- [Configuration and branding](https://docs.openinventory.polyxo.de/configuration)
+  · [Environment variables](https://docs.openinventory.polyxo.de/environment-variables)
+- [Authentication providers](https://docs.openinventory.polyxo.de/authentication)
+- [Operations and backups](https://docs.openinventory.polyxo.de/operations)
+- [Labels and printing](https://docs.openinventory.polyxo.de/printing)
+- [REST API](https://docs.openinventory.polyxo.de/api)
+  · [API reference](https://docs.openinventory.polyxo.de/api-reference)
+  · [MCP integration](https://docs.openinventory.polyxo.de/mcp)
+- [Paperlesspaper E-Paper integration](integrations/paperlesspaper/README.md)
+  · Configure the instance URL, API key and stock view directly in Paperlesspaper.
+
+## Development and contributing
+
+The web app uses Next.js, React, TypeScript, PostgreSQL, and Drizzle ORM. This
+repository also contains the native iOS and Android apps and deployment templates.
+
+- [Local development, commands, and project structure](docs/development.md)
+- [iOS setup and TestFlight deployment](ios/Inventory/README.md)
+- [Android setup and feature parity](android/README.md)
+- [Website and documentation source](https://github.com/Utzel-Butzel/open-inventory-website)
+
+Contributions and bug reports are welcome. For larger changes, open an
+[issue](https://github.com/Utzel-Butzel/inventory/issues) first to discuss the scope.
+Before opening a pull request, run `npm run lint`, `npm run typecheck`, and the
+relevant test suites, and include a short description of how you verified the change.
 
 ## License
 
-Open Inventory is available under the [MIT License](LICENSE).
+[MIT](LICENSE).
