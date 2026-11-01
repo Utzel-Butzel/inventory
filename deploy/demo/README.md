@@ -143,3 +143,22 @@ node deploy/demo/smoke.mjs
   grids and show the two filled stars. No gateway restart was needed.
 - Manifest tests, saved-view schema validation, syntax checks and focused
   ESLint passed.
+
+## Stock history update, 2026-11-01
+
+- Source: `codex/demo-office-room`; deployed app commit `0c92656`.
+- Seed v6 includes 68 item bookings over 95 days (plus three location openings),
+  yielding full 90-day history curves. Screws demonstrate assembly demand,
+  restocking, returns, waste and a count correction. Cable ties demonstrate
+  accelerating demand and a gap shortly before the existing delivery. Tool
+  loans, returns and maintenance affect availability without counting as demand.
+- Replaced the old unrecognized `usage` records with actual `issue` bookings.
+  Current quantities, serialized unit states, favorites, images and room data
+  stay consistent; acquisition and last-movement dates follow the ledger.
+- All 28 manifest/planning tests, syntax checks and focused ESLint passed.
+  Production build succeeded. External HTTPS checks verified every booking,
+  every daily history balance, the demand aggregates, pending replenishment,
+  and the existing gallery, grid, favorites, room and read-only checks.
+- Browser verification shows stepped receipt/withdrawal histories for screws
+  and cable ties, 6.6 and 7.2 pieces/day respectively, both with high confidence.
+  The comparison chart visibly includes the forthcoming 100-piece delivery.
