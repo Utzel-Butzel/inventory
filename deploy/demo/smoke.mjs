@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { DEMO_FAVORITE_RESOURCE_IDS, DEMO_LIST_VIEWS, DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES } from '../../scripts/demo-seed-manifest.mjs';
+import { DEMO_FAVORITE_RESOURCE_IDS, DEMO_LIST_VIEWS, DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES, DEMO_STOCK_MOVEMENTS, DEMO_STOCK_SETTINGS } from '../../scripts/demo-seed-manifest.mjs';
 
 const base = new URL(process.argv[2] || 'https://demo.openinventory.polyxo.de');
 assert.equal(base.hostname, 'demo.openinventory.polyxo.de', 'Run only against the isolated demo.');
@@ -120,6 +120,47 @@ for (const resource of resources) {
   assert.deepEqual(images.map(({ id }) => id), expectedImages.map(({ id }) => id), `${resource.name}: gallery order`);
 }
 console.log(`Demo viewer, read-only tenant, ${resources.length} resources and ${DEMO_MEDIA.length} attached generated images verified`);
+const forecastResponse = await request('/api/v1/stock/forecast');
+assert.equal(forecastResponse.status, 200);
+const forecast = await forecastResponse.json();
+const forecastTime = Date.parse(forecast.generatedAt);
+const dayMs = 86400000;
+let bookingCount = 0;
+for (const { resourceId } of DEMO_STOCK_SETTINGS) {
+  const item = forecast.items.find((entry) => entry.resourceId === resourceId);
+  const resource = DEMO_RESOURCES.find(({ id }) => id === resourceId);
+  assert.ok(item, `${resource.name}: forecast data`);
+  assert.equal(item.quantity, resource.quantity);
+  const response = await request(`/api/v1/resources/${resourceId}/stock/movements?limit=100`);
+  assert.equal(response.status, 200);
+  const { movements } = await response.json();
+  const expected = DEMO_STOCK_MOVEMENTS.filter((entry) => entry.resourceId === resourceId).reverse();
+  assert.deepEqual(movements.map(({ id }) => id), expected.map(({ id }) => id), `${resource.name}: complete ordered ledger`);
+  movements.forEach((movement, index) => {
+    for (const key of ['delta', 'quantity', 'balanceAfter', 'type', 'reason', 'note']) {
+      assert.equal(movement[key], expected[index][key], `${resource.name}: movement ${key}`);
+    }
+  });
+  bookingCount += movements.length;
+  const demand = movements.filter(({ type, occurredAt }) =>
+    ['issue', 'waste', 'assembly-consumption'].includes(type)
+    && Date.parse(occurredAt) >= forecastTime - 90 * dayMs);
+  assert.equal(item.consumed, demand.reduce((sum, movement) => sum + movement.quantity, 0));
+  assert.equal(item.recentConsumed, demand.filter(({ occurredAt }) =>
+    Date.parse(occurredAt) >= forecastTime - 30 * dayMs).reduce((sum, movement) => sum + movement.quantity, 0));
+  assert.equal(item.demandDays, new Set(demand.map(({ occurredAt }) => occurredAt.slice(0, 10))).size);
+  assert.equal(item.history.length, 91, `${resource.name}: full 90-day history`);
+  for (const point of item.history) {
+    const laterChanges = movements.filter(({ occurredAt }) =>
+      Math.floor((forecastTime - Date.parse(occurredAt)) / dayMs) < -point.day);
+    assert.equal(point.quantity, resource.quantity - laterChanges.reduce((sum, movement) => sum + movement.delta, 0));
+    assert.ok(point.quantity >= 0, `${resource.name}: nonnegative historical stock`);
+  }
+}
+const cables = forecast.items.find(({ resourceId }) => resourceId.endsWith('205'));
+assert.ok(cables.recentConsumed / 30 > cables.consumed / 90 * 1.5, 'Recent cable-tie demand increased');
+assert.equal(cables.receipts.reduce((sum, receipt) => sum + receipt.quantity, 0), 100);
+console.log(`${bookingCount} historical item bookings, 90-day stock curves and demand classification verified`);
 const roomResponse = await request('/api/v1/room-scans/d3e00000-0000-4000-8000-000000000901');
 assert.equal(roomResponse.status, 200, 'Demo office scan must be available');
 const { scene: room } = await roomResponse.json();

@@ -38,6 +38,9 @@ Validation after deployment:
   including Regal A2, Werkbank E1, and Fach K3.
 - Inventory and Favorites start in the saved `Raster` view. Favorites contains
   Akku-Bohrschrauber 18 V and Lötstation 80 W, both starred in the full inventory.
+- Open `/demo/stock/forecast`: cable ties and screws have 90-day histories with
+  receipts and withdrawals, measurable demand and useful replenishment forecasts.
+  Tool histories show returns and maintenance without artificial consumption.
 - Check unauthenticated and authenticated POST/PATCH/DELETE requests return 403.
 - Check GET and POST under `/api/v1/ai/` return 403.
 - Verify the application container has only the internal network, no provider

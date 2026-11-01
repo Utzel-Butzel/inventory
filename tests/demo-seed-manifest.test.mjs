@@ -89,7 +89,10 @@ test("workshop scenario covers stock, custody, maintenance, ordering, and labels
   const screwHistory = DEMO_STOCK_MOVEMENTS.filter(
     ({ resourceId }) => resourceId === screws.id,
   );
-  assert.deepEqual(screwHistory.map(({ delta }) => delta), [200, -74]);
+  assert.equal(screwHistory.at(-1).balanceAfter, 126);
+  assert.equal(screwHistory.filter(({ type }) => type === "receipt").length, 2);
+  assert.ok(screwHistory.some(({ type }) => type === "return"));
+  assert.ok(screwHistory.some(({ type }) => type === "adjustment"));
   assert.equal(screws.quantity, 126);
 
   const cableTies = items.find(({ sku }) => sku === "VERB-KB-200-S");

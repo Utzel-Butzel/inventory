@@ -508,11 +508,14 @@ async function seedDemo(transaction, configuration, preparedMedia) {
   }
 
   for (const unit of DEMO_STOCK_UNITS) {
-    const acquiredAt = atDaysAgo(referenceTime, 60);
-    const lastMovedAt = atDaysAgo(
-      referenceTime,
-      unit.status === "available" ? 36 : unit.status === "in-use" ? 2 : 1,
-    );
+    const history = DEMO_STOCK_MOVEMENTS.filter(({ resourceId }) => resourceId === unit.resourceId);
+    const acquiredDaysAgo = Math.max(...history.map(({ daysAgo }) => daysAgo));
+    const unitHistory = history.filter(({ unitId }) => unitId === unit.id);
+    const lastMovedDaysAgo = unitHistory.length
+      ? Math.min(...unitHistory.map(({ daysAgo }) => daysAgo))
+      : acquiredDaysAgo;
+    const acquiredAt = atDaysAgo(referenceTime, acquiredDaysAgo);
+    const lastMovedAt = atDaysAgo(referenceTime, lastMovedDaysAgo);
     await transaction`
       INSERT INTO stock_units (
         organization_id, id, resource_id, code, status, location,
@@ -532,6 +535,7 @@ async function seedDemo(transaction, configuration, preparedMedia) {
         location_resource_id = excluded.location_resource_id,
         metadata = excluded.metadata,
         custom_fields = excluded.custom_fields,
+        acquired_at = excluded.acquired_at,
         last_moved_at = excluded.last_moved_at,
         updated_at = now()
     `;

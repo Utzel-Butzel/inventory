@@ -16,12 +16,21 @@ from an older demo cannot remain public:
   18 V and Lötstation 80 W are the viewer's two favorites
 - five workshop items and three places, each with three Imagegen-generated
   pictures (cover, additional perspective, detail) and descriptive content,
-  plus stock history, serialized units,
+  plus 68 dated item bookings over 95 days, serialized units,
   one active checkout, one maintenance case, one low-stock case, and one order
 - one 62 × 35 mm label layout
 - a real office RoomPlan scan under Werkbank E1, with the demo soldering station
   and multimeter positioned on its tables (`/demo/spaces`)
 - fixed UUIDs and a transaction-scoped PostgreSQL advisory lock
+
+The stock forecast has full 90-day curves from real ledger rows. Screws show
+regular assembly consumption, two 200-piece receipts, an unused-material
+return, damaged parts and a count correction (126 pieces remaining). Cable ties
+show accelerating demand during the cargo-bike pilot series, two 100-piece
+receipts and an open 100-piece order: at 7.2 pieces/day, the remaining 34 pieces
+run out shortly before the delivery due in five days. Tool curves show loans,
+returns, expansion of the soldering workspace and maintenance without treating
+temporary unavailability as consumption. All dates are relative to seed startup.
 
 The demo account has no published password. Its stored bcrypt hash was created
 from discarded random input and is not used by the dedicated demo provider.
