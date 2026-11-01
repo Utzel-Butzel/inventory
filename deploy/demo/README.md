@@ -167,3 +167,22 @@ node deploy/demo/smoke.mjs
 - Browser verification shows stepped receipt/withdrawal histories for screws
   and cable ties, 6.6 and 7.2 pieces/day respectively, both with high confidence.
   The comparison chart visibly includes the forthcoming 100-piece delivery.
+
+## Scan workflow update, 2026-11-01
+
+- Source: `codex/demo-office-room`; deployed app commit `af478cf`.
+- Seed v7 adds `Wareneingang · Kabelbinder` with article-code validation,
+  a positive variable delivery quantity, purpose selection and an optional
+  delivery-note reference. Enter `VERB-KB-200-S` and 100 pieces to preview 34 → 134.
+- The gateway permits only the exact authenticated action-chain preview POST
+  in addition to login/logout. Preview rolls back its transaction; actual
+  execution, uploads and workflow editing remain denied. Restart the gateway
+  after changing its mounted Nginx configuration so the new rule is loaded.
+- Sixteen manifest/workflow/chain tests passed, with the eight demo tests
+  rerun after the final scenario adjustment; syntax, focused ESLint and the
+  production build passed. External HTTPS smoke checks verify previews with
+  100, 25 and 100 pieces, invalid codes/quantities/missing inputs/foreign targets,
+  unchanged resource timestamps and ledger, and 26 denied mutation/worker calls.
+- Browser verification confirms the three-step preview, 34 → 134 stock change
+  and disabled confirmation. Existing photos, favorites, grid defaults,
+  historical stock curves and the office room also pass the smoke checks.
