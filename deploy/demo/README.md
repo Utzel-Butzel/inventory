@@ -43,8 +43,8 @@ Validation after deployment:
 - Open `/demo/stock/forecast`: cable ties and screws have 90-day histories with
   receipts and withdrawals, measurable demand and useful replenishment forecasts.
   Tool histories show returns and maintenance without artificial consumption.
-- Open `/demo/stock/scan`, enter `VERB-KB-200-S`, quantity 12 and a purpose:
-  preview shows 34 → 22 without changing the ledger. Confirmation is disabled.
+- Open `/demo/stock/scan`, enter `VERB-KB-200-S`, quantity 100 and a purpose:
+  preview shows 34 → 134 without changing the ledger. Confirmation is disabled.
 - Check unauthenticated and authenticated mutation requests return 403;
   preview requires authentication and does not persist changes.
 - Check GET and POST under `/api/v1/ai/` return 403.

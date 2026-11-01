@@ -185,25 +185,25 @@ const movementPath = `/api/v1/resources/${workflow.resourceId}/stock/movements?l
 const beforePreview = await (await request(movementPath)).json();
 const previewBody = {
   workflowId: workflow.id, code: 'VERB-KB-200-S', codeType: null,
-  selectedResourceIds: workflow.resourceIds, inputs: { menge: 12, verwendung: 'kabelbaum', notiz: 'Lastenrad Nr. 3' },
+  selectedResourceIds: workflow.resourceIds, inputs: { menge: 100, verwendung: 'lastenrad', notiz: 'LS-DEMO-1042' },
 };
 const preview = (body) => request('/api/v1/stock/action-chains/preview', {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
 });
-for (const quantity of [12, 5, 12]) {
+for (const quantity of [100, 25, 100]) {
   const response = await preview({ ...previewBody, inputs: { ...previewBody.inputs, menge: quantity } });
   assert.equal(response.status, 200, await response.clone().text());
   const report = await response.json();
   assert.equal(report.steps.length, 3);
   assert.equal(report.steps.at(-1).quantityBefore, 34);
-  assert.equal(report.steps.at(-1).quantityAfter, 34 - quantity);
+  assert.equal(report.steps.at(-1).quantityAfter, 34 + quantity);
   assert.ok(report.steps.every(({ skipped }) => !skipped));
 }
 for (const invalid of [
   { ...previewBody, code: 'WRONG-ARTICLE' },
   { ...previewBody, inputs: { ...previewBody.inputs, menge: -2 } },
   { ...previewBody, inputs: { ...previewBody.inputs, menge: 1.5 } },
-  { ...previewBody, inputs: { menge: 12 } },
+  { ...previewBody, inputs: { menge: 100 } },
   { ...previewBody, selectedResourceIds: [nonexistent] },
 ]) {
   const response = await preview(invalid);
