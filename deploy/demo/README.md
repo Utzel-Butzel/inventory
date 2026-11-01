@@ -186,3 +186,26 @@ node deploy/demo/smoke.mjs
 - Browser verification confirms the three-step preview, 34 → 134 stock change
   and disabled confirmation. Existing photos, favorites, grid defaults,
   historical stock curves and the office room also pass the smoke checks.
+
+## Label template update, 2026-11-01
+
+- Source: `codex/demo-office-room`; deployed app commit `ff24a84`.
+- Seed v8 preserves the original workshop label and adds five templates:
+  compact tools (50 × 25 mm), small parts with a photo (70 × 40 mm), shelves
+  and bins (100 × 50 mm), serialized units (62 × 35 mm), and maintenance
+  warnings (62 × 35 mm). All templates include a QR code; serialized units
+  also include their own identifier and Code 128 barcode.
+- Read-only tenants keep label selections and preview changes in memory.
+  This removes the previous forbidden workspace-save requests while preserving
+  persisted workspaces for writable organizations.
+- Local validation passed 53 tests, with one database integration test skipped
+  because no test database was configured. TypeScript, focused ESLint and the
+  production build passed.
+- External HTTPS smoke checks verify all six complete layouts, 30 denied
+  mutation/worker calls, and the existing images, stock history, grid defaults,
+  favorites, scan workflow and office room. No gateway restart was needed.
+- Browser verification covers all five new templates with a drill, screws,
+  Regal A2, the multimeter and unit ABS-18V-01. Photos and text render correctly;
+  the serialized label uses the unit-specific QR link and barcode. Changing
+  selections no longer shows a workspace-save error. Physical printing was
+  not exercised.
