@@ -23,6 +23,8 @@ const cookieName = "__Secure-authjs.session-token";
 const base = {
   secret,
   trustHost: true,
+  // This harness uses an HTTPS origin, independently of the deployment CI URL.
+  useSecureCookies: true,
   basePath: "/api/auth",
   providers: [Credentials({
     authorize: async (credentials) => credentials.password === "correct"
