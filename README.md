@@ -5,6 +5,8 @@
 
   <p><strong>Self-hosted inventory and stock management for teams, spaces, and physical things.</strong></p>
 
+  <p>Made by <a href="https://paperlesspaper.de">paperlesspaper</a> · Sponsored by <strong>WireWire GmbH</strong></p>
+
   <p>
     <a href="https://github.com/Utzel-Butzel/inventory/actions/workflows/deployment-check.yml"><img src="https://github.com/Utzel-Butzel/inventory/actions/workflows/deployment-check.yml/badge.svg" alt="Deployment check"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/github/license/Utzel-Butzel/inventory?color=665cff" alt="MIT License"></a>
@@ -27,6 +29,12 @@ Explore the [live demo](https://demo.openinventory.polyxo.de/login?demo=1) or vi
 [the website](https://openinventory.polyxo.de) for screenshots, use cases, and
 app downloads.
 
+<p align="center">
+  <a href="https://demo.openinventory.polyxo.de/login?demo=1">
+    <img src="https://openinventory.polyxo.de/marketing/screenshots/web-inventory-cards-demo.png" width="960" alt="Open Inventory demo showing tools, consumables, photos, locations, and stock quantities in a card view">
+  </a>
+</p>
+
 ## Features
 
 | | |
@@ -40,6 +48,37 @@ app downloads.
 | **Optional AI** | Item recognition, photo counting, image generation, and translations |
 
 See the [feature overview](https://openinventory.polyxo.de/features) for more.
+
+## A look inside
+
+Track stock levels and design scannable labels for your equipment and supplies.
+
+<table>
+  <tr>
+    <th width="50%">Stock at a glance</th>
+    <th width="50%">Printable QR labels</th>
+  </tr>
+  <tr>
+    <td><a href="https://openinventory.polyxo.de/marketing/screenshots/web-stock.png"><img src="https://openinventory.polyxo.de/marketing/screenshots/web-stock.png" width="480" alt="Stock overview with quantities, low-stock alerts, incoming orders, and estimated coverage"></a></td>
+    <td><a href="https://openinventory.polyxo.de/marketing/screenshots/web-label-designer.png"><img src="https://openinventory.polyxo.de/marketing/screenshots/web-label-designer.png" width="480" alt="Label designer with item selection and a printable QR-code label preview"></a></td>
+  </tr>
+</table>
+
+From the screen to the shelf: QR labels connect physical storage to your inventory.
+
+<table>
+  <tr>
+    <th width="60%">Find the right shelf</th>
+    <th width="40%">Identify individual parts bins</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://openinventory.polyxo.de/marketing/real-world/shelf-labels.webp"><img src="https://openinventory.polyxo.de/marketing/real-world/shelf-labels.webp" width="560" alt="Storage shelf with printed labels for AA and AAA batteries, including QR codes and item illustrations"></a></td>
+    <td align="center"><a href="https://openinventory.polyxo.de/marketing/real-world/parts-bin-label.webp"><img src="https://openinventory.polyxo.de/marketing/real-world/parts-bin-label.webp" width="280" alt="Blue storage bin filled with spacers and marked with a QR-code label and item image"></a></td>
+  </tr>
+</table>
+
+Photos and screenshots from the [Open Inventory website](https://openinventory.polyxo.de).
+Click the gallery images to view them at full size.
 
 ## Quick start
 
@@ -78,6 +117,8 @@ The full documentation lives at
 - [REST API](https://docs.openinventory.polyxo.de/api)
   · [API reference](https://docs.openinventory.polyxo.de/api-reference)
   · [MCP integration](https://docs.openinventory.polyxo.de/mcp)
+- [Paperlesspaper E-Paper integration](integrations/paperlesspaper/README.md)
+  · Configure the instance URL, API key and stock view directly in Paperlesspaper.
 
 ## Development and contributing
 
