@@ -83,6 +83,23 @@ until its data is no longer needed. No production service needs modification.
 - Browser verification confirms all eight images render in the inventory,
   including the three new location cards.
 
+## Gallery update, 2026-11-01
+
+- Source: `codex/demo-location-images`; deployed app commit `4a1de49`.
+- Seed v4 gives all five items and all three places three images each. The
+  original cover remains at position 0, with a new perspective and detail at
+  positions 1 and 2. The 16 new WebP files total approximately 3.1 MB.
+- Production build and deployment succeeded; app and database are healthy.
+  Restarted the gateway after replacing the app to refresh its upstream address.
+- External HTTPS smoke checks pass for all 24 image files, resource associations,
+  ordered galleries, unchanged covers, alt text, descriptions, and checksums.
+  Viewer login, read-only state, 22 denied requests, CSP, and Server Action denial
+  also pass.
+- Browser checks on Regal A2 and Akku-Bohrschrauber 18 V confirm the cover and
+  both additional images render, and both new images open and switch correctly
+  in the image viewer.
+- The seven manifest tests, JavaScript syntax checks, and focused ESLint pass.
+
 After changing the mounted Nginx config, restart only the `gateway` container
 after deployment. Compose does not necessarily recreate it when file contents
 change. This also refreshes its upstream address after an app replacement.
