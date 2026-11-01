@@ -33,7 +33,8 @@ The existing Traefik `letsencrypt` resolver issues the certificate.
 
 Validation after deployment:
 
-- Open `/login?demo=1`, enter the demo, browse inventory and all five images.
+- Open `/login?demo=1`, enter the demo, browse inventory and all eight images,
+  including the covers for Regal A2, Werkbank E1, and Fach K3.
 - Check unauthenticated and authenticated POST/PATCH/DELETE requests return 403.
 - Check GET and POST under `/api/v1/ai/` return 403.
 - Verify the application container has only the internal network, no provider

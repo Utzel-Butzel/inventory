@@ -73,12 +73,24 @@ assert.equal(inventory.status, 200);
 const { resources } = await inventory.json();
 assert.equal(resources.length, DEMO_RESOURCES.length);
 for (const media of DEMO_MEDIA) {
+  const resource = resources.find(({ id }) => id === media.resourceId);
+  assert.ok(resource, `Missing resource for ${media.filename}`);
+  const attachedImage = resource.media.find(({ id }) => id === media.id);
+  assert.ok(attachedImage, `${resource.name}: missing attached image`);
+  assert.equal(attachedImage.url, `/api/files/demo/${media.filename}`);
+  assert.equal(attachedImage.kind, 'image');
+  assert.equal(attachedImage.position, 0, `${resource.name}: image must be the cover`);
+  assert.equal(attachedImage.altText, media.altText);
   const image = await request(`/api/files/demo/${media.filename}`);
   assert.equal(image.status, 200, media.filename);
+  assert.match(image.headers.get('content-type'), /^image\/webp\b/);
   const hash = createHash('sha256').update(Buffer.from(await image.arrayBuffer())).digest('hex');
   assert.equal(hash, media.sha256, media.filename);
 }
-console.log('Demo viewer, read-only tenant, 8 resources and 5 generated images verified');
+for (const resource of resources) {
+  assert.ok(resource.media.some(({ kind }) => kind === 'image'), `${resource.name}: missing image`);
+}
+console.log(`Demo viewer, read-only tenant, ${resources.length} resources and ${DEMO_MEDIA.length} attached generated images verified`);
 await checkDenied('Authenticated');
 const action = await request('/demo/inventory', { method: 'POST', headers: { 'Next-Action': 'demo-smoke' } });
 assert.equal(action.status, 403);
