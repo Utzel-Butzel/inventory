@@ -68,6 +68,20 @@ until its data is no longer needed. No production service needs modification.
   the previous negative DNS answer. TLS validation was not disabled. Browser
   verification on that connection remains subject to the DNS cache expiring.
 
+## Content update, 2026-11-01
+
+- Source: `codex/demo-location-images`; deployed app commit `5937ce6`.
+- Seed v3 includes eight generated covers: all five items and all three places.
+  Location descriptions and notes explain storage, maintenance, and replenishment.
+- Production build completed and the app and database are healthy. Restarted
+  only the gateway after the app replacement to refresh its upstream address.
+- External HTTPS smoke checks pass for all eight resource/media associations,
+  selected covers, descriptions, notes, alt text, WebP responses, and checksums.
+  Demo viewer login, read-only state, 22 denied requests, CSP, and Server Action
+  denial also pass.
+- Browser verification confirms all eight images render in the inventory,
+  including the three new location cards.
+
 After changing the mounted Nginx config, restart only the `gateway` container
 after deployment. Compose does not necessarily recreate it when file contents
 change. This also refreshes its upstream address after an app replacement.
