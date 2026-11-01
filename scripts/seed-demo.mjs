@@ -15,8 +15,10 @@ import postgres from "postgres";
 import {
   DEMO_ACTOR,
   DEMO_ASSIGNMENTS,
+  DEMO_FAVORITE_RESOURCE_IDS,
   DEMO_INVENTORY_TYPES,
   DEMO_LABEL_SETUP,
+  DEMO_LIST_VIEWS,
   DEMO_LOCATION_BALANCES,
   DEMO_MEDIA,
   DEMO_ORGANIZATION,
@@ -426,6 +428,28 @@ async function seedDemo(transaction, configuration, preparedMedia) {
         ai_metadata = null,
         created_by = excluded.created_by,
         updated_at = excluded.updated_at
+    `;
+  }
+
+  for (const resourceId of DEMO_FAVORITE_RESOURCE_IDS) {
+    await transaction`
+      INSERT INTO resource_favorites (organization_id, user_id, resource_id)
+      VALUES (${DEMO_ORGANIZATION.id}, ${DEMO_USER.id}, ${resourceId})
+      ON CONFLICT (organization_id, user_id, resource_id) DO NOTHING
+    `;
+  }
+
+  for (const { scope, collection } of DEMO_LIST_VIEWS) {
+    await transaction`
+      INSERT INTO user_list_views (organization_id, user_id, scope, collection)
+      VALUES (
+        ${DEMO_ORGANIZATION.id}, ${DEMO_USER.id}, ${scope},
+        ${transaction.json(collection)}
+      )
+      ON CONFLICT (organization_id, user_id, scope) DO UPDATE SET
+        collection = excluded.collection,
+        revision = user_list_views.revision + 1,
+        updated_at = now()
     `;
   }
 

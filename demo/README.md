@@ -12,6 +12,8 @@ from an older demo cannot remain public:
 
 - organization: `Werkstatt Nord · Demo` with the reserved slug `demo`
 - dedicated user: `demo@inventory.invalid`, active viewer, exactly one membership
+- saved default `Raster` view for inventory and favorites; Akku-Bohrschrauber
+  18 V and Lötstation 80 W are the viewer's two favorites
 - five workshop items and three places, each with three Imagegen-generated
   pictures (cover, additional perspective, detail) and descriptive content,
   plus stock history, serialized units,

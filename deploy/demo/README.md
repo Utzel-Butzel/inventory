@@ -36,6 +36,8 @@ Validation after deployment:
 - Open `/login?demo=1`, enter the demo, and browse all eight records. Each has
   its original cover and two additional gallery images (24 images in total),
   including Regal A2, Werkbank E1, and Fach K3.
+- Inventory and Favorites start in the saved `Raster` view. Favorites contains
+  Akku-Bohrschrauber 18 V and Lötstation 80 W, both starred in the full inventory.
 - Check unauthenticated and authenticated POST/PATCH/DELETE requests return 403.
 - Check GET and POST under `/api/v1/ai/` return 403.
 - Verify the application container has only the internal network, no provider

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES } from '../../scripts/demo-seed-manifest.mjs';
+import { DEMO_FAVORITE_RESOURCE_IDS, DEMO_LIST_VIEWS, DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES } from '../../scripts/demo-seed-manifest.mjs';
 
 const base = new URL(process.argv[2] || 'https://demo.openinventory.polyxo.de');
 assert.equal(base.hostname, 'demo.openinventory.polyxo.de', 'Run only against the isolated demo.');
@@ -72,6 +72,24 @@ const inventory = await request('/api/v1/resources?pageSize=100');
 assert.equal(inventory.status, 200);
 const { resources } = await inventory.json();
 assert.equal(resources.length, DEMO_RESOURCES.length);
+assert.deepEqual(
+  resources.filter(({ isFavorite }) => isFavorite).map(({ id }) => id).sort(),
+  [...DEMO_FAVORITE_RESOURCE_IDS].sort(),
+  'Seeded favorites in inventory',
+);
+const favoritesResponse = await request('/api/v1/resources?favorites=true&pageSize=100');
+assert.equal(favoritesResponse.status, 200);
+const favorites = await favoritesResponse.json();
+assert.deepEqual(favorites.resources.map(({ id }) => id).sort(), [...DEMO_FAVORITE_RESOURCE_IDS].sort());
+assert.ok(favorites.resources.every(({ isFavorite }) => isFavorite));
+for (const { scope, collection } of DEMO_LIST_VIEWS) {
+  const response = await request(`/api/v1/user/list-views?scope=${encodeURIComponent(scope)}`);
+  assert.equal(response.status, 200);
+  const saved = await response.json();
+  assert.deepEqual(saved.collection, collection, `${scope}: saved default grid view`);
+  assert.equal(saved.canSave, false);
+}
+console.log('Default grid views and two seeded favorites verified');
 for (const media of DEMO_MEDIA) {
   const resource = resources.find(({ id }) => id === media.resourceId);
   assert.ok(resource, `Missing resource for ${media.filename}`);

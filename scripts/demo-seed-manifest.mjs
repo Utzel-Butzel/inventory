@@ -1,4 +1,4 @@
-export const DEMO_SEED_VERSION = 4;
+export const DEMO_SEED_VERSION = 5;
 
 export const DEMO_ORGANIZATION = Object.freeze({
   id: "d3e00000-0000-4000-8000-000000000001",
@@ -13,6 +13,33 @@ export const DEMO_USER = Object.freeze({
   name: "Demo-Besucher",
   role: "viewer",
 });
+
+export const DEMO_FAVORITE_RESOURCE_IDS = Object.freeze([
+  "d3e00000-0000-4000-8000-000000000201",
+  "d3e00000-0000-4000-8000-000000000202",
+]);
+
+const demoGridViewConfig = {
+  query: "",
+  filters: { type: "all", status: "all", priority: "all", tag: "all", category: "all", excludeCategory: "all" },
+  sort: "updatedAt",
+  direction: "desc",
+  layout: "grid",
+  density: "compact",
+  pageSize: 50,
+  columns: ["name", "quantity", "location", "status"],
+};
+
+export const DEMO_LIST_VIEWS = Object.freeze([
+  { scope: "inventory", id: "d3e00000-0000-4000-8000-000000000b01" },
+  { scope: "inventory.favorites", id: "d3e00000-0000-4000-8000-000000000b02" },
+].map(({ scope, id }) => ({
+  scope,
+  collection: {
+    views: [{ id, name: "Raster", config: demoGridViewConfig }],
+    defaultId: id,
+  },
+})));
 
 export const DEMO_ACTOR = "demo-seed";
 
@@ -989,6 +1016,7 @@ export function validateDemoSeedManifest() {
   const stableIds = [
     DEMO_ORGANIZATION.id,
     DEMO_USER.id,
+    ...DEMO_LIST_VIEWS.flatMap(({ collection }) => collection.views.map(({ id }) => id)),
     ...DEMO_RESOURCES.map(({ id }) => id),
     ...DEMO_LOCATION_BALANCES.map(({ id }) => id),
     ...DEMO_STOCK_UNITS.map(({ id }) => id),
@@ -1023,6 +1051,19 @@ export function validateDemoSeedManifest() {
 
   const resourceIds = new Set(DEMO_RESOURCES.map(({ id }) => id));
   const itemResources = DEMO_RESOURCES.filter(({ kind }) => kind === "item");
+  if (new Set(DEMO_FAVORITE_RESOURCE_IDS).size !== 2 || DEMO_FAVORITE_RESOURCE_IDS.length !== 2) {
+    errors.push("The demo must have exactly two distinct favorites.");
+  }
+  for (const id of DEMO_FAVORITE_RESOURCE_IDS) {
+    if (!itemResources.some((resource) => resource.id === id)) {
+      errors.push(`Unknown demo favorite item: ${id}`);
+    }
+  }
+  for (const { scope, collection } of DEMO_LIST_VIEWS) {
+    if (collection.views.find(({ id }) => id === collection.defaultId)?.config.layout !== "grid") {
+      errors.push(`Demo list needs a default grid view: ${scope}`);
+    }
+  }
   if (itemResources.length !== 5) errors.push("The demo must contain exactly five inventory items.");
   if (DEMO_RESOURCES.filter(({ kind }) => kind === "place").length !== 3) {
     errors.push("The demo must contain exactly three places.");
