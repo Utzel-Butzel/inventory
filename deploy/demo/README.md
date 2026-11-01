@@ -126,3 +126,17 @@ node deploy/demo/smoke.mjs
   both item cards. No gateway restart was needed for this deployment.
 - No source inventory records, keyframe photos, AR assets, AI analysis or map
   location were copied into the demo.
+
+## Grid and favorites update, 2026-11-01
+
+- Source: `codex/demo-office-room`; deployed app commit `4a047da`, combining
+  the current office scan with the grid/favorites change from `9dc4dbb`.
+- Seed v5 saves `Raster` as the demo viewer's default for both inventory and
+  favorites, and stars Akku-Bohrschrauber 18 V and Lötstation 80 W.
+- Build and container health passed. The external HTTPS smoke test uses a new
+  viewer session and confirms both saved defaults, exactly two favorites in
+  inventory and the favorites filter, all 24 images, the room scene, and the
+  existing read-only checks. Browser navigation confirms both pages open as
+  grids and show the two filled stars. No gateway restart was needed.
+- Manifest tests, saved-view schema validation, syntax checks and focused
+  ESLint passed.
