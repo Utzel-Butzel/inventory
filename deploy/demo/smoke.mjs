@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES } from '../../scripts/demo-seed-manifest.mjs';
+import { DEMO_FAVORITE_RESOURCE_IDS, DEMO_LIST_VIEWS, DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES, DEMO_SCAN_WORKFLOWS, DEMO_STOCK_MOVEMENTS, DEMO_STOCK_SETTINGS } from '../../scripts/demo-seed-manifest.mjs';
 
 const base = new URL(process.argv[2] || 'https://demo.openinventory.polyxo.de');
 assert.equal(base.hostname, 'demo.openinventory.polyxo.de', 'Run only against the isolated demo.');
@@ -35,6 +35,8 @@ async function checkDenied(label) {
     ['GET', '/api/v1/ai/count/jobs'],
     ['POST', '/api/v1/organizations'],
     ['POST', '/api/v1/stock/action-chains/execute'],
+    ['POST', '/api/v1/stock/scans/execute'],
+    ['POST', '/api/v1/stock/scan-workflows'],
     ['GET', '/api/cron/notifications'],
     ['POST', '/demo/inventory'],
   ]) {
@@ -42,13 +44,18 @@ async function checkDenied(label) {
     assert.equal(response.status, 403, `${label}: ${method} ${path}`);
     await response.arrayBuffer();
   }
-  console.log(`${label}: 11 write/upload/AI/worker requests blocked`);
+  console.log(`${label}: 13 write/upload/AI/worker requests blocked`);
 }
 
 const landing = await request('/');
 assert.equal(landing.status, 302);
 assert.equal(new URL(landing.headers.get('location'), base).href, `${base.origin}/login?demo=1`);
 await checkDenied('Unauthenticated');
+const anonymousPreview = await request('/api/v1/stock/action-chains/preview', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+});
+assert.ok([401, 403].includes(anonymousPreview.status), 'Scan preview requires authentication');
+await anonymousPreview.arrayBuffer();
 const csrf = await request('/api/auth/csrf');
 assert.equal(csrf.status, 200);
 const { csrfToken } = await csrf.json();
@@ -72,13 +79,156 @@ const inventory = await request('/api/v1/resources?pageSize=100');
 assert.equal(inventory.status, 200);
 const { resources } = await inventory.json();
 assert.equal(resources.length, DEMO_RESOURCES.length);
+assert.deepEqual(
+  resources.filter(({ isFavorite }) => isFavorite).map(({ id }) => id).sort(),
+  [...DEMO_FAVORITE_RESOURCE_IDS].sort(),
+  'Seeded favorites in inventory',
+);
+const favoritesResponse = await request('/api/v1/resources?favorites=true&pageSize=100');
+assert.equal(favoritesResponse.status, 200);
+const favorites = await favoritesResponse.json();
+assert.deepEqual(favorites.resources.map(({ id }) => id).sort(), [...DEMO_FAVORITE_RESOURCE_IDS].sort());
+assert.ok(favorites.resources.every(({ isFavorite }) => isFavorite));
+for (const { scope, collection } of DEMO_LIST_VIEWS) {
+  const response = await request(`/api/v1/user/list-views?scope=${encodeURIComponent(scope)}`);
+  assert.equal(response.status, 200);
+  const saved = await response.json();
+  assert.deepEqual(saved.collection, collection, `${scope}: saved default grid view`);
+  assert.equal(saved.canSave, false);
+}
+console.log('Default grid views and two seeded favorites verified');
 for (const media of DEMO_MEDIA) {
+  const resource = resources.find(({ id }) => id === media.resourceId);
+  assert.ok(resource, `Missing resource for ${media.filename}`);
+  const attachedImage = resource.media.find(({ id }) => id === media.id);
+  assert.ok(attachedImage, `${resource.name}: missing attached image`);
+  assert.equal(attachedImage.url, `/api/files/demo/${media.filename}`);
+  assert.equal(attachedImage.kind, 'image');
+  assert.equal(attachedImage.position, media.position, `${resource.name}: gallery position`);
+  if (media.position === 0) {
+    assert.equal(resource.cover?.id, media.id, `${resource.name}: displayed cover`);
+  }
+  assert.equal(attachedImage.altText, media.altText);
   const image = await request(`/api/files/demo/${media.filename}`);
   assert.equal(image.status, 200, media.filename);
+  assert.match(image.headers.get('content-type'), /^image\/webp\b/);
   const hash = createHash('sha256').update(Buffer.from(await image.arrayBuffer())).digest('hex');
   assert.equal(hash, media.sha256, media.filename);
 }
-console.log('Demo viewer, read-only tenant, 8 resources and 5 generated images verified');
+for (const resource of resources) {
+  const expected = DEMO_RESOURCES.find(({ id }) => id === resource.id);
+  assert.ok(expected, `${resource.name}: unexpected demo resource`);
+  assert.equal(resource.description, expected.description, `${resource.name}: description`);
+  assert.equal(resource.notes, expected.notes, `${resource.name}: notes`);
+  const images = resource.media.filter(({ kind }) => kind === 'image');
+  const expectedImages = DEMO_MEDIA.filter(({ resourceId }) => resourceId === resource.id)
+    .sort((left, right) => left.position - right.position);
+  assert.deepEqual(images.map(({ position }) => position), [0, 1, 2], `${resource.name}: three ordered images`);
+  assert.deepEqual(images.map(({ id }) => id), expectedImages.map(({ id }) => id), `${resource.name}: gallery order`);
+}
+console.log(`Demo viewer, read-only tenant, ${resources.length} resources and ${DEMO_MEDIA.length} attached generated images verified`);
+const forecastResponse = await request('/api/v1/stock/forecast');
+assert.equal(forecastResponse.status, 200);
+const forecast = await forecastResponse.json();
+const forecastTime = Date.parse(forecast.generatedAt);
+const dayMs = 86400000;
+let bookingCount = 0;
+for (const { resourceId } of DEMO_STOCK_SETTINGS) {
+  const item = forecast.items.find((entry) => entry.resourceId === resourceId);
+  const resource = DEMO_RESOURCES.find(({ id }) => id === resourceId);
+  assert.ok(item, `${resource.name}: forecast data`);
+  assert.equal(item.quantity, resource.quantity);
+  const response = await request(`/api/v1/resources/${resourceId}/stock/movements?limit=100`);
+  assert.equal(response.status, 200);
+  const { movements } = await response.json();
+  const expected = DEMO_STOCK_MOVEMENTS.filter((entry) => entry.resourceId === resourceId).reverse();
+  assert.deepEqual(movements.map(({ id }) => id), expected.map(({ id }) => id), `${resource.name}: complete ordered ledger`);
+  movements.forEach((movement, index) => {
+    for (const key of ['delta', 'quantity', 'balanceAfter', 'type', 'reason', 'note']) {
+      assert.equal(movement[key], expected[index][key], `${resource.name}: movement ${key}`);
+    }
+  });
+  bookingCount += movements.length;
+  const demand = movements.filter(({ type, occurredAt }) =>
+    ['issue', 'waste', 'assembly-consumption'].includes(type)
+    && Date.parse(occurredAt) >= forecastTime - 90 * dayMs);
+  assert.equal(item.consumed, demand.reduce((sum, movement) => sum + movement.quantity, 0));
+  assert.equal(item.recentConsumed, demand.filter(({ occurredAt }) =>
+    Date.parse(occurredAt) >= forecastTime - 30 * dayMs).reduce((sum, movement) => sum + movement.quantity, 0));
+  assert.equal(item.demandDays, new Set(demand.map(({ occurredAt }) => occurredAt.slice(0, 10))).size);
+  assert.equal(item.history.length, 91, `${resource.name}: full 90-day history`);
+  for (const point of item.history) {
+    const laterChanges = movements.filter(({ occurredAt }) =>
+      Math.floor((forecastTime - Date.parse(occurredAt)) / dayMs) < -point.day);
+    assert.equal(point.quantity, resource.quantity - laterChanges.reduce((sum, movement) => sum + movement.delta, 0));
+    assert.ok(point.quantity >= 0, `${resource.name}: nonnegative historical stock`);
+  }
+}
+const cables = forecast.items.find(({ resourceId }) => resourceId.endsWith('205'));
+assert.ok(cables.recentConsumed / 30 > cables.consumed / 90 * 1.5, 'Recent cable-tie demand increased');
+assert.equal(cables.receipts.reduce((sum, receipt) => sum + receipt.quantity, 0), 100);
+console.log(`${bookingCount} historical item bookings, 90-day stock curves and demand classification verified`);
+const [expectedWorkflow] = DEMO_SCAN_WORKFLOWS;
+const workflowsResponse = await request('/api/v1/stock/scan-workflows');
+assert.equal(workflowsResponse.status, 200);
+const { workflows } = await workflowsResponse.json();
+assert.equal(workflows.length, DEMO_SCAN_WORKFLOWS.length);
+const workflow = workflows.find(({ id }) => id === expectedWorkflow.id);
+for (const [key, value] of Object.entries(expectedWorkflow)) {
+  assert.deepEqual(workflow[key], value, `Demo scan workflow: ${key}`);
+}
+const runnerResponse = await request(`/api/v1/stock/scan-workflows/${workflow.id}/runner`);
+assert.equal(runnerResponse.status, 200);
+const { workflow: runner } = await runnerResponse.json();
+assert.equal(runner.targetGroups[0].options[0].quantity, 34);
+const movementPath = `/api/v1/resources/${workflow.resourceId}/stock/movements?limit=100`;
+const beforePreview = await (await request(movementPath)).json();
+const previewBody = {
+  workflowId: workflow.id, code: 'VERB-KB-200-S', codeType: null,
+  selectedResourceIds: workflow.resourceIds, inputs: { menge: 100, verwendung: 'lastenrad', notiz: 'LS-DEMO-1042' },
+};
+const preview = (body) => request('/api/v1/stock/action-chains/preview', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+});
+for (const quantity of [100, 25, 100]) {
+  const response = await preview({ ...previewBody, inputs: { ...previewBody.inputs, menge: quantity } });
+  assert.equal(response.status, 200, await response.clone().text());
+  const report = await response.json();
+  assert.equal(report.steps.length, 3);
+  assert.equal(report.steps.at(-1).quantityBefore, 34);
+  assert.equal(report.steps.at(-1).quantityAfter, 34 + quantity);
+  assert.ok(report.steps.every(({ skipped }) => !skipped));
+}
+for (const invalid of [
+  { ...previewBody, code: 'WRONG-ARTICLE' },
+  { ...previewBody, inputs: { ...previewBody.inputs, menge: -2 } },
+  { ...previewBody, inputs: { ...previewBody.inputs, menge: 1.5 } },
+  { ...previewBody, inputs: { menge: 100 } },
+  { ...previewBody, selectedResourceIds: [nonexistent] },
+]) {
+  const response = await preview(invalid);
+  assert.equal(response.status, 422, 'Invalid demo scan must be rejected');
+  await response.arrayBuffer();
+}
+assert.deepEqual(await (await request(movementPath)).json(), beforePreview, 'Preview must leave the ledger unchanged');
+const afterRunner = await (await request(`/api/v1/stock/scan-workflows/${workflow.id}/runner`)).json();
+assert.deepEqual(afterRunner, { workflow: runner }, 'Preview must leave stock and timestamps unchanged');
+console.log('Scan workflow: variable quantities, validation, repeatable preview and unchanged stock ledger verified');
+const roomResponse = await request('/api/v1/room-scans/d3e00000-0000-4000-8000-000000000901');
+assert.equal(roomResponse.status, 200, 'Demo office scan must be available');
+const { scene: room } = await roomResponse.json();
+assert.equal(room.room.id, 'd3e00000-0000-4000-8000-000000000102');
+assert.equal(room.scan.scene.surfaces.length, 7);
+assert.equal(room.scan.scene.objects.length, 10);
+assert.equal(room.scan.scene.mapAnchor, undefined);
+assert.equal(room.scan.aiAnalysis, null);
+assert.deepEqual(room.scan.assets, []);
+assert.deepEqual(room.scan.keyframes, []);
+assert.deepEqual(room.placements.map(p => p.resource.id).sort(), [
+  'd3e00000-0000-4000-8000-000000000202',
+  'd3e00000-0000-4000-8000-000000000203',
+]);
+console.log('Office geometry and two demo item placements verified; no original photos or map location');
 await checkDenied('Authenticated');
 const action = await request('/demo/inventory', { method: 'POST', headers: { 'Next-Action': 'demo-smoke' } });
 assert.equal(action.status, 403);

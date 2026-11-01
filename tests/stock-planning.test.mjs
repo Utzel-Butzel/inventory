@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DAY_MS, planStock } from "../lib/stock-planning.ts";
+import { DEMO_RESOURCES, DEMO_STOCK_MOVEMENTS, DEMO_STOCK_SETTINGS } from "../scripts/demo-seed-manifest.mjs";
 
 const now = new Date("2026-10-27T12:00:00Z");
 const date = (day) => new Date(now.getTime() + day * DAY_MS).toISOString();
@@ -176,4 +177,38 @@ test("relative comparison uses today's stock; missing demand never fabricates a 
   assert.equal(planningChartSeries(plan({ quantity: 0 }), 30, "relative"), null);
   assert.equal(planningChartSeries(plan({ quantity: -5 }), 30, "relative"), null);
   assert.deepEqual(planningChartSeries(plan({ consumed: 0, recentConsumed: 0 }), 90).projection, []);
+});
+
+test("demo ledgers show real demand, restocking and a delivery gap without counting tool loans as consumption", () => {
+  const plans = DEMO_STOCK_SETTINGS.map((settings) => {
+    const resource = DEMO_RESOURCES.find(({ id }) => id === settings.resourceId);
+    const movements = DEMO_STOCK_MOVEMENTS.filter(({ resourceId }) => resourceId === resource.id);
+    const demand = movements.filter(({ type, daysAgo }) => daysAgo < 90 && ["issue", "waste", "assembly-consumption"].includes(type));
+    const history = reconstructStockHistory(resource.quantity, 90, movements.map(({ daysAgo, delta }) => ({ ageDays: daysAgo, delta })));
+    assert.equal(history.length, 91);
+    assert.ok(history.every(({ quantity }) => quantity >= 0));
+    assert.equal(history.at(-1).quantity, resource.quantity);
+    assert.ok(history.some((point, index) => index > 0 && point.quantity > history[index - 1].quantity));
+    assert.ok(history.some((point, index) => index > 0 && point.quantity < history[index - 1].quantity));
+    return planStock(input({
+      ...settings, quantity: resource.quantity, history,
+      consumed: demand.reduce((sum, movement) => sum + movement.quantity, 0),
+      recentConsumed: demand.filter(({ daysAgo }) => daysAgo < 30).reduce((sum, movement) => sum + movement.quantity, 0),
+      demandDays: new Set(demand.map(({ daysAgo }) => daysAgo)).size,
+      receipts: resource.sku === "VERB-KB-200-S" ? [{ quantity: 100, expectedAt: date(5) }] : [],
+    }), now);
+  });
+  const screws = plans.find(({ resourceId }) => resourceId.endsWith("204"));
+  const ties = plans.find(({ resourceId }) => resourceId.endsWith("205"));
+  assert.equal(screws.confidence, "high");
+  assert.equal(screws.dailyUsage, 6.6);
+  assert.equal(screws.status, "order");
+  assert.equal(ties.confidence, "high");
+  assert.equal(ties.dailyUsage, 7.2);
+  assert.ok(ties.recentDailyUsage > ties.averageDailyUsage * 1.5);
+  assert.ok(ties.stockoutDay > 4 && ties.stockoutDay < 5, "first shortage precedes the scheduled delivery");
+  assert.equal(ties.status, "critical");
+  for (const tool of plans.filter(({ resourceId }) => ![screws.resourceId, ties.resourceId].includes(resourceId))) {
+    assert.equal(tool.consumed, 0, "loans, returns and maintenance are not permanent demand");
+  }
 });

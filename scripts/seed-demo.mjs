@@ -15,8 +15,10 @@ import postgres from "postgres";
 import {
   DEMO_ACTOR,
   DEMO_ASSIGNMENTS,
+  DEMO_FAVORITE_RESOURCE_IDS,
   DEMO_INVENTORY_TYPES,
   DEMO_LABEL_SETUP,
+  DEMO_LIST_VIEWS,
   DEMO_LOCATION_BALANCES,
   DEMO_MEDIA,
   DEMO_ORGANIZATION,
@@ -26,6 +28,7 @@ import {
   DEMO_RELATION_TYPES,
   DEMO_RESOURCES,
   DEMO_ROLES,
+  DEMO_SCAN_WORKFLOWS,
   DEMO_SEED_VERSION,
   DEMO_STOCK_MOVEMENTS,
   DEMO_STOCK_SETTINGS,
@@ -41,6 +44,10 @@ const DEMO_PASSWORD_HASH =
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const bundledAssetsDirectory = path.resolve(scriptDirectory, "../demo/assets");
 const mediaStoragePrefix = "demo";
+const demoRoomScanId = "d3e00000-0000-4000-8000-000000000901";
+const demoRoomScene = JSON.parse(await readFile(
+  new URL("../demo/office-room-scene.json", import.meta.url), "utf8",
+));
 
 const value = (name) => process.env[name]?.trim() ?? "";
 const removeRequested = process.argv.slice(2).includes("--remove");
@@ -235,8 +242,14 @@ async function assertTenantRowIdsAreSafe(transaction) {
       SELECT 'label_setups', id, organization_id FROM label_setups
       WHERE id = ${DEMO_LABEL_SETUP.id}
       UNION ALL
+      SELECT 'stock_scan_workflows', id, organization_id FROM stock_scan_workflows
+      WHERE id = ANY(${DEMO_SCAN_WORKFLOWS.map(({ id }) => id)})
+      UNION ALL
       SELECT 'media', id, organization_id FROM media
       WHERE id = ANY(${DEMO_MEDIA.map(({ id }) => id)})
+      UNION ALL
+      SELECT 'room_scans', id, organization_id FROM room_scans
+      WHERE id = ${demoRoomScanId}
     ) seeded_rows
     WHERE organization_id <> ${DEMO_ORGANIZATION.id}
   `;
@@ -429,6 +442,28 @@ async function seedDemo(transaction, configuration, preparedMedia) {
     `;
   }
 
+  for (const resourceId of DEMO_FAVORITE_RESOURCE_IDS) {
+    await transaction`
+      INSERT INTO resource_favorites (organization_id, user_id, resource_id)
+      VALUES (${DEMO_ORGANIZATION.id}, ${DEMO_USER.id}, ${resourceId})
+      ON CONFLICT (organization_id, user_id, resource_id) DO NOTHING
+    `;
+  }
+
+  for (const { scope, collection } of DEMO_LIST_VIEWS) {
+    await transaction`
+      INSERT INTO user_list_views (organization_id, user_id, scope, collection)
+      VALUES (
+        ${DEMO_ORGANIZATION.id}, ${DEMO_USER.id}, ${scope},
+        ${transaction.json(collection)}
+      )
+      ON CONFLICT (organization_id, user_id, scope) DO UPDATE SET
+        collection = excluded.collection,
+        revision = user_list_views.revision + 1,
+        updated_at = now()
+    `;
+  }
+
   // Resource inserts invoke the application's stock bootstrap trigger. The
   // curated demo carries its own deterministic ledger, so remove only the
   // trigger rows attributable to this fixed tenant and actor before upserting
@@ -477,11 +512,14 @@ async function seedDemo(transaction, configuration, preparedMedia) {
   }
 
   for (const unit of DEMO_STOCK_UNITS) {
-    const acquiredAt = atDaysAgo(referenceTime, 60);
-    const lastMovedAt = atDaysAgo(
-      referenceTime,
-      unit.status === "available" ? 36 : unit.status === "in-use" ? 2 : 1,
-    );
+    const history = DEMO_STOCK_MOVEMENTS.filter(({ resourceId }) => resourceId === unit.resourceId);
+    const acquiredDaysAgo = Math.max(...history.map(({ daysAgo }) => daysAgo));
+    const unitHistory = history.filter(({ unitId }) => unitId === unit.id);
+    const lastMovedDaysAgo = unitHistory.length
+      ? Math.min(...unitHistory.map(({ daysAgo }) => daysAgo))
+      : acquiredDaysAgo;
+    const acquiredAt = atDaysAgo(referenceTime, acquiredDaysAgo);
+    const lastMovedAt = atDaysAgo(referenceTime, lastMovedDaysAgo);
     await transaction`
       INSERT INTO stock_units (
         organization_id, id, resource_id, code, status, location,
@@ -501,6 +539,7 @@ async function seedDemo(transaction, configuration, preparedMedia) {
         location_resource_id = excluded.location_resource_id,
         metadata = excluded.metadata,
         custom_fields = excluded.custom_fields,
+        acquired_at = excluded.acquired_at,
         last_moved_at = excluded.last_moved_at,
         updated_at = now()
     `;
@@ -641,6 +680,31 @@ async function seedDemo(transaction, configuration, preparedMedia) {
     `;
   }
 
+  for (const workflow of DEMO_SCAN_WORKFLOWS) {
+    await transaction`
+      INSERT INTO stock_scan_workflows (
+        organization_id, id, name, description, enabled, resource_id,
+        target_resource_ids, target_selection_mode, allow_variant_selection,
+        code_types, extraction, identifier_property_key, identifier_storage,
+        operation, create_missing_unit, unit_status, extracted_fields,
+        fixed_properties, input_fields, actions, once_per_code, quantity_input_key,
+        public_trigger_enabled, public_trigger_code, trigger_webhook,
+        webhook_event_name, revision, created_by, updated_by
+      ) VALUES (
+        ${DEMO_ORGANIZATION.id}, ${workflow.id}, ${workflow.name}, ${workflow.description},
+        ${workflow.enabled}, ${workflow.resourceId}, ${workflow.resourceIds},
+        ${workflow.targetSelectionMode}, ${workflow.allowVariantSelection}, ${workflow.codeTypes},
+        ${transaction.json(workflow.extraction)}, ${workflow.identifierPropertyKey},
+        ${workflow.identifierStorage}, ${transaction.json(workflow.operation)},
+        ${workflow.createMissingUnit}, ${workflow.unitStatus}, ${transaction.json(workflow.extractedFields)},
+        ${transaction.json(workflow.fixedProperties)}, ${transaction.json(workflow.inputFields)},
+        ${transaction.json(workflow.actions)}, ${workflow.oncePerCode}, ${workflow.quantityInputKey},
+        ${workflow.publicTriggerEnabled}, ${workflow.publicTriggerCode}, ${workflow.triggerWebhook},
+        ${workflow.webhookEventName}, 1, ${DEMO_ACTOR}, ${DEMO_ACTOR}
+      )
+    `;
+  }
+
   await transaction`
     INSERT INTO label_setups (
       organization_id, id, name, width_mm, height_mm, elements, revision,
@@ -678,7 +742,7 @@ async function seedDemo(transaction, configuration, preparedMedia) {
           ${DEMO_ORGANIZATION.id}, ${media.id}, ${media.resourceId},
           ${storageKey}, ${`/api/files/${storageKey}`}, ${media.filename},
           'image/webp', 'image', ${media.size}, ${media.width}, ${media.height},
-          0, ${media.altText}, 'demo-imagegen'
+          ${media.position}, ${media.altText}, 'demo-imagegen'
         )
         ON CONFLICT (id) DO UPDATE SET
           resource_id = excluded.resource_id,
@@ -738,6 +802,35 @@ async function seedDemo(transaction, configuration, preparedMedia) {
       webhook_enabled = false,
       updated_at = now()
   `;
+
+  // Reuse the demo workbench place and demo items. The bundled office geometry
+  // contains no original inventory records, photographs, or map coordinates.
+  await transaction`
+    INSERT INTO room_scans (
+      organization_id, id, room_resource_id, revision, scene,
+      captured_at, device_model, created_by
+    ) VALUES (
+      ${DEMO_ORGANIZATION.id}, ${demoRoomScanId},
+      ${"d3e00000-0000-4000-8000-000000000102"}, 1,
+      ${transaction.json(demoRoomScene)}, ${new Date("2026-08-13T10:12:00Z")},
+      'RoomPlan · Büro-Scan mit Demo-Inventar', ${DEMO_ACTOR}
+    )
+  `;
+  for (const [resourceId, x, y, z] of [
+    ["d3e00000-0000-4000-8000-000000000202", 0, -0.30, -0.70],
+    ["d3e00000-0000-4000-8000-000000000203", 2.2, -0.30, 0.27],
+  ]) {
+    await transaction`
+      INSERT INTO resource_spatial_placements (
+        organization_id, resource_id, room_scan_id,
+        position_x, position_y, position_z, confidence, method,
+        captured_at, updated_by
+      ) VALUES (
+        ${DEMO_ORGANIZATION.id}, ${resourceId}, ${demoRoomScanId},
+        ${x}, ${y}, ${z}, 1, 'manual', now(), ${DEMO_ACTOR}
+      )
+    `;
+  }
 
   // Keep this as the final data mutation. A partially completed seed must never
   // advertise a writable public organization as a finished demo tenant.

@@ -1,4 +1,4 @@
-export const DEMO_SEED_VERSION = 2;
+export const DEMO_SEED_VERSION = 7;
 
 export const DEMO_ORGANIZATION = Object.freeze({
   id: "d3e00000-0000-4000-8000-000000000001",
@@ -13,6 +13,33 @@ export const DEMO_USER = Object.freeze({
   name: "Demo-Besucher",
   role: "viewer",
 });
+
+export const DEMO_FAVORITE_RESOURCE_IDS = Object.freeze([
+  "d3e00000-0000-4000-8000-000000000201",
+  "d3e00000-0000-4000-8000-000000000202",
+]);
+
+const demoGridViewConfig = {
+  query: "",
+  filters: { type: "all", status: "all", priority: "all", tag: "all", category: "all", excludeCategory: "all" },
+  sort: "updatedAt",
+  direction: "desc",
+  layout: "grid",
+  density: "compact",
+  pageSize: 50,
+  columns: ["name", "quantity", "location", "status"],
+};
+
+export const DEMO_LIST_VIEWS = Object.freeze([
+  { scope: "inventory", id: "d3e00000-0000-4000-8000-000000000b01" },
+  { scope: "inventory.favorites", id: "d3e00000-0000-4000-8000-000000000b02" },
+].map(({ scope, id }) => ({
+  scope,
+  collection: {
+    views: [{ id, name: "Raster", config: demoGridViewConfig }],
+    defaultId: id,
+  },
+})));
 
 export const DEMO_ACTOR = "demo-seed";
 
@@ -216,7 +243,7 @@ export const DEMO_RESOURCES = Object.freeze([
   {
     id: "d3e00000-0000-4000-8000-000000000101",
     name: "Regal A2",
-    description: "Materialregal an der Nordwand, Felder A1 bis A4.",
+    description: "Zentrales Materialregal an der Nordwand der Werkstatt Nord. Hier lagern die Akku-Bohrschrauber mit Zubehör und das Kleinteilefach K3 für Schrauben und Kabelbinder.",
     type: "place",
     status: "available",
     sku: "ORT-REGAL-A2",
@@ -228,14 +255,14 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["lager", "nordwand"],
     categories: [{ name: "Lagerort", color: "#16a374" }],
     customFields: {},
-    notes: "Traglast je Fach: 120 kg.",
+    notes: "Werkzeugkoffer auf den unteren Böden abstellen, Kleinteile im Fach K3 einsortieren. Ausgeliehene Geräte nach der Rückgabe mit Akku und Zubehör auf Vollständigkeit prüfen. Traglast je Fach: 120 kg.",
     updatedDaysAgo: 21,
     kind: "place",
   },
   {
     id: "d3e00000-0000-4000-8000-000000000102",
     name: "Werkbank E1",
-    description: "Elektronikarbeitsplatz mit ESD-Matte und Absaugung.",
+    description: "Elektronikarbeitsplatz für Reparaturen und Prototypen mit ESD-Matte, Lötstationen und Absaugung. Hier ist auch das Digitalmultimeter für die nächste Kalibrierung hinterlegt.",
     type: "place",
     status: "available",
     sku: "ORT-WERKBANK-E1",
@@ -247,14 +274,14 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["elektronik", "esd"],
     categories: [{ name: "Arbeitsplatz", color: "#3b82f6" }],
     customFields: {},
-    notes: "Absaugung vor Lötarbeiten einschalten.",
+    notes: "Absaugung vor Lötarbeiten einschalten und die Arbeitsfläche nach Gebrauch freiräumen. Das Digitalmultimeter ist zur Kalibrierung vorgemerkt und bis zur Freigabe nicht verfügbar.",
     updatedDaysAgo: 18,
     kind: "place",
   },
   {
     id: "d3e00000-0000-4000-8000-000000000103",
     name: "Fach K3",
-    description: "Kleinteilefach im Regal A2.",
+    description: "Übersichtliches Kleinteilefach im Regal A2 mit blauen Sichtlagerkästen für Schrauben M4×20 und einer separaten Schale für schwarze Kabelbinder. Verbrauchsmaterial ist hier direkt griffbereit.",
     type: "place",
     status: "available",
     sku: "ORT-FACH-K3",
@@ -266,7 +293,7 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["kleinteile", "lager"],
     categories: [{ name: "Lagerort", color: "#16a374" }],
     customFields: {},
-    notes: "Behälter 3 bis 6.",
+    notes: "Schrauben und Kabelbinder getrennt einsortieren und Entnahmen im Bestand buchen. Die Kabelbinder liegen unter dem Mindestbestand; eine Nachbestellung über 100 Stück ist bereits unterwegs.",
     updatedDaysAgo: 14,
     kind: "place",
   },
@@ -285,7 +312,7 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["akku", "bohren", "mobil"],
     categories: [{ name: "Elektrowerkzeug", color: "#e99b2d" }],
     customFields: { lieferumfang: "2 Geräte, 3 Akkus, 1 Ladegerät" },
-    notes: "Gerät 02 ist für das Projekt Lastenrad ausgegeben.",
+    notes: "Die Historie zeigt vier abgeschlossene Ausleihen mit Rückgaben. Gerät 02 ist aktuell für das Projekt Lastenrad ausgegeben; Gerät 01 liegt einsatzbereit in Regal A2.",
     updatedDaysAgo: 2,
     kind: "item",
   },
@@ -304,7 +331,7 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["löten", "elektronik", "esd"],
     categories: [{ name: "Elektronik", color: "#635bff" }],
     customFields: { temperaturbereich: "150–450 °C" },
-    notes: "Spitzen nach Gebrauch reinigen und verzinnen.",
+    notes: "Von zwei auf drei Arbeitsplätze erweitert. Nach Workshop-Ausleihen und einem Netzteilwechsel sind alle drei Stationen wieder verfügbar. Spitzen nach Gebrauch reinigen und verzinnen.",
     updatedDaysAgo: 6,
     kind: "item",
   },
@@ -323,7 +350,7 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["messen", "elektronik", "kalibrierung"],
     categories: [{ name: "Messtechnik", color: "#e2647f" }],
     customFields: { wartungsstatus: "Kalibrierung beauftragt" },
-    notes: "Bis zur abgeschlossenen Kalibrierung nicht verwenden.",
+    notes: "Die Historie zeigt Außeneinsatz, Prüfleitungstausch und die aktuelle Kalibrierung. Bis zur Freigabe nicht verwenden; die Sperre ist kein Verbrauch.",
     updatedDaysAgo: 1,
     kind: "item",
   },
@@ -342,7 +369,7 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["schrauben", "m4", "edelstahl"],
     categories: [{ name: "Verbrauchsmaterial", color: "#64748b" }],
     customFields: { norm: "ISO 4762", werkstoff: "Edelstahl A2" },
-    notes: "Bestand nach Entnahme direkt buchen.",
+    notes: "Regelmäßiger Montageverbrauch mit zwei Nachlieferungen à 200 Stück, einer Materialrückgabe und einer Inventurkorrektur. Aktuell 126 Stück in Fach K3; Bedarf für die nächste Wagenserie prüfen.",
     updatedDaysAgo: 4,
     kind: "item",
   },
@@ -361,7 +388,7 @@ export const DEMO_RESOURCES = Object.freeze([
     tags: ["kabelbinder", "verbrauch", "uv-beständig"],
     categories: [{ name: "Verbrauchsmaterial", color: "#64748b" }],
     customFields: { abmessung: "200 × 4,8 mm" },
-    notes: "Mindestbestand unterschritten; Nachbestellung ist offen.",
+    notes: "Der Bedarf ist durch die Lastenrad-Vorserie zuletzt deutlich gestiegen. Nur noch 34 Stück verfügbar, 100 Stück werden in fünf Tagen erwartet. Bei weiterem Verbrauch droht bereits kurz vor der Lieferung eine Lücke.",
     updatedDaysAgo: 3,
     kind: "item",
   },
@@ -473,6 +500,35 @@ export const DEMO_STOCK_UNITS = Object.freeze([
   },
 ]);
 
+// Events run oldest to newest. Derive balances from bookings rather than
+// inventing chart points; the forecast reads this same ledger in production.
+function demoStockHistory(sku, idBase, events) {
+  const resource = DEMO_RESOURCES.find((entry) => entry.sku === sku);
+  const locationId = DEMO_LOCATION_BALANCES.find((entry) => entry.resourceId === resource.id)?.locationResourceId ?? null;
+  let balance = 0;
+  return events.map(([daysAgo, delta, type, reason, note, unitCode], index) => {
+    const unit = unitCode ? DEMO_STOCK_UNITS.find((entry) => entry.code === unitCode) : null;
+    if (unitCode && !unit) throw new Error(`Unknown demo stock unit: ${unitCode}`);
+    balance += delta;
+    return {
+      id: `d3e00000-0000-4000-8000-${(idBase + index + 1).toString(16).padStart(12, "0")}`,
+      sequence: index + 1,
+      resourceId: resource.id,
+      unitId: unit?.id ?? null,
+      delta,
+      quantity: Math.abs(delta),
+      balanceAfter: balance,
+      type,
+      reason,
+      note,
+      location: resource.location,
+      fromLocationResourceId: delta < 0 ? locationId : null,
+      toLocationResourceId: delta > 0 ? locationId : null,
+      daysAgo,
+    };
+  });
+}
+
 export const DEMO_STOCK_MOVEMENTS = Object.freeze([
   {
     id: "d3e00000-0000-4000-8000-000000000510",
@@ -482,13 +538,13 @@ export const DEMO_STOCK_MOVEMENTS = Object.freeze([
     delta: 1,
     quantity: 1,
     balanceAfter: 1,
-    type: "opening-balance",
+    type: "opening_balance",
     reason: "Ort angelegt",
     note: "Regal als Lagerort in die Werkstattstruktur aufgenommen.",
     location: "Werkstatt Nord",
     fromLocationResourceId: null,
     toLocationResourceId: null,
-    daysAgo: 48,
+    daysAgo: 125,
   },
   {
     id: "d3e00000-0000-4000-8000-000000000511",
@@ -498,13 +554,13 @@ export const DEMO_STOCK_MOVEMENTS = Object.freeze([
     delta: 1,
     quantity: 1,
     balanceAfter: 1,
-    type: "opening-balance",
+    type: "opening_balance",
     reason: "Ort angelegt",
     note: "Elektronikarbeitsplatz in die Werkstattstruktur aufgenommen.",
     location: "Werkstatt Nord",
     fromLocationResourceId: null,
     toLocationResourceId: null,
-    daysAgo: 47,
+    daysAgo: 124,
   },
   {
     id: "d3e00000-0000-4000-8000-000000000512",
@@ -514,158 +570,92 @@ export const DEMO_STOCK_MOVEMENTS = Object.freeze([
     delta: 1,
     quantity: 1,
     balanceAfter: 1,
-    type: "opening-balance",
+    type: "opening_balance",
     reason: "Ort angelegt",
     note: "Kleinteilefach im Regal A2 erfasst.",
     location: "Regal A2",
     fromLocationResourceId: null,
     toLocationResourceId: "d3e00000-0000-4000-8000-000000000101",
-    daysAgo: 46,
+    daysAgo: 123,
   },
-  {
-    id: "d3e00000-0000-4000-8000-000000000501",
-    sequence: 1,
-    resourceId: "d3e00000-0000-4000-8000-000000000201",
-    unitId: null,
-    delta: 2,
-    quantity: 2,
-    balanceAfter: 2,
-    type: "initial-stock",
-    reason: "Erstbestand erfasst",
-    note: "Zwei Geräte aus dem Werkstattbestand übernommen.",
-    location: "Regal A2",
-    fromLocationResourceId: null,
-    toLocationResourceId: "d3e00000-0000-4000-8000-000000000101",
-    daysAgo: 36,
-  },
-  {
-    id: "d3e00000-0000-4000-8000-000000000502",
-    sequence: 2,
-    resourceId: "d3e00000-0000-4000-8000-000000000201",
-    unitId: "d3e00000-0000-4000-8000-000000000402",
-    delta: -1,
-    quantity: 1,
-    balanceAfter: 1,
-    type: "assignment-checkout",
-    reason: "Ausgabe an Projekt Lastenrad",
-    note: "Gerät 02 mit Akku und Bit-Set ausgegeben.",
-    location: "Regal A2",
-    fromLocationResourceId: "d3e00000-0000-4000-8000-000000000101",
-    toLocationResourceId: null,
-    daysAgo: 2,
-  },
-  {
-    id: "d3e00000-0000-4000-8000-000000000503",
-    sequence: 1,
-    resourceId: "d3e00000-0000-4000-8000-000000000202",
-    unitId: null,
-    delta: 3,
-    quantity: 3,
-    balanceAfter: 3,
-    type: "initial-stock",
-    reason: "Erstbestand erfasst",
-    note: "Drei Arbeitsplätze ausgestattet.",
-    location: "Werkbank E1",
-    fromLocationResourceId: null,
-    toLocationResourceId: "d3e00000-0000-4000-8000-000000000102",
-    daysAgo: 31,
-  },
-  {
-    id: "d3e00000-0000-4000-8000-000000000504",
-    sequence: 1,
-    resourceId: "d3e00000-0000-4000-8000-000000000203",
-    unitId: null,
-    delta: 1,
-    quantity: 1,
-    balanceAfter: 1,
-    type: "initial-stock",
-    reason: "Erstbestand erfasst",
-    note: "Messgerät mit Prüfleitungssatz übernommen.",
-    location: "Werkbank E1",
-    fromLocationResourceId: null,
-    toLocationResourceId: "d3e00000-0000-4000-8000-000000000102",
-    daysAgo: 44,
-  },
-  {
-    id: "d3e00000-0000-4000-8000-000000000505",
-    sequence: 2,
-    resourceId: "d3e00000-0000-4000-8000-000000000203",
-    unitId: "d3e00000-0000-4000-8000-000000000403",
-    delta: -1,
-    quantity: 1,
-    balanceAfter: 0,
-    type: "maintenance",
-    reason: "Kalibrierung fällig",
-    note: "Gerät bis zur Rückgabe aus der Kalibrierung gesperrt.",
-    location: "Werkbank E1",
-    fromLocationResourceId: "d3e00000-0000-4000-8000-000000000102",
-    toLocationResourceId: null,
-    daysAgo: 1,
-  },
-  {
-    id: "d3e00000-0000-4000-8000-000000000506",
-    sequence: 1,
-    resourceId: "d3e00000-0000-4000-8000-000000000204",
-    unitId: null,
-    delta: 200,
-    quantity: 200,
-    balanceAfter: 200,
-    type: "receipt",
-    reason: "Wareneingang",
-    note: "Packung zu 200 Stück eingebucht.",
-    location: "Fach K3",
-    fromLocationResourceId: null,
-    toLocationResourceId: "d3e00000-0000-4000-8000-000000000103",
-    daysAgo: 24,
-  },
-  {
-    id: "d3e00000-0000-4000-8000-000000000507",
-    sequence: 2,
-    resourceId: "d3e00000-0000-4000-8000-000000000204",
-    unitId: null,
-    delta: -74,
-    quantity: 74,
-    balanceAfter: 126,
-    type: "usage",
-    reason: "Montage Werkbankwagen",
-    note: "74 Stück für drei Werkbankwagen entnommen.",
-    location: "Fach K3",
-    fromLocationResourceId: "d3e00000-0000-4000-8000-000000000103",
-    toLocationResourceId: null,
-    daysAgo: 4,
-  },
-  {
-    id: "d3e00000-0000-4000-8000-000000000508",
-    sequence: 1,
-    resourceId: "d3e00000-0000-4000-8000-000000000205",
-    unitId: null,
-    delta: 80,
-    quantity: 80,
-    balanceAfter: 80,
-    type: "receipt",
-    reason: "Wareneingang",
-    note: "Anbruchpackung gezählt und eingebucht.",
-    location: "Fach K3",
-    fromLocationResourceId: null,
-    toLocationResourceId: "d3e00000-0000-4000-8000-000000000103",
-    daysAgo: 18,
-  },
-  {
-    id: "d3e00000-0000-4000-8000-000000000509",
-    sequence: 2,
-    resourceId: "d3e00000-0000-4000-8000-000000000205",
-    unitId: null,
-    delta: -46,
-    quantity: 46,
-    balanceAfter: 34,
-    type: "usage",
-    reason: "Kabelbäume Projekt Lastenrad",
-    note: "Bestand liegt jetzt unter dem Mindestwert.",
-    location: "Fach K3",
-    fromLocationResourceId: "d3e00000-0000-4000-8000-000000000103",
-    toLocationResourceId: null,
-    daysAgo: 1,
-  },
+  ...demoStockHistory("WERK-ABS-18V", 0xc00, [
+    [95, 2, "opening_balance", "Werkstattbestand übernommen", "Zwei einsatzbereite Geräte mit Akkus und Ladegerät erfasst."],
+    [80, -1, "assignment-checkout", "Ausleihe: Regalaufbau", "Gerät 01 für den Aufbau der Materialregale ausgegeben.", "ABS-18V-01"],
+    [77, 1, "assignment-return", "Rückgabe: Regalaufbau", "Gerät 01 vollständig und mit geladenem Akku zurück.", "ABS-18V-01"],
+    [65, -1, "assignment-checkout", "Ausleihe: Repair-Café", "Gerät 02 für das mobile Reparaturteam ausgegeben.", "ABS-18V-02"],
+    [61, 1, "assignment-return", "Rückgabe: Repair-Café", "Gerät 02 gereinigt und mit vollständigem Bit-Set zurück.", "ABS-18V-02"],
+    [45, -1, "assignment-checkout", "Ausleihe: Prüfstandbau", "Gerät 01 für die Montage eines Prüfstands ausgegeben.", "ABS-18V-01"],
+    [42, 1, "assignment-return", "Rückgabe: Prüfstandbau", "Prüfstand fertig; Gerät 01 wieder in Regal A2.", "ABS-18V-01"],
+    [22, -1, "assignment-checkout", "Ausleihe: Werkbankwagen", "Gerät 02 für die Vormontage der Wagen ausgegeben.", "ABS-18V-02"],
+    [18, 1, "assignment-return", "Rückgabe: Werkbankwagen", "Gerät 02 und Zubehör vollständig zurück.", "ABS-18V-02"],
+    [2, -1, "assignment-checkout", "Ausgabe an Projekt Lastenrad", "Gerät 02 mit Akku und Bit-Set ausgegeben; Rückgabe in fünf Tagen.", "ABS-18V-02"],
+  ]),
+  ...demoStockHistory("ELEK-LOET-80W", 0xd00, [
+    [95, 2, "opening_balance", "Elektronikplätze ausgestattet", "Zwei Lötstationen aus dem Werkstattbestand übernommen."],
+    [64, 1, "receipt", "Dritter Lötarbeitsplatz", "Eine neue Station für den Prototypenplatz geliefert und geprüft."],
+    [52, -2, "assignment-checkout", "Ausleihe: Lötworkshop", "Zwei Stationen samt Ablagen für einen dreitägigen Workshop ausgegeben."],
+    [49, 2, "assignment-return", "Rückgabe: Lötworkshop", "Beide Stationen funktionsgeprüft und wieder an Werkbank E1."],
+    [28, -1, "assignment-checkout", "Ausleihe: Repair-Café", "Eine Station für Reparaturen an Radios und Leuchten bereitgestellt."],
+    [24, 1, "assignment-return", "Rückgabe: Repair-Café", "Station mit gereinigter Lötspitze zurückgegeben."],
+    [12, -1, "adjustment", "Station vorübergehend gesperrt", "Netzteil defekt; eine Station aus dem verfügbaren Bestand genommen."],
+    [6, 1, "return", "Reparierte Station zurück", "Netzteil ersetzt, Schutzleiterprüfung bestanden; wieder drei Stationen verfügbar."],
+  ]),
+  ...demoStockHistory("MESS-DMM-TRMS", 0xe00, [
+    [95, 1, "opening_balance", "Messgerät übernommen", "Digitalmultimeter mit Prüfleitungssatz und gültigem Prüfnachweis erfasst."],
+    [70, -1, "assignment-checkout", "Ausleihe: mobile Fehlersuche", "Messgerät für die Diagnose an der Werkstattbeleuchtung ausgegeben.", "DMM-TRMS-01"],
+    [66, 1, "assignment-return", "Rückgabe: mobile Fehlersuche", "Messgerät und Prüfleitungssatz vollständig zurück.", "DMM-TRMS-01"],
+    [42, -1, "unit-status", "Defekte Prüfleitung", "Messgerät bis zum Austausch der beschädigten Leitung gesperrt.", "DMM-TRMS-01"],
+    [37, 1, "unit-status", "Messgerät wieder freigegeben", "Neue Prüfleitung montiert, Funktionsprüfung bestanden.", "DMM-TRMS-01"],
+    [1, -1, "unit-status", "Kalibrierung fällig", "Gerät bis zur Rückgabe aus der beauftragten Kalibrierung gesperrt.", "DMM-TRMS-01"],
+  ]),
+  ...demoStockHistory("VERB-M4X20-A2", 0xf00, [
+    [95, 200, "opening_balance", "Kleinteilebestand gezählt", "Eine Packung mit 200 Schrauben als Anfangsbestand erfasst."],
+    [88, -18, "issue", "Montage: Monitorhalter", "18 Schrauben für drei Halterungen an den Prüfplätzen verbaut."],
+    [82, -24, "issue", "Montage: Prüfadapter", "Sechs Prüfadapter mit jeweils vier Schrauben montiert."],
+    [76, -32, "issue", "Prototypen: Sensorgehäuse", "Acht Sensorgehäuse verschraubt."],
+    [71, -20, "issue", "Repair-Café: Gehäusereparaturen", "20 Schrauben für fünf Reparaturen entnommen."],
+    [65, -36, "issue", "Montage: Prototypenträger", "Neun Trägerplatten für die Versuchsreihe vorbereitet."],
+    [60, 200, "receipt", "Wareneingang: M4-Schrauben", "Eine weitere Packung mit 200 Stück geliefert und in Fach K3 einsortiert."],
+    [57, -28, "issue", "Montage: Wagenhalter", "Sieben Halterungen für mobile Werkzeugwagen montiert."],
+    [52, -16, "issue", "Reparatur: Netzteilgehäuse", "Vier Gehäuse nach der Reparatur wieder verschraubt."],
+    [47, -42, "issue", "Projekt Lastenrad: Träger", "42 Schrauben für die Trägermontage ausgegeben."],
+    [43, 12, "return", "Unbenutzte Schrauben zurück", "Zwölf unbenutzte Schrauben aus der Trägermontage zurückgezählt."],
+    [40, -30, "issue", "Montage: Bohrschablonen", "Sechs Schablonen für die Werkstatt gefertigt."],
+    [35, -22, "issue", "Reparatur: Schutzabdeckungen", "Abdeckungen an zwei Maschinen erneuert."],
+    [31, -18, "issue", "Montage: Kabelkanalhalter", "Sechs Halter am Elektronikarbeitsplatz angebracht."],
+    [26, 200, "receipt", "Wareneingang vor Wagenserie", "200 Stück für die anstehenden Montageaufträge nachgeliefert."],
+    [24, -36, "issue", "Montage: Gerätehalter", "Neun Halterungen für die Werkstattwagen aufgebaut."],
+    [20, -28, "issue", "Montage: Rollenaufnahmen", "Rollenaufnahmen und Adapterplatten verschraubt."],
+    [16, -32, "issue", "Prototypen: Steuergehäuse", "Acht Steuergehäuse geschlossen."],
+    [12, -24, "issue", "Reparatur: Messplatz", "Sechs Aufnahmen am Messplatz ersetzt."],
+    [9, -4, "waste", "Beschädigte Gewinde aussortiert", "Vier Schrauben mit beschädigten Gewinden entsorgt."],
+    [7, -74, "issue", "Endmontage: drei Werkbankwagen", "74 Stück für die Endmontage der drei Wagen verbaut."],
+    [4, -2, "adjustment", "Inventurkorrektur Fach K3", "Beim Nachzählen zwei Stück Fehlbestand festgestellt; korrigierter Bestand: 126."],
+  ]),
+  ...demoStockHistory("VERB-KB-200-S", 0x1000, [
+    [95, 150, "opening_balance", "Kabelbinderbestand gezählt", "Eine volle Packung und 50 Stück Restbestand übernommen."],
+    [89, -8, "issue", "Verdrahtung: Prüfadapter", "Acht Kabelbinder für die Zugentlastung eingesetzt."],
+    [83, -10, "issue", "Verdrahtung: Sensorleitungen", "Leitungen an zwei Testaufbauten gebündelt."],
+    [77, -12, "issue", "Wartung: Ladeplätze", "Ladekabel an drei Werkstattplätzen neu geführt."],
+    [71, -8, "issue", "Repair-Café: Leuchten", "Neue Zugentlastungen an vier Leuchten befestigt."],
+    [65, -14, "issue", "Montage: Werkstattregale", "Stromleitungen an den Materialregalen befestigt."],
+    [59, -10, "issue", "Reparatur: E-Bike-Kabel", "Lose Leitungen an zwei Rädern neu verlegt."],
+    [53, -12, "issue", "Prototyp: Steuerbox", "Kabelbaum in der ersten Steuerbox fixiert."],
+    [47, -16, "issue", "Montage: Präsentationsstand", "Versorgungsleitungen am mobilen Stand gesichert."],
+    [45, 100, "receipt", "Wareneingang: Kabelbinder", "Eine Packung à 100 Stück geliefert."],
+    [35, -16, "issue", "Montage: LED-Arbeitsplätze", "Kabel an vier neuen Leuchten befestigt."],
+    [29, -22, "issue", "Projekt Lastenrad: Prototyp", "Erster vollständiger Kabelbaum am Lastenrad verlegt."],
+    [28, -14, "issue", "Projekt Lastenrad: Prüfstand", "Zusätzliche Leitungen am Belastungsprüfstand fixiert."],
+    [25, -26, "issue", "Projekt Lastenrad: zweite Baugruppe", "Beleuchtung, Sensoren und Ladeleitung gebündelt."],
+    [21, -30, "issue", "Projekt Lastenrad: Vorserie", "Zwei Kabelbäume für die erste Vorserie vorbereitet."],
+    [18, 100, "receipt", "Nachlieferung für die Vorserie", "100 Stück eingetroffen und vor Serienstart eingelagert."],
+    [16, -28, "issue", "Projekt Lastenrad: Montage", "Kabelbäume an zwei weiteren Rädern befestigt."],
+    [13, 6, "return", "Unbenutztes Material zurück", "Sechs noch offene Kabelbinder aus dem Montagekit zurückgelegt."],
+    [12, -32, "issue", "Projekt Lastenrad: zweite Serie", "Zwei weitere Räder fertig verdrahtet."],
+    [8, -28, "issue", "Nacharbeit: Beleuchtung", "Geänderte Leitungsführung an der Vorserie befestigt."],
+    [5, -4, "waste", "Beschädigte Rastköpfe", "Vier beschädigte Kabelbinder aussortiert."],
+    [3, -32, "issue", "Projekt Lastenrad: Abschlussmontage", "Noch 34 Stück verfügbar; Nachbestellung über 100 Stück ist offen."],
+  ]),
 ]);
 
 export const DEMO_ASSIGNMENTS = Object.freeze([
@@ -722,6 +712,53 @@ export const DEMO_RELATIONS = Object.freeze([
   relationTypeKey,
 })));
 
+export const DEMO_SCAN_WORKFLOWS = Object.freeze([
+  {
+    id: "d3e00000-0000-4000-8000-000000002001",
+    name: "Wareneingang · Kabelbinder",
+    description: "Beispiel: Eine Packung mit 100 Kabelbindern trifft ein. Unter „Code manuell eingeben“ VERB-KB-200-S eintragen, die Liefermenge 100 und den Verwendungszweck wählen. „Alle Aktionen prüfen“ zeigt die geplante Änderung von 34 auf 134 Stück. Die Demo bleibt eine Vorschau; es wird nichts gebucht.",
+    enabled: true,
+    resourceId: "d3e00000-0000-4000-8000-000000000205",
+    resourceIds: ["d3e00000-0000-4000-8000-000000000205"],
+    targetSelectionMode: "all",
+    allowVariantSelection: false,
+    codeTypes: ["qr_code", "code_128"],
+    extraction: { mode: "full" },
+    identifierPropertyKey: "artikelnummer",
+    identifierStorage: "execution",
+    operation: { type: "stock-adjustment", delta: 100 },
+    createMissingUnit: false,
+    unitStatus: null,
+    extractedFields: [],
+    fixedProperties: [],
+    inputFields: [
+      { key: "menge", label: "Liefermenge (Stück)", type: "number", required: true, storage: "execution", placeholder: "Zum Beispiel 100", options: [], visibleWhen: null },
+      { key: "verwendung", label: "Verwendungszweck", type: "radio", required: true, storage: "execution", placeholder: "", options: [
+        { value: "lastenrad", label: "Projekt Lastenrad" },
+        { value: "werkstatt", label: "Werkstatt auffüllen" },
+        { value: "reparatur", label: "Reparaturkurs" },
+      ], visibleWhen: null },
+      { key: "notiz", label: "Lieferschein / Notiz (optional)", type: "textarea", required: false, storage: "execution", placeholder: "Zum Beispiel: Lieferschein LS-DEMO-1042", options: [], visibleWhen: null },
+    ],
+    actions: [
+      { id: "artikel-pruefen", label: "Artikelcode prüfen", type: "assert", enabled: true, when: null,
+        check: { mode: "all", rules: [{ left: { source: "scan", field: "identifier" }, operator: "equals", right: { source: "literal", value: "VERB-KB-200-S" } }] },
+        message: "Für dieses Beispiel bitte den Artikelcode VERB-KB-200-S verwenden." },
+      { id: "menge-pruefen", label: "Positive Liefermenge prüfen", type: "assert", enabled: true, when: null,
+        check: { mode: "all", rules: [{ left: { source: "input", key: "menge" }, operator: "gte", right: { source: "literal", value: 1 } }] },
+        message: "Bitte eine Liefermenge von mindestens einem Stück angeben." },
+      { id: "lieferung-erfassen", label: "Kabelbinder aus der Lieferung zubuchen", type: "stock-adjustment", enabled: true, when: null,
+        target: { source: "selected" }, delta: { source: "input", key: "menge" }, factor: 1 },
+    ],
+    oncePerCode: false,
+    quantityInputKey: "menge",
+    publicTriggerEnabled: false,
+    publicTriggerCode: null,
+    triggerWebhook: false,
+    webhookEventName: "inventory.action.executed",
+  },
+]);
+
 export const DEMO_LABEL_SETUP = Object.freeze({
   id: "d3e00000-0000-4000-8000-000000000901",
   name: "Werkstatt 62 × 35 mm",
@@ -746,7 +783,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "5bd6c0c691b07d0e09c4d4d9cec1374ef75820b988a6418019801a6add86632b",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild eines Akku-Bohrschraubers im Werkzeugkoffer."
+    "altText": "KI-generiertes Demobild eines Akku-Bohrschraubers im Werkzeugkoffer.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a02",
@@ -755,7 +793,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "2696d5a6d0793c06a3f7a9647a972d7b76d456b2f3d9fe195dbe156cabc3c5f8",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild einer Lötstation am Elektronikarbeitsplatz."
+    "altText": "KI-generiertes Demobild einer Lötstation am Elektronikarbeitsplatz.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a03",
@@ -764,7 +803,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "ede69a989c0f34c6d38f6de21db1ffa639209110b2c56989b8289728346d100e",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild von Schrauben in Kleinteilebehältern."
+    "altText": "KI-generiertes Demobild von Schrauben in Kleinteilebehältern.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a04",
@@ -773,7 +813,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "a32bfa1c3afa7c9d1f5a16dca969868831b0659bd32cba05dcfa1d7f8408e011",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild eines Digitalmultimeters mit Messleitungen."
+    "altText": "KI-generiertes Demobild eines Digitalmultimeters mit Messleitungen.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a05",
@@ -782,7 +823,198 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "e4526c0648744e79bc40651e3d2dc96c0af85c941dae41f4152103881f7f476f",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild schwarzer Kabelbinder in einer Ablageschale."
+    "altText": "KI-generiertes Demobild schwarzer Kabelbinder in einer Ablageschale.",
+    "position": 0
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a06",
+    "resourceId": "d3e00000-0000-4000-8000-000000000101",
+    "filename": "generated-shelf.webp",
+    "sha256": "fdc2bbd8f22bbdd685162d0d22210522e8162b1a4b9987f3486b5e66a8ddb176",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild von Regal A2 mit Werkzeugkoffern, Akkugeräten und blauen Kleinteilekästen.",
+    "position": 0
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a07",
+    "resourceId": "d3e00000-0000-4000-8000-000000000102",
+    "filename": "generated-workbench.webp",
+    "sha256": "a4302c20cd8c35bbf5bb2988445f7070a886d0b51a382b9faec7741878649e62",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild von Werkbank E1 mit blauer ESD-Matte, Lötstation, Absaugung und Multimeter.",
+    "position": 0
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a08",
+    "resourceId": "d3e00000-0000-4000-8000-000000000103",
+    "filename": "generated-parts-bin.webp",
+    "sha256": "6ee159ebeb2b68c58150061a6292751ec122abfc0830382ecb44e212ec1f8b52",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild von Fach K3 mit sortierten Schrauben, Muttern, Unterlegscheiben und Kabelbindern.",
+    "position": 0
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a11",
+    "resourceId": "d3e00000-0000-4000-8000-000000000201",
+    "filename": "generated-drill-perspective.webp",
+    "sha256": "e0c510ec48bdd8049e87506ac39fa603c493fdfef0daf49f30397aaadec8119e",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Akku-Bohrschrauber aus seitlicher Perspektive mit Akku, Ladegerät und geöffnetem Werkzeugkoffer.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a12",
+    "resourceId": "d3e00000-0000-4000-8000-000000000201",
+    "filename": "generated-drill-detail.webp",
+    "sha256": "6fa78017eb57eccace2c42bb757004f7df0d721fec7143bf47055f7c99b27a8f",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht des Akku-Bohrschraubers mit Schnellspannfutter, Drehmomentring und Griff.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a13",
+    "resourceId": "d3e00000-0000-4000-8000-000000000202",
+    "filename": "generated-soldering-perspective.webp",
+    "sha256": "05724396775eea383bde1c576468f8a53fa786b354742645d6c476834d112f20",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Lötstation mit Ablage, Spitzenreiniger und Lötzinn aus erhöhter Perspektive.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a14",
+    "resourceId": "d3e00000-0000-4000-8000-000000000202",
+    "filename": "generated-soldering-detail.webp",
+    "sha256": "23386cdef63cf3e3aa4d08f7adf02b075e4c74686496caeb3ff969881b23488a",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht von Lötkolben, sicherer Ablage und Messing-Spitzenreiniger.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a15",
+    "resourceId": "d3e00000-0000-4000-8000-000000000203",
+    "filename": "generated-multimeter-perspective.webp",
+    "sha256": "f260dbc42402fdda3ad4d0c0814ca0032e35ccb1b0f23a69b12ccbfeeb5c7086",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Digitalmultimeter und rote sowie schwarze Messleitungen in der Draufsicht.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a16",
+    "resourceId": "d3e00000-0000-4000-8000-000000000203",
+    "filename": "generated-multimeter-detail.webp",
+    "sha256": "5aaf772b29b48158ef7e61156bb2ad2627471d694737af41837bfbdefe8c769c",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht von Drehschalter, Messbuchsen und Prüfspitzen des Digitalmultimeters.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a17",
+    "resourceId": "d3e00000-0000-4000-8000-000000000204",
+    "filename": "generated-screws-perspective.webp",
+    "sha256": "e7cb5c14763129719929d25a0e631f08e387e342aec80d769492666545da352b",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Schrauben, Muttern und Unterlegscheiben in getrennten blauen Behältern von oben.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a18",
+    "resourceId": "d3e00000-0000-4000-8000-000000000204",
+    "filename": "generated-screws-detail.webp",
+    "sha256": "a2861a08cf5da51fb4588bb56d3a184d066e1408647e504fcfb2952ed2c7cd71",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Nahaufnahme der M4-Schrauben mit Innensechskant, Gewinde, Mutter und Unterlegscheibe.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a19",
+    "resourceId": "d3e00000-0000-4000-8000-000000000205",
+    "filename": "generated-cable-ties-perspective.webp",
+    "sha256": "4d138dd0f53fbe81d180a6f506cf47f4bdbb048ccc2a8362e1e87657b9026c15",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Schwarze Kabelbinder als Bündel, Einzelteile und lose Schlaufe in der Draufsicht.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1a",
+    "resourceId": "d3e00000-0000-4000-8000-000000000205",
+    "filename": "generated-cable-ties-detail.webp",
+    "sha256": "82150e8434462d4438843d71e6c1eada10a315c77e93d227bb7e9c3eac345be5",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht der Verschlussköpfe und Verzahnung schwarzer Kabelbinder.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1b",
+    "resourceId": "d3e00000-0000-4000-8000-000000000101",
+    "filename": "generated-shelf-perspective.webp",
+    "sha256": "fca35db0ca92fd1be5037786d3a0c4f6d51ada53f3bdab73a9c7bf4ea9626932",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Regal A2 in der Frontalansicht mit Kleinteilekästen und Werkzeugkoffern.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1c",
+    "resourceId": "d3e00000-0000-4000-8000-000000000101",
+    "filename": "generated-shelf-detail.webp",
+    "sha256": "fd2e69d8755f2c08097d8890cae1a513d23db5e20c507e28b49eee6ee0fcd6b8",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht der Werkzeugkoffer und unteren Lagerböden im Regal A2.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1d",
+    "resourceId": "d3e00000-0000-4000-8000-000000000102",
+    "filename": "generated-workbench-perspective.webp",
+    "sha256": "65777cb18298f8ccff1a2188f5265999ab42d6bd7eb16aec2740ae8155928f43",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Werkbank E1 aus erhöhter Perspektive mit ESD-Arbeitsfläche und Elektronikwerkzeugen.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1e",
+    "resourceId": "d3e00000-0000-4000-8000-000000000102",
+    "filename": "generated-workbench-detail.webp",
+    "sha256": "98e622df9f16d68a5a37713011570d2c620ae2cce14b58a82edcf7d79db726f0",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht des Lötbereichs an Werkbank E1 mit Absaugung und ESD-Matte.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1f",
+    "resourceId": "d3e00000-0000-4000-8000-000000000103",
+    "filename": "generated-parts-bin-perspective.webp",
+    "sha256": "f6c8debceea89c9fb9687c6dcdb92caa5538648ddc24281da67a67b3372a3a34",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Fach K3 aus erhöhter Perspektive mit Einblick in die sortierten Materialbehälter.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a20",
+    "resourceId": "d3e00000-0000-4000-8000-000000000103",
+    "filename": "generated-parts-bin-detail.webp",
+    "sha256": "8a9c2fbfd9ff0b7f09b5d98c64ff602fbe0a705d5634b8856eab19fbfc60ae65",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht der griffbereiten Sichtlagerkästen und Kabelbinderschale in Fach K3.",
+    "position": 2
   }
 ]);
 
@@ -794,6 +1026,7 @@ export function validateDemoSeedManifest() {
   const stableIds = [
     DEMO_ORGANIZATION.id,
     DEMO_USER.id,
+    ...DEMO_LIST_VIEWS.flatMap(({ collection }) => collection.views.map(({ id }) => id)),
     ...DEMO_RESOURCES.map(({ id }) => id),
     ...DEMO_LOCATION_BALANCES.map(({ id }) => id),
     ...DEMO_STOCK_UNITS.map(({ id }) => id),
@@ -802,6 +1035,7 @@ export function validateDemoSeedManifest() {
     ...DEMO_PURCHASE_ORDERS.map(({ id }) => id),
     ...DEMO_PURCHASE_ORDER_LINES.map(({ id }) => id),
     ...DEMO_RELATIONS.map(({ id }) => id),
+    ...DEMO_SCAN_WORKFLOWS.map(({ id }) => id),
     DEMO_LABEL_SETUP.id,
     ...DEMO_MEDIA.map(({ id }) => id),
   ];
@@ -828,6 +1062,27 @@ export function validateDemoSeedManifest() {
 
   const resourceIds = new Set(DEMO_RESOURCES.map(({ id }) => id));
   const itemResources = DEMO_RESOURCES.filter(({ kind }) => kind === "item");
+  for (const workflow of DEMO_SCAN_WORKFLOWS) {
+    if (!workflow.resourceIds.includes(workflow.resourceId) || workflow.resourceIds.some((id) => !itemResources.some((item) => item.id === id))) {
+      errors.push(`Unknown scan workflow target: ${workflow.id}`);
+    }
+    if (workflow.publicTriggerEnabled || workflow.triggerWebhook || workflow.actions.some(({ type }) => type === "webhook")) {
+      errors.push(`Demo scan workflows must remain private and integration-free: ${workflow.id}`);
+    }
+  }
+  if (new Set(DEMO_FAVORITE_RESOURCE_IDS).size !== 2 || DEMO_FAVORITE_RESOURCE_IDS.length !== 2) {
+    errors.push("The demo must have exactly two distinct favorites.");
+  }
+  for (const id of DEMO_FAVORITE_RESOURCE_IDS) {
+    if (!itemResources.some((resource) => resource.id === id)) {
+      errors.push(`Unknown demo favorite item: ${id}`);
+    }
+  }
+  for (const { scope, collection } of DEMO_LIST_VIEWS) {
+    if (collection.views.find(({ id }) => id === collection.defaultId)?.config.layout !== "grid") {
+      errors.push(`Demo list needs a default grid view: ${scope}`);
+    }
+  }
   if (itemResources.length !== 5) errors.push("The demo must contain exactly five inventory items.");
   if (DEMO_RESOURCES.filter(({ kind }) => kind === "place").length !== 3) {
     errors.push("The demo must contain exactly three places.");
@@ -852,7 +1107,12 @@ export function validateDemoSeedManifest() {
   const unitById = new Map(DEMO_STOCK_UNITS.map((unit) => [unit.id, unit]));
   for (const movement of DEMO_STOCK_MOVEMENTS) {
     if (!resourceIds.has(movement.resourceId)) errors.push(`Unknown movement resource: ${movement.id}`);
-    if (movement.unitId && !unitById.has(movement.unitId)) errors.push(`Unknown movement unit: ${movement.id}`);
+    if (movement.unitId && unitById.get(movement.unitId)?.resourceId !== movement.resourceId) {
+      errors.push(`Unknown or mismatched movement unit: ${movement.id}`);
+    }
+    if (!Number.isInteger(movement.daysAgo) || movement.daysAgo < 0 || movement.quantity !== Math.abs(movement.delta)) {
+      errors.push(`Invalid movement age or quantity: ${movement.id}`);
+    }
   }
   for (const resource of DEMO_RESOURCES) {
     if (!Number.isInteger(resource.updatedDaysAgo) || resource.updatedDaysAgo < 0) {
@@ -862,9 +1122,14 @@ export function validateDemoSeedManifest() {
       .filter((movement) => movement.resourceId === resource.id)
       .sort((left, right) => left.sequence - right.sequence);
     let balance = 0;
+    let previousDaysAgo = Infinity;
     for (const movement of history) {
       balance += movement.delta;
       if (movement.balanceAfter !== balance) errors.push(`Movement balance mismatch: ${movement.id}`);
+      if (balance < 0 || movement.daysAgo >= previousDaysAgo) {
+        errors.push(`Negative balance or nonchronological movement: ${movement.id}`);
+      }
+      previousDaysAgo = movement.daysAgo;
     }
     if (history.length === 0 || balance !== resource.quantity) {
       errors.push(`Current resource quantity does not match movement history: ${resource.sku}`);
@@ -901,6 +1166,16 @@ export function validateDemoSeedManifest() {
   for (const media of DEMO_MEDIA) {
     if (!resourceIds.has(media.resourceId)) errors.push(`Unknown media resource: ${media.id}`);
     if (!/^[0-9a-f]{64}$/.test(media.sha256)) errors.push(`Invalid media checksum: ${media.filename}`);
+  }
+  for (const resource of DEMO_RESOURCES) {
+    const images = DEMO_MEDIA.filter(({ resourceId }) => resourceId === resource.id);
+    const positions = images.map(({ position }) => position).sort((left, right) => left - right);
+    if (positions.length !== 3 || positions.some((position, index) => position !== index)) {
+      errors.push(`Demo resource needs three images at positions 0, 1, 2: ${resource.sku}`);
+    }
+    if (new Set(images.map(({ sha256 }) => sha256)).size !== images.length) {
+      errors.push(`Duplicate demo gallery image: ${resource.sku}`);
+    }
   }
 
   return errors;
