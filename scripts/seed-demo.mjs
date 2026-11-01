@@ -41,6 +41,10 @@ const DEMO_PASSWORD_HASH =
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const bundledAssetsDirectory = path.resolve(scriptDirectory, "../demo/assets");
 const mediaStoragePrefix = "demo";
+const demoRoomScanId = "d3e00000-0000-4000-8000-000000000901";
+const demoRoomScene = JSON.parse(await readFile(
+  new URL("../demo/office-room-scene.json", import.meta.url), "utf8",
+));
 
 const value = (name) => process.env[name]?.trim() ?? "";
 const removeRequested = process.argv.slice(2).includes("--remove");
@@ -237,6 +241,9 @@ async function assertTenantRowIdsAreSafe(transaction) {
       UNION ALL
       SELECT 'media', id, organization_id FROM media
       WHERE id = ANY(${DEMO_MEDIA.map(({ id }) => id)})
+      UNION ALL
+      SELECT 'room_scans', id, organization_id FROM room_scans
+      WHERE id = ${demoRoomScanId}
     ) seeded_rows
     WHERE organization_id <> ${DEMO_ORGANIZATION.id}
   `;
@@ -738,6 +745,35 @@ async function seedDemo(transaction, configuration, preparedMedia) {
       webhook_enabled = false,
       updated_at = now()
   `;
+
+  // Reuse the demo workbench place and demo items. The bundled office geometry
+  // contains no original inventory records, photographs, or map coordinates.
+  await transaction`
+    INSERT INTO room_scans (
+      organization_id, id, room_resource_id, revision, scene,
+      captured_at, device_model, created_by
+    ) VALUES (
+      ${DEMO_ORGANIZATION.id}, ${demoRoomScanId},
+      ${"d3e00000-0000-4000-8000-000000000102"}, 1,
+      ${transaction.json(demoRoomScene)}, ${new Date("2026-08-13T10:12:00Z")},
+      'RoomPlan · Büro-Scan mit Demo-Inventar', ${DEMO_ACTOR}
+    )
+  `;
+  for (const [resourceId, x, y, z] of [
+    ["d3e00000-0000-4000-8000-000000000202", 0, -0.30, -0.70],
+    ["d3e00000-0000-4000-8000-000000000203", 2.2, -0.30, 0.27],
+  ]) {
+    await transaction`
+      INSERT INTO resource_spatial_placements (
+        organization_id, resource_id, room_scan_id,
+        position_x, position_y, position_z, confidence, method,
+        captured_at, updated_by
+      ) VALUES (
+        ${DEMO_ORGANIZATION.id}, ${resourceId}, ${demoRoomScanId},
+        ${x}, ${y}, ${z}, 1, 'manual', now(), ${DEMO_ACTOR}
+      )
+    `;
+  }
 
   // Keep this as the final data mutation. A partially completed seed must never
   // advertise a writable public organization as a finished demo tenant.
