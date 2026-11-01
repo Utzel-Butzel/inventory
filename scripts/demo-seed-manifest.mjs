@@ -1,4 +1,4 @@
-export const DEMO_SEED_VERSION = 3;
+export const DEMO_SEED_VERSION = 4;
 
 export const DEMO_ORGANIZATION = Object.freeze({
   id: "d3e00000-0000-4000-8000-000000000001",
@@ -746,7 +746,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "5bd6c0c691b07d0e09c4d4d9cec1374ef75820b988a6418019801a6add86632b",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild eines Akku-Bohrschraubers im Werkzeugkoffer."
+    "altText": "KI-generiertes Demobild eines Akku-Bohrschraubers im Werkzeugkoffer.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a02",
@@ -755,7 +756,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "2696d5a6d0793c06a3f7a9647a972d7b76d456b2f3d9fe195dbe156cabc3c5f8",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild einer Lötstation am Elektronikarbeitsplatz."
+    "altText": "KI-generiertes Demobild einer Lötstation am Elektronikarbeitsplatz.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a03",
@@ -764,7 +766,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "ede69a989c0f34c6d38f6de21db1ffa639209110b2c56989b8289728346d100e",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild von Schrauben in Kleinteilebehältern."
+    "altText": "KI-generiertes Demobild von Schrauben in Kleinteilebehältern.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a04",
@@ -773,7 +776,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "a32bfa1c3afa7c9d1f5a16dca969868831b0659bd32cba05dcfa1d7f8408e011",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild eines Digitalmultimeters mit Messleitungen."
+    "altText": "KI-generiertes Demobild eines Digitalmultimeters mit Messleitungen.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a05",
@@ -782,7 +786,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "e4526c0648744e79bc40651e3d2dc96c0af85c941dae41f4152103881f7f476f",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild schwarzer Kabelbinder in einer Ablageschale."
+    "altText": "KI-generiertes Demobild schwarzer Kabelbinder in einer Ablageschale.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a06",
@@ -791,7 +796,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "fdc2bbd8f22bbdd685162d0d22210522e8162b1a4b9987f3486b5e66a8ddb176",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild von Regal A2 mit Werkzeugkoffern, Akkugeräten und blauen Kleinteilekästen."
+    "altText": "KI-generiertes Demobild von Regal A2 mit Werkzeugkoffern, Akkugeräten und blauen Kleinteilekästen.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a07",
@@ -800,7 +806,8 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "a4302c20cd8c35bbf5bb2988445f7070a886d0b51a382b9faec7741878649e62",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild von Werkbank E1 mit blauer ESD-Matte, Lötstation, Absaugung und Multimeter."
+    "altText": "KI-generiertes Demobild von Werkbank E1 mit blauer ESD-Matte, Lötstation, Absaugung und Multimeter.",
+    "position": 0
   },
   {
     "id": "d3e00000-0000-4000-8000-000000000a08",
@@ -809,7 +816,168 @@ export const DEMO_MEDIA = Object.freeze([
     "sha256": "6ee159ebeb2b68c58150061a6292751ec122abfc0830382ecb44e212ec1f8b52",
     "width": 1536,
     "height": 1024,
-    "altText": "KI-generiertes Demobild von Fach K3 mit sortierten Schrauben, Muttern, Unterlegscheiben und Kabelbindern."
+    "altText": "KI-generiertes Demobild von Fach K3 mit sortierten Schrauben, Muttern, Unterlegscheiben und Kabelbindern.",
+    "position": 0
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a11",
+    "resourceId": "d3e00000-0000-4000-8000-000000000201",
+    "filename": "generated-drill-perspective.webp",
+    "sha256": "e0c510ec48bdd8049e87506ac39fa603c493fdfef0daf49f30397aaadec8119e",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Akku-Bohrschrauber aus seitlicher Perspektive mit Akku, Ladegerät und geöffnetem Werkzeugkoffer.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a12",
+    "resourceId": "d3e00000-0000-4000-8000-000000000201",
+    "filename": "generated-drill-detail.webp",
+    "sha256": "6fa78017eb57eccace2c42bb757004f7df0d721fec7143bf47055f7c99b27a8f",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht des Akku-Bohrschraubers mit Schnellspannfutter, Drehmomentring und Griff.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a13",
+    "resourceId": "d3e00000-0000-4000-8000-000000000202",
+    "filename": "generated-soldering-perspective.webp",
+    "sha256": "05724396775eea383bde1c576468f8a53fa786b354742645d6c476834d112f20",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Lötstation mit Ablage, Spitzenreiniger und Lötzinn aus erhöhter Perspektive.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a14",
+    "resourceId": "d3e00000-0000-4000-8000-000000000202",
+    "filename": "generated-soldering-detail.webp",
+    "sha256": "23386cdef63cf3e3aa4d08f7adf02b075e4c74686496caeb3ff969881b23488a",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht von Lötkolben, sicherer Ablage und Messing-Spitzenreiniger.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a15",
+    "resourceId": "d3e00000-0000-4000-8000-000000000203",
+    "filename": "generated-multimeter-perspective.webp",
+    "sha256": "f260dbc42402fdda3ad4d0c0814ca0032e35ccb1b0f23a69b12ccbfeeb5c7086",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Digitalmultimeter und rote sowie schwarze Messleitungen in der Draufsicht.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a16",
+    "resourceId": "d3e00000-0000-4000-8000-000000000203",
+    "filename": "generated-multimeter-detail.webp",
+    "sha256": "5aaf772b29b48158ef7e61156bb2ad2627471d694737af41837bfbdefe8c769c",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht von Drehschalter, Messbuchsen und Prüfspitzen des Digitalmultimeters.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a17",
+    "resourceId": "d3e00000-0000-4000-8000-000000000204",
+    "filename": "generated-screws-perspective.webp",
+    "sha256": "e7cb5c14763129719929d25a0e631f08e387e342aec80d769492666545da352b",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Schrauben, Muttern und Unterlegscheiben in getrennten blauen Behältern von oben.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a18",
+    "resourceId": "d3e00000-0000-4000-8000-000000000204",
+    "filename": "generated-screws-detail.webp",
+    "sha256": "a2861a08cf5da51fb4588bb56d3a184d066e1408647e504fcfb2952ed2c7cd71",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Nahaufnahme der M4-Schrauben mit Innensechskant, Gewinde, Mutter und Unterlegscheibe.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a19",
+    "resourceId": "d3e00000-0000-4000-8000-000000000205",
+    "filename": "generated-cable-ties-perspective.webp",
+    "sha256": "4d138dd0f53fbe81d180a6f506cf47f4bdbb048ccc2a8362e1e87657b9026c15",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Schwarze Kabelbinder als Bündel, Einzelteile und lose Schlaufe in der Draufsicht.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1a",
+    "resourceId": "d3e00000-0000-4000-8000-000000000205",
+    "filename": "generated-cable-ties-detail.webp",
+    "sha256": "82150e8434462d4438843d71e6c1eada10a315c77e93d227bb7e9c3eac345be5",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht der Verschlussköpfe und Verzahnung schwarzer Kabelbinder.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1b",
+    "resourceId": "d3e00000-0000-4000-8000-000000000101",
+    "filename": "generated-shelf-perspective.webp",
+    "sha256": "fca35db0ca92fd1be5037786d3a0c4f6d51ada53f3bdab73a9c7bf4ea9626932",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Regal A2 in der Frontalansicht mit Kleinteilekästen und Werkzeugkoffern.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1c",
+    "resourceId": "d3e00000-0000-4000-8000-000000000101",
+    "filename": "generated-shelf-detail.webp",
+    "sha256": "fd2e69d8755f2c08097d8890cae1a513d23db5e20c507e28b49eee6ee0fcd6b8",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht der Werkzeugkoffer und unteren Lagerböden im Regal A2.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1d",
+    "resourceId": "d3e00000-0000-4000-8000-000000000102",
+    "filename": "generated-workbench-perspective.webp",
+    "sha256": "65777cb18298f8ccff1a2188f5265999ab42d6bd7eb16aec2740ae8155928f43",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Werkbank E1 aus erhöhter Perspektive mit ESD-Arbeitsfläche und Elektronikwerkzeugen.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1e",
+    "resourceId": "d3e00000-0000-4000-8000-000000000102",
+    "filename": "generated-workbench-detail.webp",
+    "sha256": "98e622df9f16d68a5a37713011570d2c620ae2cce14b58a82edcf7d79db726f0",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht des Lötbereichs an Werkbank E1 mit Absaugung und ESD-Matte.",
+    "position": 2
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a1f",
+    "resourceId": "d3e00000-0000-4000-8000-000000000103",
+    "filename": "generated-parts-bin-perspective.webp",
+    "sha256": "f6c8debceea89c9fb9687c6dcdb92caa5538648ddc24281da67a67b3372a3a34",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Fach K3 aus erhöhter Perspektive mit Einblick in die sortierten Materialbehälter.",
+    "position": 1
+  },
+  {
+    "id": "d3e00000-0000-4000-8000-000000000a20",
+    "resourceId": "d3e00000-0000-4000-8000-000000000103",
+    "filename": "generated-parts-bin-detail.webp",
+    "sha256": "8a9c2fbfd9ff0b7f09b5d98c64ff602fbe0a705d5634b8856eab19fbfc60ae65",
+    "width": 1536,
+    "height": 1024,
+    "altText": "KI-generiertes Demobild: Detailansicht der griffbereiten Sichtlagerkästen und Kabelbinderschale in Fach K3.",
+    "position": 2
   }
 ]);
 
@@ -929,9 +1097,15 @@ export function validateDemoSeedManifest() {
     if (!resourceIds.has(media.resourceId)) errors.push(`Unknown media resource: ${media.id}`);
     if (!/^[0-9a-f]{64}$/.test(media.sha256)) errors.push(`Invalid media checksum: ${media.filename}`);
   }
-  const picturedResourceIds = new Set(DEMO_MEDIA.map(({ resourceId }) => resourceId));
   for (const resource of DEMO_RESOURCES) {
-    if (!picturedResourceIds.has(resource.id)) errors.push(`Missing demo image: ${resource.sku}`);
+    const images = DEMO_MEDIA.filter(({ resourceId }) => resourceId === resource.id);
+    const positions = images.map(({ position }) => position).sort((left, right) => left - right);
+    if (positions.length !== 3 || positions.some((position, index) => position !== index)) {
+      errors.push(`Demo resource needs three images at positions 0, 1, 2: ${resource.sku}`);
+    }
+    if (new Set(images.map(({ sha256 }) => sha256)).size !== images.length) {
+      errors.push(`Duplicate demo gallery image: ${resource.sku}`);
+    }
   }
 
   return errors;

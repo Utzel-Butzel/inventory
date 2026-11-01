@@ -81,6 +81,22 @@ Primary request: photorealistic medium-wide photograph of one organized small-pa
 Composition/framing: landscape 3:2, nearly frontal view with slight depth, all containers in focus, crisp natural steel, plastic and wood textures, soft window daylight against a pale wall. Cohesive blue, grey and warm wood palette.
 Constraints: fictional unbranded workshop, no people, no readable text, no labels, no logos, no watermark. One single photograph, no collage. This illustrates a fictional inventory demo.
 
+## Three-image galleries (2026-11-01)
+
+Every item and location has three distinct images. The existing cover stays at
+position 0; the new `generated-*-perspective.webp` and `generated-*-detail.webp`
+files use positions 1 and 2. All 16 supplementary photographs were created
+with the built-in Imagegen tool using the corresponding original cover as an
+identity and style reference, then encoded as 1536 × 1024 WebP at quality 85
+without cropping. They depict fictional inventory and places.
+
+The complete prompt set, reference filenames, output filenames, alt text,
+positions, and stable media IDs are in [`gallery-prompts.json`](gallery-prompts.json).
+Checksums and dimensions remain in `scripts/demo-seed-manifest.mjs`.
+The manifest validates three distinct files and consecutive gallery positions
+per resource; the deployment smoke check verifies every media association,
+gallery order, original cover, alt text, and all 24 file checksums.
+
 ## Archived context photography (not used by the demo)
 
 

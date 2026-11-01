@@ -79,8 +79,10 @@ for (const media of DEMO_MEDIA) {
   assert.ok(attachedImage, `${resource.name}: missing attached image`);
   assert.equal(attachedImage.url, `/api/files/demo/${media.filename}`);
   assert.equal(attachedImage.kind, 'image');
-  assert.equal(attachedImage.position, 0, `${resource.name}: image must be the cover`);
-  assert.equal(resource.cover?.id, media.id, `${resource.name}: displayed cover`);
+  assert.equal(attachedImage.position, media.position, `${resource.name}: gallery position`);
+  if (media.position === 0) {
+    assert.equal(resource.cover?.id, media.id, `${resource.name}: displayed cover`);
+  }
   assert.equal(attachedImage.altText, media.altText);
   const image = await request(`/api/files/demo/${media.filename}`);
   assert.equal(image.status, 200, media.filename);
@@ -93,7 +95,11 @@ for (const resource of resources) {
   assert.ok(expected, `${resource.name}: unexpected demo resource`);
   assert.equal(resource.description, expected.description, `${resource.name}: description`);
   assert.equal(resource.notes, expected.notes, `${resource.name}: notes`);
-  assert.ok(resource.media.some(({ kind }) => kind === 'image'), `${resource.name}: missing image`);
+  const images = resource.media.filter(({ kind }) => kind === 'image');
+  const expectedImages = DEMO_MEDIA.filter(({ resourceId }) => resourceId === resource.id)
+    .sort((left, right) => left.position - right.position);
+  assert.deepEqual(images.map(({ position }) => position), [0, 1, 2], `${resource.name}: three ordered images`);
+  assert.deepEqual(images.map(({ id }) => id), expectedImages.map(({ id }) => id), `${resource.name}: gallery order`);
 }
 console.log(`Demo viewer, read-only tenant, ${resources.length} resources and ${DEMO_MEDIA.length} attached generated images verified`);
 await checkDenied('Authenticated');

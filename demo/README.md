@@ -12,8 +12,9 @@ from an older demo cannot remain public:
 
 - organization: `Werkstatt Nord · Demo` with the reserved slug `demo`
 - dedicated user: `demo@inventory.invalid`, active viewer, exactly one membership
-- five workshop items and three places, each with its own Imagegen-generated
-  cover picture and descriptive content, plus stock history, serialized units,
+- five workshop items and three places, each with three Imagegen-generated
+  pictures (cover, additional perspective, detail) and descriptive content,
+  plus stock history, serialized units,
   one active checkout, one maintenance case, one low-stock case, and one order
 - one 62 × 35 mm label layout
 - fixed UUIDs and a transaction-scoped PostgreSQL advisory lock

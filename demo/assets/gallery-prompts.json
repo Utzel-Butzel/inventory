@@ -1,0 +1,146 @@
+[
+  {
+    "key": "drill-perspective",
+    "reference": "generated-drill.webp",
+    "filename": "generated-drill-perspective.webp",
+    "position": 1,
+    "id": "d3e00000-0000-4000-8000-000000000a11",
+    "altText": "KI-generiertes Demobild: Akku-Bohrschrauber aus seitlicher Perspektive mit Akku, Ladegerät und geöffnetem Werkzeugkoffer.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Akku-Bohrschrauber 18 V\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact yellow-and-black cordless drill, black fitted case, batteries and charger in the reference.\nPrimary request: Rephotograph the same complete drill standing upright on its attached battery on the wooden workbench, viewed from the opposite three-quarter side. Place the same open fitted case softly in the background and the spare battery and charger nearby. Keep the exact housing shape, colour blocks, chuck and handle design.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "drill-detail",
+    "reference": "generated-drill.webp",
+    "filename": "generated-drill-detail.webp",
+    "position": 2,
+    "id": "d3e00000-0000-4000-8000-000000000a12",
+    "altText": "KI-generiertes Demobild: Detailansicht des Akku-Bohrschraubers mit Schnellspannfutter, Drehmomentring und Griff.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Akku-Bohrschrauber 18 V\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact yellow-and-black cordless drill, black fitted case, batteries and charger in the reference.\nPrimary request: Create a detailed close photograph of the same drill resting safely on the workbench, emphasizing its keyless metal chuck, torque collar, trigger and textured grip. Show sufficient tool body to identify the exact same model, with the case softly blurred behind. No drill bit in motion.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "soldering-perspective",
+    "reference": "generated-soldering.webp",
+    "filename": "generated-soldering-perspective.webp",
+    "position": 1,
+    "id": "d3e00000-0000-4000-8000-000000000a13",
+    "altText": "KI-generiertes Demobild: Lötstation mit Ablage, Spitzenreiniger und Lötzinn aus erhöhter Perspektive.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Lötstation 80 W\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact compact charcoal soldering station with silver circular control, dark iron and stand, brass cleaner and solder reel in the reference.\nPrimary request: Rephotograph the complete same soldering station, iron resting in its safe stand, brass cleaner and solder reel from a higher almost overhead three-quarter angle. Keep the same blue antistatic mat and wooden workbench. Preserve the device design and the same accessories.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "soldering-detail",
+    "reference": "generated-soldering.webp",
+    "filename": "generated-soldering-detail.webp",
+    "position": 2,
+    "id": "d3e00000-0000-4000-8000-000000000a14",
+    "altText": "KI-generiertes Demobild: Detailansicht von Lötkolben, sicherer Ablage und Messing-Spitzenreiniger.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Lötstation 80 W\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact compact charcoal soldering station with silver circular control, dark iron and stand, brass cleaner and solder reel in the reference.\nPrimary request: Create a close detailed photograph of the same soldering iron safely resting in its black stand next to the brass tip cleaner and solder reel. Keep the control station partially visible behind, with its original shape and silver dial. Show the fine tip and material textures clearly on the same blue work mat; no active soldering, smoke or sparks.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "multimeter-perspective",
+    "reference": "generated-multimeter.webp",
+    "filename": "generated-multimeter-perspective.webp",
+    "position": 1,
+    "id": "d3e00000-0000-4000-8000-000000000a15",
+    "altText": "KI-generiertes Demobild: Digitalmultimeter und rote sowie schwarze Messleitungen in der Draufsicht.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Digitalmultimeter TRMS\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact charcoal rubber-protected multimeter, blank grey display, yellow button, rotary selector, three lower input sockets and red-and-black test leads in the reference.\nPrimary request: Rephotograph the same complete multimeter lying flat on the blue electronics mat from directly overhead. Arrange the same red and black test leads neatly alongside, with tips and connectors fully visible. Preserve the exact device design, socket count and blank switched-off display.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "multimeter-detail",
+    "reference": "generated-multimeter.webp",
+    "filename": "generated-multimeter-detail.webp",
+    "position": 2,
+    "id": "d3e00000-0000-4000-8000-000000000a16",
+    "altText": "KI-generiertes Demobild: Detailansicht von Drehschalter, Messbuchsen und Prüfspitzen des Digitalmultimeters.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Digitalmultimeter TRMS\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact charcoal rubber-protected multimeter, blank grey display, yellow button, rotary selector, three lower input sockets and red-and-black test leads in the reference.\nPrimary request: Create a close detailed photograph of the lower half of the exact same multimeter, focusing on the rotary selector, protective rubber edges and three input sockets, with the same red and black probe tips lying beside it on the blue mat. Preserve the device design and socket arrangement; no invented readings, energized circuit or active test.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "screws-perspective",
+    "reference": "generated-screws.webp",
+    "filename": "generated-screws-perspective.webp",
+    "position": 1,
+    "id": "d3e00000-0000-4000-8000-000000000a17",
+    "altText": "KI-generiertes Demobild: Schrauben, Muttern und Unterlegscheiben in getrennten blauen Behältern von oben.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Schrauben M4×20\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the same short stainless steel cylindrical socket-head screws, nuts, washers and blue open-front bins in the reference.\nPrimary request: Rephotograph the same three blue small-parts bins from directly overhead on the warm wooden shelf, with screws, hex nuts and washers clearly separated into their respective bins. Maintain realistic small M4 fastener proportions and the same bin style and materials.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "screws-detail",
+    "reference": "generated-screws.webp",
+    "filename": "generated-screws-detail.webp",
+    "position": 2,
+    "id": "d3e00000-0000-4000-8000-000000000a18",
+    "altText": "KI-generiertes Demobild: Nahaufnahme der M4-Schrauben mit Innensechskant, Gewinde, Mutter und Unterlegscheibe.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Schrauben M4×20\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the same short stainless steel cylindrical socket-head screws, nuts, washers and blue open-front bins in the reference.\nPrimary request: Create a macro-style detailed photograph of two short stainless steel M4 by 20 mm cylindrical socket-head screws resting side by side on the wooden workbench. Both cylindrical screw HEADS are nearest the camera, with clearly recessed hexagonal sockets INSIDE THE HEADS. Solid threaded shafts extend away from the camera to ordinary flat SOLID ends. The threaded shaft ends must NOT have sockets, holes or recesses. Add one matching hex nut and flat washer beside them, with part of the reference blue bin softly out of focus behind. Accurate mechanical geometry and realistic fastener proportions.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "cable-ties-perspective",
+    "reference": "generated-cable-ties.webp",
+    "filename": "generated-cable-ties-perspective.webp",
+    "position": 1,
+    "id": "d3e00000-0000-4000-8000-000000000a19",
+    "altText": "KI-generiertes Demobild: Schwarze Kabelbinder als Bündel, Einzelteile und lose Schlaufe in der Draufsicht.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Kabelbinder 200 mm schwarz\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact black nylon cable ties with square locking heads, fine teeth and tapered tails in the shallow grey tray in the reference.\nPrimary request: Rephotograph the same shallow grey tray and black cable ties directly overhead on the wooden workbench. Keep one neat bundle and a few separate ties laid out in parallel, with one already closed into a loose loop. Preserve the same matte nylon finish, locking-head shape and proportions.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "cable-ties-detail",
+    "reference": "generated-cable-ties.webp",
+    "filename": "generated-cable-ties-detail.webp",
+    "position": 2,
+    "id": "d3e00000-0000-4000-8000-000000000a1a",
+    "altText": "KI-generiertes Demobild: Detailansicht der Verschlussköpfe und Verzahnung schwarzer Kabelbinder.",
+    "prompt": "Use case: product-mockup\nAsset type: additional inventory demo gallery photograph of Kabelbinder 200 mm schwarz\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact black nylon cable ties with square locking heads, fine teeth and tapered tails in the shallow grey tray in the reference.\nPrimary request: Create a detailed close photograph of three of the same black nylon cable ties lying on the grey tray, emphasizing their square locking heads, fine serrated teeth and tapered ends. One tie forms a loose loop to make its locking mechanism recognizable. Preserve plausible 200 mm by 4.8 mm proportions and the natural matte texture.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "shelf-perspective",
+    "reference": "generated-shelf.webp",
+    "filename": "generated-shelf-perspective.webp",
+    "position": 1,
+    "id": "d3e00000-0000-4000-8000-000000000a1b",
+    "altText": "KI-generiertes Demobild: Regal A2 in der Frontalansicht mit Kleinteilekästen und Werkzeugkoffern.",
+    "prompt": "Use case: photorealistic-natural\nAsset type: additional inventory demo gallery photograph of Regal A2\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact galvanized steel shelving unit with warm wooden shelves, blue parts bins, black tool cases and cordless tool in the reference.\nPrimary request: Rephotograph the same complete shelving unit from a more frontal viewpoint with the full unit visible. Preserve the shelf count, steel uprights, wooden boards, blue bins on the middle shelf and tool cases below, along with the same workshop setting. Keep the stocked contents and layout consistent with the reference.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "shelf-detail",
+    "reference": "generated-shelf.webp",
+    "filename": "generated-shelf-detail.webp",
+    "position": 2,
+    "id": "d3e00000-0000-4000-8000-000000000a1c",
+    "altText": "KI-generiertes Demobild: Detailansicht der Werkzeugkoffer und unteren Lagerböden im Regal A2.",
+    "prompt": "Use case: photorealistic-natural\nAsset type: additional inventory demo gallery photograph of Regal A2\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact galvanized steel shelving unit with warm wooden shelves, blue parts bins, black tool cases and cordless tool in the reference.\nPrimary request: Create a close detailed photograph of the same shelving unit's lower storage area, focusing on the sturdy wooden shelf boards, metal uprights, black fitted tool cases and cordless tool accessories. Preserve all designs and the arrangement seen in the reference, with a strip of the blue-bin shelf visible above for context.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "workbench-perspective",
+    "reference": "generated-workbench.webp",
+    "filename": "generated-workbench-perspective.webp",
+    "position": 1,
+    "id": "d3e00000-0000-4000-8000-000000000a1d",
+    "altText": "KI-generiertes Demobild: Werkbank E1 aus erhöhter Perspektive mit ESD-Arbeitsfläche und Elektronikwerkzeugen.",
+    "prompt": "Use case: photorealistic-natural\nAsset type: additional inventory demo gallery photograph of Werkbank E1\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact wooden electronics workstation with large blue antistatic mat, charcoal soldering equipment, fume extractor, adjustable lamp, wall-mounted component drawers and dark multimeter in the reference.\nPrimary request: Rephotograph the same full workbench from a higher three-quarter viewpoint looking across its surface. Preserve the room, blue mat, soldering station, fume extractor, lamp, component drawers and multimeter, with the same arrangement and materials. Keep a clear practical working area and include enough surroundings to identify the workstation.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "workbench-detail",
+    "reference": "generated-workbench.webp",
+    "filename": "generated-workbench-detail.webp",
+    "position": 2,
+    "id": "d3e00000-0000-4000-8000-000000000a1e",
+    "altText": "KI-generiertes Demobild: Detailansicht des Lötbereichs an Werkbank E1 mit Absaugung und ESD-Matte.",
+    "prompt": "Use case: photorealistic-natural\nAsset type: additional inventory demo gallery photograph of Werkbank E1\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact wooden electronics workstation with large blue antistatic mat, charcoal soldering equipment, fume extractor, adjustable lamp, wall-mounted component drawers and dark multimeter in the reference.\nPrimary request: Create a close detailed photograph of the same workbench's electronics repair area, emphasizing the blue antistatic mat, charcoal soldering station with iron safely in its holder, brass tip cleaner and solder reel, and the nearby fume extractor. Preserve the same equipment design and materials; component drawers remain visible in the background. No active soldering.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "parts-bin-perspective",
+    "reference": "generated-parts-bin.webp",
+    "filename": "generated-parts-bin-perspective.webp",
+    "position": 1,
+    "id": "d3e00000-0000-4000-8000-000000000a1f",
+    "altText": "KI-generiertes Demobild: Fach K3 aus erhöhter Perspektive mit Einblick in die sortierten Materialbehälter.",
+    "prompt": "Use case: photorealistic-natural\nAsset type: additional inventory demo gallery photograph of Fach K3\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact small-parts shelf compartment with three blue open-front bins of screws, nuts and washers and a grey tray of black cable ties, on a wooden board between galvanized steel uprights in the reference.\nPrimary request: Rephotograph the same entire storage compartment from a higher three-quarter view, showing clearly into all three blue bins and the grey cable-tie tray. Preserve the exact left-to-right arrangement, shelf boundaries, bin styles and contents. Include the metal uprights and wooden shelf so the image reads as a storage location.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  },
+  {
+    "key": "parts-bin-detail",
+    "reference": "generated-parts-bin.webp",
+    "filename": "generated-parts-bin-detail.webp",
+    "position": 2,
+    "id": "d3e00000-0000-4000-8000-000000000a20",
+    "altText": "KI-generiertes Demobild: Detailansicht der griffbereiten Sichtlagerkästen und Kabelbinderschale in Fach K3.",
+    "prompt": "Use case: photorealistic-natural\nAsset type: additional inventory demo gallery photograph of Fach K3\nInput image: reference for the exact subject identity, materials, colours and workshop setting; not a layout template.\nSubject: the exact small-parts shelf compartment with three blue open-front bins of screws, nuts and washers and a grey tray of black cable ties, on a wooden board between galvanized steel uprights in the reference.\nPrimary request: Create a detailed close photograph looking along the front edge of the same shelf compartment. Show the aligned blue open-front bins containing screws, nuts and washers, continuing to the grey cable-tie tray, with the wood shelf and one galvanized upright visible. Preserve the exact bin shapes, colours and left-to-right contents. Emphasize orderly access and tangible materials.\nComposition/framing: landscape 3:2, one single coherent photorealistic photograph, natural detailed textures, soft daylight consistent with the reference. Make this a distinct useful supplementary view.\nConstraints: preserve the reference subject identity; fictional unbranded inventory, no people, no added labels, no new text, no logos, no watermark, no collage."
+  }
+]
