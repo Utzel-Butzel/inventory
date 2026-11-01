@@ -120,6 +120,21 @@ for (const resource of resources) {
   assert.deepEqual(images.map(({ id }) => id), expectedImages.map(({ id }) => id), `${resource.name}: gallery order`);
 }
 console.log(`Demo viewer, read-only tenant, ${resources.length} resources and ${DEMO_MEDIA.length} attached generated images verified`);
+const roomResponse = await request('/api/v1/room-scans/d3e00000-0000-4000-8000-000000000901');
+assert.equal(roomResponse.status, 200, 'Demo office scan must be available');
+const { scene: room } = await roomResponse.json();
+assert.equal(room.room.id, 'd3e00000-0000-4000-8000-000000000102');
+assert.equal(room.scan.scene.surfaces.length, 7);
+assert.equal(room.scan.scene.objects.length, 10);
+assert.equal(room.scan.scene.mapAnchor, undefined);
+assert.equal(room.scan.aiAnalysis, null);
+assert.deepEqual(room.scan.assets, []);
+assert.deepEqual(room.scan.keyframes, []);
+assert.deepEqual(room.placements.map(p => p.resource.id).sort(), [
+  'd3e00000-0000-4000-8000-000000000202',
+  'd3e00000-0000-4000-8000-000000000203',
+]);
+console.log('Office geometry and two demo item placements verified; no original photos or map location');
 await checkDenied('Authenticated');
 const action = await request('/demo/inventory', { method: 'POST', headers: { 'Next-Action': 'demo-smoke' } });
 assert.equal(action.status, 403);

@@ -19,12 +19,21 @@ from an older demo cannot remain public:
   plus stock history, serialized units,
   one active checkout, one maintenance case, one low-stock case, and one order
 - one 62 × 35 mm label layout
+- a real office RoomPlan scan under Werkbank E1, with the demo soldering station
+  and multimeter positioned on its tables (`/demo/spaces`)
 - fixed UUIDs and a transaction-scoped PostgreSQL advisory lock
 
 The demo account has no published password. Its stored bcrypt hash was created
 from discarded random input and is not used by the dedicated demo provider.
 Application-level read-only enforcement remains mandatory; the seed flag alone
 must never be treated as an authorization boundary.
+
+`office-room-scene.json` is the owner's office geometry, approved for the public
+demo on 2026-11-01. It retains seven surfaces and ten furniture objects from the
+room scan shown in the Reddit draft. Map coordinates, photographs, keyframes,
+AI analysis, native AR assets and original inventory records are not included.
+The two demo item positions are illustrative manual placements. The startup
+seed recreates this scene with the rest of the demo on every deployment.
 
 With local storage, the startup seed verifies and copies the bundled context
 images into the persistent upload volume before inserting their media records.
