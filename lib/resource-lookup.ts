@@ -6,6 +6,8 @@ import { resources } from "@/db/schema";
 import { db } from "@/lib/db";
 import { parseResourceCode } from "@/lib/resource-code";
 import { getResource } from "@/lib/resources";
+import { labelShortcodeFromUrl } from "@/lib/label-shortcode-contract";
+import { resolveLabelShortcode } from "@/lib/label-shortcodes";
 
 export type ResourceCodeMatch =
   | "id"
@@ -26,6 +28,14 @@ export async function lookupResourceByCode(
 ) {
   const parsed = parseResourceCode(value);
   if (!parsed.code) return null;
+
+  const shortcode = labelShortcodeFromUrl(parsed.code);
+  if (shortcode) {
+    const target = await resolveLabelShortcode(shortcode, organizationId);
+    if (!target) return null;
+    const resource = await getResource(organizationId, target.resourceId);
+    return resource ? { resource, matchedBy: "id" as const, stockUnitId: target.stockUnitId } : null;
+  }
 
   if (parsed.resourceId) {
     const resource = await getResource(organizationId, parsed.resourceId);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { labelQrRedirectUrlSchema } from "@/lib/label-redirect-contract";
 import { aiPromptSelectionFields } from "@/lib/ai-prompt-templates";
 
 import { stockUnitStatuses } from "@/db/schema";
@@ -468,6 +469,7 @@ export const organizationUpdateInputSchema = z
     name: z.string().trim().min(1).max(160).optional(),
     slug: organizationSlugSchema.optional(),
     allowNegativeStock: z.boolean().optional(),
+    labelQrRedirectUrl: labelQrRedirectUrlSchema.optional(),
   })
   .strict()
   .refine((value) => Object.values(value).some((entry) => entry !== undefined), {

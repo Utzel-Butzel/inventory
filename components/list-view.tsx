@@ -129,12 +129,12 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
       setSaving(false);
     }
   };
-  const save = async (name: string, asNew: boolean, visibility: ListViewVisibility = active?.visibility ?? "personal") => {
+  const save = async (name: string, asNew: boolean, visibility: ListViewVisibility = active?.visibility ?? "personal", makeDefault?: boolean) => {
     if (!asNew && active && !canManageActive) return false;
     const previous = asNew ? undefined : active;
     const id = previous?.visibility === visibility ? previous.id : crypto.randomUUID();
     try {
-      const next = saveListView(collections, { id, name: name.trim(), config }, visibility, previous);
+      const next = saveListView(collections, { id, name: name.trim(), config }, visibility, previous, makeDefault);
       return await persist(next, visibility + ":" + id);
     } catch (saveError) {
       setError(t(saveError instanceof Error && saveError.message === "limit" ? "listView.errors.limit" : "listView.errors.name"));
@@ -145,10 +145,6 @@ export function useListView(scope: string, initial: Partial<ListViewConfig> = {}
     config, patch, setFilter, collection, active, dirty, loading, saving, canSave, canManageActive, canManageOrganizationViews, error, notice,
     select, save,
     refresh: () => setReload((value) => value + 1),
-    setDefault: () => {
-      if (!active) return Promise.resolve(false);
-      return persist({ ...collections, [active.visibility]: { ...collections[active.visibility], defaultId: active.isDefault ? null : active.id } });
-    },
     remove: async () => {
       if (!active) return false;
       const success = await persist({ ...collections, [active.visibility]: removeListView(collections[active.visibility], active.id) }, null);
@@ -222,6 +218,7 @@ export function ListViewToolbar({ list, filters = [], sorts, searchPlaceholder, 
   const [editing, setEditing] = useState<"new" | "manage" | null>(null);
   const [name, setName] = useState("");
   const [visibility, setVisibility] = useState<ListViewVisibility>("personal");
+  const [makeDefault, setMakeDefault] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const root = useRef<HTMLElement>(null);
   const { config } = list;
@@ -255,17 +252,17 @@ export function ListViewToolbar({ list, filters = [], sorts, searchPlaceholder, 
           </button>)}
         </div>
         <div className="flex flex-wrap items-center gap-1">
-          {list.active ? <button type="button" disabled={list.saving || !list.canManageActive} className={summaryClass} onClick={() => { setName(list.active!.name); setVisibility(list.active!.visibility); setEditing(editing === "manage" ? null : "manage"); setConfirmDelete(false); }}><Settings2 size={14} />{t("listView.manage")}</button> : null}
+          {list.active ? <button type="button" disabled={list.saving || !list.canManageActive} className={summaryClass} onClick={() => { setName(list.active!.name); setVisibility(list.active!.visibility); setMakeDefault(list.active!.isDefault); setEditing(editing === "manage" ? null : "manage"); setConfirmDelete(false); }}><Settings2 size={14} />{t("listView.manage")}</button> : null}
           {list.active && list.dirty ? <button type="button" disabled={list.saving || !list.canManageActive} className={summaryClass} onClick={() => void list.save(list.active!.name, false)}><Save size={14} />{t("listView.save")}</button> : null}
-          <button type="button" disabled={list.loading || list.saving || !list.canSave} onClick={() => { setName(""); setVisibility("personal"); setEditing(editing === "new" ? null : "new"); }} className={cn(summaryClass, "disabled:opacity-40")}><Plus size={14} />{t("listView.saveAs")}</button>
+          <button type="button" disabled={list.loading || list.saving || !list.canSave} onClick={() => { setName(""); setVisibility("personal"); setMakeDefault(false); setEditing(editing === "new" ? null : "new"); }} className={cn(summaryClass, "disabled:opacity-40")}><Plus size={14} />{t("listView.saveAs")}</button>
         </div>
       </div>
-      {editing ? <form className="flex flex-wrap items-end gap-2 border-b border-border bg-surface-subtle p-3" onSubmit={async (event) => { event.preventDefault(); if (await list.save(name, editing === "new", visibility)) setEditing(null); }}>
+      {editing ? <form className="flex flex-wrap items-end gap-2 border-b border-border bg-surface-subtle p-3" onSubmit={async (event) => { event.preventDefault(); if (await list.save(name, editing === "new", visibility, makeDefault)) setEditing(null); }}>
         <label className="min-w-40 flex-1 text-xs font-semibold text-muted-strong">{t("listView.name")}<input autoFocus required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder={t("listView.namePlaceholder")} className={cn(controlClass, "mt-1 block w-full")} /></label>
-        <label className="min-w-40 text-xs font-semibold text-muted-strong">{t("listView.visibility")}<select value={visibility} disabled={list.saving} onChange={(event) => setVisibility(event.target.value as ListViewVisibility)} className={cn(controlClass, "mt-1 block w-full")}><option value="personal">{t("listView.personal")}</option><option value="organization" disabled={!list.canManageOrganizationViews}>{t("listView.organization")}</option></select></label>
+        <label className="min-w-40 text-xs font-semibold text-muted-strong">{t("listView.visibility")}<select value={visibility} disabled={list.saving} onChange={(event) => { setVisibility(event.target.value as ListViewVisibility); setMakeDefault(false); }} className={cn(controlClass, "mt-1 block w-full")}><option value="personal">{t("listView.personal")}</option><option value="organization" disabled={!list.canManageOrganizationViews}>{t("listView.organization")}</option></select></label>
+        <label className="flex min-h-9 items-center gap-2 text-xs font-semibold text-muted-strong"><input type="checkbox" checked={makeDefault} disabled={list.saving} onChange={(event) => setMakeDefault(event.target.checked)} />{t(visibility === "organization" ? "listView.useAsOrganizationDefault" : "listView.useAsDefault")}</label>
         <Button size="sm" type="submit" disabled={list.saving || !name.trim() || (editing === "manage" && !list.canManageActive)}><Save size={14} />{t("listView.save")}</Button>
         {editing === "manage" ? <>
-          <Button size="sm" variant="secondary" disabled={list.saving} onClick={() => void list.setDefault()}><Star size={14} />{t(list.active?.visibility === "organization" ? (list.active.isDefault ? "listView.unsetOrganizationDefault" : "listView.setOrganizationDefault") : (list.active?.isDefault ? "listView.unsetDefault" : "listView.setDefault"))}</Button>
           <Button size="sm" variant="secondary" disabled={list.saving} onClick={async () => { if (!confirmDelete) { setConfirmDelete(true); return; } if (await list.remove()) setEditing(null); }}>{t(confirmDelete ? "listView.confirmDelete" : "listView.delete")}</Button>
         </> : null}
         <Button size="sm" variant="secondary" onClick={() => setEditing(null)}>{t("listView.cancel")}</Button>

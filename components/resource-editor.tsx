@@ -68,6 +68,7 @@ import {
   useImageModelPreference,
 } from "@/components/image-model-selector";
 import { MarkdownEditor } from "@/components/markdown-editor";
+import { videoPreviewSources } from "@/lib/video-preview";
 import { ResponsiveMediaImage } from "@/components/responsive-media-image";
 import {
   combinedAiCost,
@@ -1156,6 +1157,20 @@ export function ResourceEditor({
     }
   };
 
+  const updateVideoPreview = async (item: ClientMedia, field: "previewMediaId" | "posterMediaId", value: string) => {
+    if (!resourceId) return;
+    setSaving(true);
+    try {
+      await fetchJson(`/api/v1/resources/${resourceId}/media/${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ previewMediaId: item.previewMediaId, posterMediaId: item.posterMediaId, [field]: value || null }),
+      });
+      await loadResource();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : t("errors.save"));
+    } finally { setSaving(false); }
+  };
+
   const removeMedia = async (mediaId: string) => {
     if (!resourceId || !window.confirm(t("confirm.removeFile"))) return;
     try {
@@ -1801,7 +1816,7 @@ export function ResourceEditor({
                             className="h-full w-full object-cover"
                           />
                         ) : item.kind === "video" ? (
-                          <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
+                          <video src={videoPreviewSources(item, itemMedia).src} poster={videoPreviewSources(item, itemMedia).poster} className="h-full w-full object-cover" muted playsInline preload="none" />
                         ) : (
                           <div className="grid h-full place-items-center text-muted"><Icon size={34} strokeWidth={1.5} /></div>
                         )}
@@ -1812,11 +1827,27 @@ export function ResourceEditor({
                         </span>
                         {item.source === "ai" ? <span className="rounded-full bg-brand-solid px-2 py-1 text-[11px] font-bold text-on-brand">{t("media.ai")}</span> : null}
                       </div>
-                      <div className="absolute inset-x-2 bottom-2 flex justify-end gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+                      <div className="absolute inset-x-2 top-12 flex justify-end gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
                         <button type="button" disabled={index === 0} onClick={() => void moveMedia(item.id, -1)} className="grid h-7 w-7 place-items-center rounded-lg bg-surface/95 text-muted shadow disabled:opacity-30" aria-label={t("media.moveEarlier")}><ArrowUp size={13} /></button>
                         <button type="button" disabled={index === itemMedia.length - 1} onClick={() => void moveMedia(item.id, 1)} className="grid h-7 w-7 place-items-center rounded-lg bg-surface/95 text-muted shadow disabled:opacity-30" aria-label={t("media.moveLater")}><ArrowDown size={13} /></button>
                         <button type="button" onClick={() => void removeMedia(item.id)} className="grid h-7 w-7 place-items-center rounded-lg bg-surface/95 text-danger shadow" aria-label={t("media.remove")}><Trash2 size={13} /></button>
                       </div>
+                      {item.kind === "video" && !itemMedia.some((candidate) => candidate.previewMediaId === item.id) ? (
+                        <div className="space-y-2 p-3">
+                          {(["previewMediaId", "posterMediaId"] as const).map((field) => (
+                            <label key={field} className="block text-xs text-muted">
+                              {t(field === "previewMediaId" ? "media.videoPreview" : "media.videoPoster")}
+                              <select className="mt-1 block w-full rounded border border-border bg-surface p-1 text-foreground" disabled={saving}
+                                value={item[field] ?? ""} onChange={(event) => void updateVideoPreview(item, field, event.target.value)}>
+                                <option value="">{t(field === "previewMediaId" ? "media.noVideoPreview" : "media.noVideoPoster")}</option>
+                                {itemMedia.filter((candidate) => candidate.id !== item.id &&
+                                  (field === "previewMediaId" ? candidate.kind === "video" && !candidate.previewMediaId && !candidate.posterMediaId : candidate.kind === "image")
+                                ).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+                              </select>
+                            </label>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}

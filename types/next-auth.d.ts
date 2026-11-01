@@ -27,6 +27,7 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
+    rememberMe?: boolean;
     userId?: string;
     role?: InventoryUserRole;
     authProvider?: InventoryAuthProvider;

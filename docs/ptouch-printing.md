@@ -5,6 +5,10 @@ and a local USB print queue. The printer does not need P-touch Editor for this
 workflow. The web server can run remotely; QZ Tray and the printer must be on
 the computer running the browser.
 
+Start with the [QZ Tray installation guide](printing.md#install-and-connect)
+for Windows, macOS and Linux. The macOS printer-queue setup below was tested
+with the PT-P710BT.
+
 ## macOS setup
 
 1. Install [QZ Tray](https://qz.io/download/) from the official installer and
@@ -176,3 +180,7 @@ P-touch output. Drafts can be test-printed before saving or saved as a new templ
 
 Each selected target has an explicit copy count. Copies count toward the 100-label
 series limit. Keep one tape width per series; lengths and layouts may differ.
+
+## Other printers and shared PDF printing
+
+See [General printing](printing.md) for system-driver printers, PDF export, A4/Letter sheets, and the multi-printer Windows/macOS/Linux agent. Existing P-touch installations remain supported.

@@ -293,9 +293,11 @@ struct StockManagementView: View {
     @State private var confirmOutgoing = false
     @State private var confirmTrackingChange = false
     @State private var editingUnit: StockUnit?
+    private let selectedUnitID: UUID?
 
-    init(resource: InventoryResource) {
+    init(resource: InventoryResource, selectedUnitID: UUID? = nil) {
         _model = StateObject(wrappedValue: StockManagementViewModel(resource: resource))
+        self.selectedUnitID = selectedUnitID
     }
 
     var body: some View {
@@ -374,6 +376,21 @@ struct StockManagementView: View {
     private func stockForm(_ detail: StockDetailResponse) -> some View {
         Form {
             summarySection(detail)
+            if let selectedUnitID {
+                Section("Gescanntes Exemplar") {
+                    if let unit = detail.units.first(where: { $0.id == selectedUnitID }) {
+                        LabeledContent("Code", value: unit.code)
+                        LabeledContent("Status", value: unit.status.localizedName)
+                        LabeledContent("Ort", value: unit.location.nilIfBlank ?? "Kein Ort")
+                        if state.canManageStock {
+                            Button("Exemplar bearbeiten") { editingUnit = unit }
+                        }
+                    } else {
+                        Text("Dieses Exemplar ist nicht verfügbar oder gehört nicht zu diesem Eintrag.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
             if detail.config.trackingMode == .bulk {
                 bookingSection(detail)
             } else {

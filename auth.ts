@@ -12,8 +12,10 @@ import {
 } from "@/db/schema";
 import { getAuthProviderConfiguration } from "@/lib/auth-provider-config";
 import { normalizeUserRole } from "@/lib/auth-roles";
+import { DEFAULT_SESSION_MAX_AGE, withSessionLifetime } from "@/lib/auth-session";
 import { db } from "@/lib/db";
 import { authenticateLocalUser } from "@/lib/local-auth";
+import { createSupabaseAuthProvider } from "@/lib/supabase-auth-provider";
 import {
   PUBLIC_DEMO_ORGANIZATION_ID,
   PUBLIC_DEMO_USER_ID,
@@ -180,17 +182,38 @@ if (providerConfiguration.oidc) {
   });
 }
 
+if (providerConfiguration.supabase) {
+  providers.push(createSupabaseAuthProvider(providerConfiguration.supabase));
+}
+
 export const authConfig = {
   providers,
   pages: {
     signIn: "/login",
+    error: "/login",
   },
   session: {
     strategy: "jwt",
-    maxAge: 60 * 60 * 12,
+    maxAge: DEFAULT_SESSION_MAX_AGE,
   },
   trustHost: true,
   callbacks: {
+    async signIn({ account, user }) {
+      if (account?.provider !== "supabase" || !providerConfiguration.supabase) return true;
+      if (!user.email) return false;
+      // SSO authenticates an existing account; it never provisions permissions.
+      const [membership] = await db
+        .select({ userId: users.id })
+        .from(users)
+        .innerJoin(organizationMemberships, eq(organizationMemberships.userId, users.id))
+        .where(and(
+          eq(users.email, user.email.trim().toLowerCase()),
+          eq(users.isActive, true),
+          eq(organizationMemberships.isActive, true),
+        ))
+        .limit(1);
+      return Boolean(membership);
+    },
     jwt({ token, user, account, profile }) {
       if (account?.provider === "demo" && user) {
         token.userId = user.id;
@@ -239,4 +262,6 @@ export const authConfig = {
   },
 } satisfies NextAuthConfig;
 
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+export const { handlers, auth, signIn, signOut } = NextAuth((request) =>
+  withSessionLifetime(authConfig, request),
+);

@@ -15,7 +15,8 @@ the same configured sign-in methods.
 | --- | --- | --- | --- |
 | Local password | Credentials provider | Enabled | Also powers native password-to-token login |
 | Auth0 | Built-in Auth0 provider | Disabled | Enabled when all required `AUTH0_*` values are present |
-| Generic OpenID Connect | Custom OIDC provider | Disabled | One configurable slot for Supabase, Keycloak, Zitadel, and similar services |
+| Generic OpenID Connect | Custom OIDC provider | Disabled | One configurable slot for standards-based providers |
+| Supabase OAuth | Explicit OAuth endpoints | Disabled | Supports self-hosted Kong gateways and existing Digital sessions |
 | Read-only demo | Credentials provider | Disabled | Dedicated product-demo principal, not a general user login method |
 
 Local password, Auth0, and the generic OIDC provider can be shown together on
@@ -358,3 +359,39 @@ is disabled. Correct the reported environment variable and redeploy.
   the identity provider.
 - Treat `AUTH_SECRET` rotation as a logout of all browser sessions.
 
+
+## Supabase OAuth, including self-hosted Kong gateways
+
+Register a confidential Supabase OAuth client with `client_secret_basic`,
+`authorization_code`, and the exact callback
+`https://inventory.example.com/api/auth/callback/supabase`.
+
+```dotenv
+AUTH_SUPABASE_URL=https://supabase.example.com
+AUTH_SUPABASE_ANON_KEY=public-anon-key
+AUTH_SUPABASE_CLIENT_ID=registered-client-id
+AUTH_SUPABASE_CLIENT_SECRET=server-only-client-secret
+AUTH_SUPABASE_PROVIDER_NAME=Konglomerat
+```
+
+This dedicated provider uses explicit OAuth endpoints, state and S256 PKCE,
+`email profile` scopes and server-validated UserInfo with a verified email.
+It does not require OIDC discovery or changing the Supabase JWT signing key.
+Only the public anon key accompanies the browser authorization redirect;
+client secrets and provider tokens stay server-side and are not included in the
+Inventory session. Endpoint requests are bounded, uncached and refuse redirects.
+
+The local account and an active organization membership must already exist.
+A missing or disabled account is rejected at sign-in with a useful message.
+Current roles and account activation continue to be checked on each Inventory
+request. Supabase/CMS roles are not imported. Local passwords can remain enabled.
+Logging out of Inventory ends its own session, not the Digital or CMS session.
+
+The Supabase consent UI must support this client without imposing unrelated CMS
+roles. Konglomerat Digital recognizes its exact registered client ID via
+`OPENINVENTORY_OAUTH_CLIENT_ID`; all other clients retain their CMS role gate.
+Never configure the generic OIDC provider with ID `supabase` at the same time.
+
+Validation: `npm run test:sso` exercises the real Auth.js authorization-code and
+PKCE flow with a mock provider, invalid state, unverified identity, denied
+membership, credential confinement and configuration validation.

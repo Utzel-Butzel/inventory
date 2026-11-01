@@ -111,6 +111,7 @@ export const validateObjectScanImage = (
 
 export const isInlinePublicMediaType = (mimeType: string) =>
   (mimeType.startsWith("image/") && mimeType !== "image/svg+xml") ||
+  ["video/mp4", "video/webm", "video/quicktime"].includes(mimeType) ||
   isUsdzMediaType(mimeType);
 
 export const storageProviderSupportsMediaType = (

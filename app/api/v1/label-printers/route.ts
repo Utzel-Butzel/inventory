@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireSessionPermission } from "@/lib/api-auth";
-import { boundedPrintJson } from "@/lib/shared-label-print-contract";
+import { boundedPrintJson, printerCreateSchema } from "@/lib/shared-label-print-contract";
 import {
   checkPrintMutation,
   printFailure,
@@ -15,13 +15,14 @@ export async function GET(request: Request) {
   const auth = await requireSessionPermission(request, "labels.read");
   if (auth.response) return auth.response;
   const rows = await db.execute(
-    sql`SELECT id,name,tape_width,enabled,last_seen_at>now()-interval '45 seconds' AS online FROM label_printers WHERE organization_id=${auth.identity.organizationId} AND enabled=true ORDER BY name`,
+    sql`SELECT id,name,kind,location,max_width_mm,max_height_mm,tape_width,enabled,last_seen_at>now()-interval '45 seconds' AS online FROM label_printers WHERE organization_id=${auth.identity.organizationId} AND enabled=true ORDER BY name`,
   );
   return Response.json(
     {
       printers: rows.map((p) => ({
         id: p.id,
-        name: p.name,
+        name: p.name, kind: p.kind, location: p.location,
+        maxWidthMm: Number(p.max_width_mm), maxHeightMm: Number(p.max_height_mm),
         tape: Number(p.tape_width),
         enabled: p.enabled,
         online: !!p.online,
@@ -35,19 +36,13 @@ export async function POST(request: Request) {
   if (auth.response) return auth.response;
   try {
     checkPrintMutation(request, auth.identity);
-    const parsed = z
-      .object({
-        name: z.string().trim().min(1).max(120),
-        tape: z.literal(24).default(24),
-      })
-      .strict()
-      .safeParse(await boundedPrintJson(request, 2048));
+    const parsed = printerCreateSchema.safeParse(await boundedPrintJson(request, 4096));
     if (!parsed.success)
       return Response.json({ error: "Invalid printer." }, { status: 400 });
     const id = randomUUID(),
       token = "iprt_" + randomBytes(32).toString("base64url");
     await db.execute(
-      sql`INSERT INTO label_printers(id,organization_id,name,token_hash,tape_width) VALUES(${id},${auth.identity.organizationId},${parsed.data.name},${printHash(token)},${parsed.data.tape})`,
+      sql`INSERT INTO label_printers(id,organization_id,name,token_hash,tape_width,kind,location,max_width_mm,max_height_mm) VALUES(${id},${auth.identity.organizationId},${parsed.data.name},${printHash(token)},${parsed.data.tape},${parsed.data.kind},${parsed.data.location},${parsed.data.maxWidthMm},${parsed.data.maxHeightMm})`,
     );
     return Response.json(
       { printer: { id, ...parsed.data }, token },

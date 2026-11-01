@@ -115,6 +115,11 @@
     "emptyDescription": "Administrators can configure fields for {{type}} records or matching categories in Settings."
   },
   "media": {
+    "originalVideo": "Original video",
+    "videoPreview": "Preview video",
+    "videoPoster": "Poster image",
+    "noVideoPreview": "Use original",
+    "noVideoPoster": "No poster image",
     "title": "Media",
     "description_one": "Images, video, PDFs and 3D models · {{count}} file",
     "description_other": "Images, video, PDFs and 3D models · {{count}} files",

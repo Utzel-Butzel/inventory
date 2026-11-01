@@ -26,6 +26,7 @@ export type OrganizationSummary = {
   slug: string;
   isReadOnly: boolean;
   allowNegativeStock: boolean;
+  labelQrRedirectUrl: string | null;
 };
 
 export type OrganizationMembershipSummary = OrganizationSummary & {
@@ -184,7 +185,7 @@ const canonicalRelationTypes = [
 export const organizationSummary = (
   organization: Pick<
     typeof organizations.$inferSelect,
-    "id" | "name" | "slug" | "isReadOnly" | "allowNegativeStock"
+    "id" | "name" | "slug" | "isReadOnly" | "allowNegativeStock" | "labelQrRedirectUrl"
   >,
 ): OrganizationSummary => ({
   id: organization.id,
@@ -192,6 +193,7 @@ export const organizationSummary = (
   slug: organization.slug,
   isReadOnly: organization.isReadOnly,
   allowNegativeStock: organization.allowNegativeStock,
+  labelQrRedirectUrl: organization.labelQrRedirectUrl,
 });
 
 export async function getOrganization(id: string) {
@@ -388,6 +390,7 @@ export async function updateOrganization(options: {
   name?: string;
   slug?: string;
   allowNegativeStock?: boolean;
+  labelQrRedirectUrl?: string | null;
   actor: string;
 }) {
   try {
@@ -398,6 +401,9 @@ export async function updateOrganization(options: {
         ...(options.slug ? { slug: options.slug } : {}),
         ...(options.allowNegativeStock !== undefined
           ? { allowNegativeStock: options.allowNegativeStock }
+          : {}),
+        ...(options.labelQrRedirectUrl !== undefined
+          ? { labelQrRedirectUrl: options.labelQrRedirectUrl }
           : {}),
         updatedAt: new Date(),
       })

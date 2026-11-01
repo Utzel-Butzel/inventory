@@ -1,5 +1,9 @@
 "use client";
 
+import { hugsRowContent } from "@/lib/label-auto-layout";
+import { labelRowHeightError } from "@/lib/label-setup-contract";
+import { labelTextDecoration } from "@/lib/label-rich-text";
+
 import {
   type CSSProperties,
   type ReactNode,
@@ -24,7 +28,9 @@ import {
   type LabelSetupDto,
   type LabelTextElement,
 } from "@/lib/label-setup-contract";
-import { labelTargetName, labelTargetUrl, type LabelResource } from "@/lib/label-target";
+import { labelTargetName, labelTargetUrl, labelQrUrl, type LabelResource } from "@/lib/label-target";
+import { labelShortcodeUrl } from "@/lib/label-shortcode-contract";
+import { useLabelShortcode } from "@/components/use-label-shortcode";
 import { resolveLabelText, labelPlaceholderValues } from "@/lib/label-rich-text";
 import { printableLabelBarcode } from "@/lib/label-barcode";
 import { labelQrColors } from "@/lib/label-dynamic-layout";
@@ -35,7 +41,7 @@ import { cropLabelImage, DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/
 
 import { labelImageSource } from "@/lib/label-image-source";
 
-import { LABEL_FONT_STACKS, defaultLabelFontSize, defaultLabelFontWeight } from "@/lib/label-typography";
+import { LABEL_FONT_STACKS, LABEL_TEXT_PIXELS_PER_MM, defaultLabelFontSize, defaultLabelFontWeight } from "@/lib/label-typography";
 
 import styles from "./label-printer.module.css";
 
@@ -253,7 +259,8 @@ export function LabelRenderer({
   const setup = useLabelLayout(template, resource, origin);
   const printPage = `label-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const shortUrl = labelTargetUrl(origin, resource);
-  const qrValue = canEncodeQr(shortUrl) ? shortUrl : null;
+  const wantsShortcode = setup.elements.some(element => element.type === "qr" && element.visible && element.useShortcode);
+  const shortcode = useLabelShortcode(wantsShortcode && !resource.previewOnly, resource.id, resource.stockUnit?.id ?? null);
   const barcodeCode = printableLabelBarcode(resource);
   const identifier = resource.stockUnit?.code ?? (resource.sku
     ? t("renderer.sku", { sku: resource.sku })
@@ -272,6 +279,7 @@ export function LabelRenderer({
       data-label-inverted={setup.inverted ? "true" : undefined}
       data-label-width-mm={setup.widthMm}
       data-label-height-mm={setup.heightMm}
+      data-label-layout-error={labelRowHeightError(template) ? "Auto Layout elements and padding exceed the label height." : undefined}
       className={`${styles.label} ${styles.designedLabel}${setup.inverted ? ` ${styles.invertedLabel}` : ""}${className ? ` ${className}` : ""}`}
       style={{
         width: `${setup.widthMm * dimensionScale}${dimensionUnit}`,
@@ -308,8 +316,18 @@ export function LabelRenderer({
             ) : null;
           }
           if (element.type === "qr") {
+            const pending = element.useShortcode && !resource.previewOnly && !shortcode.code && !shortcode.error;
+            const value = element.useShortcode
+              ? (shortcode.code ? labelShortcodeUrl(origin, shortcode.code) : null)
+              : labelQrUrl(origin, resource);
+            const qrValue = value && canEncodeQr(value) ? value : null;
+            const error = element.useShortcode && resource.previewOnly ? t("renderer.shortcodeSample")
+              : element.useShortcode && shortcode.error ? t("renderer.shortcodeError") : t("renderer.qrTooLong");
             return (
-              <div key={labelElementKey(element)} data-label-qr className={styles.designedElement} style={position}>
+              <div key={labelElementKey(element)} data-label-qr data-label-qr-value={qrValue ?? undefined}
+                data-label-qr-state={pending ? "pending" : qrValue ? "ready" : "error"}
+                data-label-qr-error={!qrValue && !pending ? error : undefined}
+                className={styles.designedElement} style={position}>
                 {qrValue ? (
                   <QrCode
                     value={qrValue}
@@ -320,7 +338,9 @@ export function LabelRenderer({
                   />
                 ) : (
                   <span className={styles.qrUnavailable}>
-                    {t("renderer.qrTooLong")}
+                    {pending ? t("renderer.shortcodeLoading") : error}
+                    {element.useShortcode && shortcode.error ? <button type="button" onClick={shortcode.retry}
+                      className="block underline">{t("renderer.shortcodeRetry")}</button> : null}
                   </span>
                 )}
               </div>
@@ -360,11 +380,14 @@ export function LabelRenderer({
                 : element.type === "url"
                   ? shortUrl
                   : location;
-          const value = element.content
-            ? resolveLabelText(element.content, labelPlaceholderValues(resource, origin)).map((run, index) => (
-                <span key={index} style={{ fontWeight: run.weight ?? defaultLabelFontWeight(element), fontStyle: run.italic ? "italic" : "normal", textDecorationLine: run.underline ? "underline" : "none" }}>{run.text}</span>
-              ))
-            : plainValue;
+          const runs = element.content ? resolveLabelText(element.content, labelPlaceholderValues(resource, origin)) : null;
+          const value = runs ? runs.map((run, index) => (
+            <span key={index} style={{ fontWeight: run.weight ?? defaultLabelFontWeight(element), fontStyle: run.italic ? "italic" : "normal", textDecorationLine: labelTextDecoration(run) }}>{run.text}</span>
+          )) : plainValue;
+          const growsWithText = setup.layout ? hugsRowContent(element) : element.autoWidth;
+          const textScale = (pixelsPerMm ?? 96 / 25.4) / LABEL_TEXT_PIXELS_PER_MM;
+          const lineCount = (runs ? runs.map(run => run.text).join("") : plainValue).split("\n").length;
+          const contentHeightMm = lineCount * (element.fontSizeMm ?? defaultLabelFontSize(element)) * (element.lineHeight ?? 1.08);
           const textOverflow = element.textOverflow ?? "ellipsis";
           return (
             <div
@@ -376,10 +399,17 @@ export function LabelRenderer({
                     ? styles.designedUrl
                     : styles.designedMetadata
               }`}
-              style={{ ...position, ...textStyle(element, pixelsPerMm) }}
+              style={{ ...position, ...textStyle(element, pixelsPerMm), fontOpticalSizing: growsWithText ? "none" : undefined }}
             >
-              {element.autoWidth ? (
-                <span className={styles.designedTextContent} style={{ whiteSpace: "pre", lineHeight: element.lineHeight ?? 1.08 }}>{value}</span>
+              {growsWithText ? (
+                // Geometric zoom keeps platform font metrics identical to the measurement probe,
+                // including at small preview sizes and the browser's physical mm scale.
+                <span className={styles.designedTextContent} style={{ position: "relative", height: pixelsPerMm ? `${contentHeightMm * pixelsPerMm}px` : `${contentHeightMm}mm` }}>
+                  <span style={{ position: "absolute", left: 0, top: 0, width: `${100 / textScale}%`,
+                    fontSize: `${(element.fontSizeMm ?? defaultLabelFontSize(element)) * LABEL_TEXT_PIXELS_PER_MM}px`,
+                    fontWeight: defaultLabelFontWeight(element), whiteSpace: "pre", lineHeight: element.lineHeight ?? 1.08,
+                    transform: `scale(${textScale})`, transformOrigin: "top left" }}>{value}</span>
+                </span>
               ) : textOverflow === "shrink" ? (
                 <ShrinkingText value={value} element={element} />
               ) : (

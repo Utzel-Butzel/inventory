@@ -26,7 +26,7 @@ stock workflows, mobile capture, maps, optional AI, a scoped REST API, and an
 opt-in Model Context Protocol (MCP) endpoint.
 
 Your data stays on infrastructure you control. The web app, API, migrations,
-and native iOS app live in this repository; the public website and product
+and native iOS and Android apps live in this repository; the public website and product
 content live in [open-inventory-website](https://github.com/Utzel-Butzel/open-inventory-website).
 
 ## Features
@@ -172,6 +172,7 @@ until configured in `.env`.
 
 | Area | Main settings |
 | --- | --- |
+| Branding | `APP_NAME` for the displayed app name; `APP_LOGO_URL` for a custom logo |
 | Authentication | Local accounts by default; optional `AUTH0_*` and `AUTH_OIDC_*` providers; see [Authentication providers](AUTHPROVIDERS.md) |
 | Storage | Persistent local files or `OPENINARY_*` |
 | Maps | Token-free defaults or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` |
@@ -181,8 +182,26 @@ until configured in `.env`.
 
 See [`.env.example`](.env.example) for the complete, commented reference.
 
-For direct USB label printing from a desktop browser, see
-[Brother PT-P710BT with QZ Tray](docs/ptouch-printing.md).
+To customize the navigation and sign-in branding, set these optional values:
+
+```dotenv
+APP_NAME="Mein Inventar"
+APP_LOGO_URL=https://example.org/logo.png
+```
+
+`APP_NAME` also sets the application name in browser titles. The logo URL must
+be a publicly accessible HTTP(S) image URL; use HTTPS when serving the app over
+HTTPS. Logos are fitted without cropping. Empty values keep the built-in
+branding, and an invalid or unavailable logo falls back to the built-in icon.
+These are runtime settings, so no image rebuild is needed after the feature is
+installed. Restart the app after changing `.env.local`, or recreate the app
+container after changing its environment (for Docker Compose,
+`docker compose up -d --force-recreate app`; for Dokploy/Coolify, redeploy).
+
+For direct P-touch printing from a desktop browser, we recommend QZ Tray. See
+[installation and connection](docs/printing.md#install-and-connect) and the
+[Brother PT-P710BT setup](docs/ptouch-printing.md). Other system printers use the
+[normal browser print dialog or PDF export](docs/printing.md#print-from-this-computer).
 
 Organization administrators can configure photo-analysis and research models,
 output language, the number of input photos (1–3), overwrite behavior, and
@@ -255,6 +274,8 @@ Open [http://localhost:3000](http://localhost:3000).
 | `npm run db:tunnel` | Open an SSH tunnel to a remote PostgreSQL server |
 | `npm run auth:hash -- "password"` | Generate a bcrypt password hash |
 | `npm run deploy` | Build and upload the native iOS app to TestFlight |
+| `npm run android:check` | Run Android unit tests and lint, and build the native debug APK |
+| `npm run android:install` | Install the Android app on a connected device or emulator |
 
 Focused contract and integration test commands are listed in
 [`package.json`](package.json).
@@ -279,11 +300,19 @@ interactive documentation.
 The built-in stateless MCP server lets trusted agents search inventory, read
 items and stock, list due counts, create or update items, and record stock
 movements or physical counts. It is disabled by default. Enable it and apply
-the database migration before connecting a client:
+the database migrations before connecting a client. Persist this setting in the
+application's runtime environment, then restart or redeploy the application:
 
-```bash
-MCP_ENABLED=true npm run db:migrate
+```dotenv
+MCP_ENABLED=true
 ```
+
+The production container applies migrations at startup. For a source
+installation, run `npm run db:migrate` with the intended database configuration.
+Setting `MCP_ENABLED` only on that command does not enable the running app.
+
+See the [technical MCP guide](https://docs.openinventory.polyxo.de/mcp) for client
+setup, the ten available tools, request examples, permissions and troubleshooting.
 
 The endpoint is `https://your-inventory.example/mcp`. Configure the client with
 an Inventory API token from **Settings → API access** as the bearer credential.
@@ -311,6 +340,7 @@ authorization layer instead of distributing long-lived Inventory tokens.
 
 - [OpenAPI specification](public/openapi.yaml)
 - [Native iOS app and setup guide](ios/Inventory/README.md)
+- [Native Android app, setup and feature parity](android/README.md)
 - Outgoing webhooks are configured under **Settings → Webhooks**
 
 ## Project structure
@@ -322,6 +352,7 @@ authorization layer instead of distributing long-lived Inventory tokens.
 | `lib/` | Domain logic and integrations |
 | `db/` | Drizzle schema and PostgreSQL migrations |
 | `ios/Inventory/` | Native SwiftUI client |
+| `android/` | Native Kotlin / Jetpack Compose / Material 3 client |
 | `deploy/` | Dokploy and Coolify templates |
 | `public/openapi.yaml` | REST API contract |
 

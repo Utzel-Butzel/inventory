@@ -4,6 +4,7 @@ import {
   updateOrganization,
 } from "@/lib/organizations";
 import { organizationUpdateInputSchema } from "@/lib/validators";
+import { labelExternalDestination } from "@/lib/label-redirect-contract";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -43,6 +44,11 @@ export async function PATCH(request: Request, context: Context) {
       { status: 422, headers: noStoreHeaders },
     );
   }
+  if (parsed.data.labelQrRedirectUrl &&
+    !labelExternalDestination(parsed.data.labelQrRedirectUrl, process.env.AUTH_URL || request.url)) {
+    return Response.json({ error: "The QR destination must not point to this instance's QR redirect routes." },
+      { status: 422, headers: noStoreHeaders });
+  }
   let updated: Awaited<ReturnType<typeof updateOrganization>>;
   try {
     updated = await updateOrganization({
@@ -50,6 +56,7 @@ export async function PATCH(request: Request, context: Context) {
       name: parsed.data.name,
       slug: parsed.data.slug,
       allowNegativeStock: parsed.data.allowNegativeStock,
+      labelQrRedirectUrl: parsed.data.labelQrRedirectUrl,
       actor: identity.subject,
     });
   } catch (error) {

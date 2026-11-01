@@ -443,9 +443,9 @@ test("duplicating and layering preserve original image content and identities", 
 });
 
 test("extended typography survives saving and keeps old template defaults", async () => {
-  const { defaultLabelFontWeight, defaultLabelFontSize, pointsToMm, mmToPoints } = await import('../lib/label-typography.ts');
+  const { LABEL_NAMED_FONTS, defaultLabelFontWeight, defaultLabelFontSize, pointsToMm, mmToPoints } = await import('../lib/label-typography.ts');
   const base = { type: 'name', x: 0, y: 0, width: 50, height: 50, visible: true };
-  for (const fontFamily of ['inter', 'roboto', 'roboto-condensed', 'nunito-sans', 'barlow-semi-condensed']) {
+  for (const [fontFamily] of LABEL_NAMED_FONTS) {
     for (const fontWeight of [100, 200, 300, 400, 500, 600, 700, 800, 900]) {
       const element = { ...base, fontFamily, fontWeight, letterSpacingEm: -0.05, lineHeight: 2.5, fontSizeMm: pointsToMm(12), content: [{ text: '[Title]', weight: fontWeight }] };
       assert.deepEqual(labelElementsSchema.parse([element])[0], element);
@@ -487,6 +487,20 @@ test("every hosted font face has its matching preview CSS, binary and license", 
 
 test("raster font embedding distinguishes related family names and uses real weights and italics", async () => {
   const { selectLabelFontFace } = await import('../lib/label-fonts.ts');
+  const { LABEL_NAMED_FONTS, LABEL_FONT_STACKS, labelFontWeights } = await import('../lib/label-typography.ts');
+  for (const [family] of LABEL_NAMED_FONTS) {
+    for (const weight of labelFontWeights(family)) {
+      for (const style of ['normal', 'italic']) {
+        const face = selectLabelFontFace(LABEL_FONT_STACKS[family], weight, style);
+        assert.ok(face, `${family} ${weight} ${style} must embed`);
+        const [min, max = min] = face.weight.split(' ').map(Number);
+        assert.ok(weight >= min && weight <= max);
+      }
+    }
+  }
+  assert.deepEqual(labelFontWeights('lora'), [400, 500, 600, 700]);
+  assert.deepEqual(labelFontWeights('jetbrains-mono'), [100, 200, 300, 400, 500, 600, 700, 800]);
+  assert.deepEqual(labelFontWeights('source-sans-3'), [200, 300, 400, 500, 600, 700, 800, 900]);
   assert.equal(selectLabelFontFace('"Inventory Roboto Condensed", sans-serif', 600, 'normal').file, 'RobotoCondensed-Variable.ttf');
   assert.equal(selectLabelFontFace('"Inventory Roboto", sans-serif', 600, 'italic').file, 'Roboto-Italic-Variable.ttf');
   assert.equal(selectLabelFontFace('"Inventory Barlow Semi Condensed", sans-serif', 900, 'normal').file, 'BarlowSemiCondensed-Black.ttf');
@@ -546,6 +560,52 @@ test("fixed and hidden automatic text retain the template dimensions", () => {
     assert.equal(resolveLabelLayout(setup, 120), setup);
   }
   assert.equal(resolveLabelLayout(dynamicSetup, NaN), dynamicSetup);
+});
+
+test("automatic length adds the requested right margin without moving or scaling content", () => {
+  for (const textWidth of [1, 40, 120]) {
+    const baseline = resolveLabelLayout(dynamicSetup, textWidth);
+    for (const margin of [0, 0.1, 5, 20]) {
+      const setup = { ...dynamicSetup, elements: dynamicSetup.elements.map(element => element.type === "name"
+        ? { ...element, autoWidthRightMarginMm: margin } : element) };
+      const result = resolveLabelLayout(setup, textWidth);
+      assert.ok(Math.abs(result.widthMm - baseline.widthMm - margin) < 1e-9);
+      for (const type of ["name", "qr", "image"]) {
+        const before = physicalBox(baseline, type), after = physicalBox(result, type);
+        assert.ok(Math.abs(before.x - after.x) < 1e-9);
+        assert.ok(Math.abs(before.width - after.width) < 1e-9);
+        assert.equal(result.elements.find(element => element.type === type).height,
+          baseline.elements.find(element => element.type === type).height);
+      }
+      assert.equal(result.elements[0].width, 100);
+      assert.equal(result.heightMm, dynamicSetup.heightMm);
+    }
+  }
+});
+
+test("right margin is added after other rows' minimum length and ignored when auto length is disabled", () => {
+  const setup = { ...dynamicSetup, elements: [
+    ...dynamicSetup.elements.map(element => element.type === "name" ? { ...element, autoWidthRightMarginMm: 7 } : element),
+    { type: "subtitle", x: 0, y: 0, width: 100, height: 10, visible: true },
+  ] };
+  assert.ok(resolveLabelLayout(setup, 1).widthMm >= 87);
+  for (const patch of [{ autoWidth: false }, { visible: false }]) {
+    const fixed = { ...setup, elements: setup.elements.map(element => element.type === "name" ? { ...element, ...patch } : element) };
+    assert.equal(resolveLabelLayout(fixed, 120), fixed);
+  }
+});
+
+test("auto-length margin and independently edited text height survive template persistence", () => {
+  const elements = dynamicSetup.elements.map(element => element.type === "name"
+    ? { ...element, autoWidthRightMarginMm: 4.5, height: 45 } : element);
+  const payload = { name: "Right margin", widthMm: 80, heightMm: 18, elements };
+  assert.deepEqual(labelSetupCreateSchema.parse(JSON.parse(JSON.stringify(payload))), payload);
+  assert.deepEqual(labelSetupPatchSchema.parse({ revision: 1, elements }).elements, elements);
+  assert.equal(resolveLabelLayout({ ...dynamicSetup, elements }, 30).elements.find(element => element.type === "name").height, 45);
+  for (const margin of [-1, 1001, Infinity, "5"]) {
+    assert.equal(labelElementsSchema.safeParse(elements.map(element => element.type === "name"
+      ? { ...element, autoWidthRightMarginMm: margin } : element)).success, false);
+  }
 });
 
 test("shortening does not cut off another row or shift an image over fixed content", () => {

@@ -1035,6 +1035,10 @@ paths:
                 allowNegativeStock:
                   type: boolean
                   description: Allow bulk stock balances to fall below zero.
+                labelQrRedirectUrl:
+                  type: [string, "null"]
+                  maxLength: 2048
+                  description: Optional complete HTTP(S) destination for all label QR links. Empty or null restores inventory destinations.
       responses:
         "200":
           description: Updated organization
@@ -1129,6 +1133,10 @@ paths:
                   maxLength: 48
                   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
                 allowNegativeStock: { type: boolean }
+                labelQrRedirectUrl:
+                  type: [string, "null"]
+                  maxLength: 2048
+                  description: Optional complete HTTP(S) destination for all label QR links. Empty or null restores inventory destinations.
       responses:
         "200":
           description: Organization updated
@@ -6518,7 +6526,7 @@ components:
     OrganizationSummary:
       type: object
       additionalProperties: false
-      required: [id, name, slug, isReadOnly, allowNegativeStock]
+      required: [id, name, slug, isReadOnly, allowNegativeStock, labelQrRedirectUrl]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
@@ -6529,10 +6537,11 @@ components:
           pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
         isReadOnly: { type: boolean }
         allowNegativeStock: { type: boolean }
+        labelQrRedirectUrl: { type: [string, "null"], maxLength: 2048 }
     OrganizationMembership:
       type: object
       additionalProperties: false
-      required: [id, name, slug, isReadOnly, allowNegativeStock, role, roleName]
+      required: [id, name, slug, isReadOnly, allowNegativeStock, labelQrRedirectUrl, role, roleName]
       properties:
         id: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 160 }
@@ -6550,6 +6559,7 @@ components:
         allowNegativeStock:
           type: boolean
           description: Whether bulk stock balances may fall below zero in this organization.
+        labelQrRedirectUrl: { type: [string, "null"], maxLength: 2048 }
         canManage:
           type: boolean
           description: Present on organization-list responses; true when the current identity can administer that active organization.
@@ -7934,12 +7944,21 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
               maximum: 31
+            rowSizing: { type: string, enum: [content, fixed], default: content }
             autoWidth:
               type: boolean
+            autoWidthRightMarginMm:
+              type: number
+              minimum: 0
+              maximum: 1000
+              description: Additional right label margin in millimeters when this text controls automatic length.
             fontSizeMm:
               type: number
               exclusiveMinimum: 0
@@ -8048,6 +8067,9 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
@@ -8100,6 +8122,9 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
@@ -8149,6 +8174,9 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
@@ -8215,12 +8243,21 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
               maximum: 31
+            rowSizing: { type: string, enum: [content, fixed], default: content }
             autoWidth:
               type: boolean
+            autoWidthRightMarginMm:
+              type: number
+              minimum: 0
+              maximum: 1000
+              description: Additional right label margin in millimeters when this text controls automatic length.
             fontSizeMm:
               type: number
               exclusiveMinimum: 0
@@ -8327,12 +8364,21 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
               maximum: 31
+            rowSizing: { type: string, enum: [content, fixed], default: content }
             autoWidth:
               type: boolean
+            autoWidthRightMarginMm:
+              type: number
+              minimum: 0
+              maximum: 1000
+              description: Additional right label margin in millimeters when this text controls automatic length.
             fontSizeMm:
               type: number
               exclusiveMinimum: 0
@@ -8439,12 +8485,21 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
               maximum: 31
+            rowSizing: { type: string, enum: [content, fixed], default: content }
             autoWidth:
               type: boolean
+            autoWidthRightMarginMm:
+              type: number
+              minimum: 0
+              maximum: 1000
+              description: Additional right label margin in millimeters when this text controls automatic length.
             fontSizeMm:
               type: number
               exclusiveMinimum: 0
@@ -8551,6 +8606,9 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
@@ -8590,12 +8648,21 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
               maximum: 31
+            rowSizing: { type: string, enum: [content, fixed], default: content }
             autoWidth:
               type: boolean
+            autoWidthRightMarginMm:
+              type: number
+              minimum: 0
+              maximum: 1000
+              description: Additional right label margin in millimeters when this text controls automatic length.
             fontSizeMm:
               type: number
               exclusiveMinimum: 0
@@ -8702,12 +8769,21 @@ components:
               maximum: 100
             visible:
               type: boolean
+            rowOrder: { type: integer, minimum: 0, maximum: 31 }
+            rowWidthMm: { type: number, minimum: 0.1, maximum: 1000 }
+            rowHeightMm: { type: number, minimum: 0.1, maximum: 1000 }
             layer:
               type: integer
               minimum: 0
               maximum: 31
+            rowSizing: { type: string, enum: [content, fixed], default: content }
             autoWidth:
               type: boolean
+            autoWidthRightMarginMm:
+              type: number
+              minimum: 0
+              maximum: 1000
+              description: Additional right label margin in millimeters when this text controls automatic length.
             fontSizeMm:
               type: number
               exclusiveMinimum: 0
@@ -8795,8 +8871,23 @@ components:
       items:
         $ref: "#/components/schemas/LabelElement"
       description: Up to 32 elements with unique identities (id, or type for legacy elements). Visible
-        images must not overlap visible QR codes. At most one text element may use autoWidth to control
+        images must not overlap visible QR codes in free layout. At most one text element may use autoWidth to control
         the physical label length.
+    LabelRowLayout:
+      type: object
+      additionalProperties: false
+      required: [mode, gapMm, paddingTopMm, paddingRightMm, paddingBottomMm, paddingLeftMm, align]
+      properties:
+        mode: { type: string, const: row }
+        gapMm: { type: number, minimum: 0, maximum: 1000 }
+        paddingTopMm: { type: number, minimum: 0, maximum: 1000 }
+        paddingRightMm: { type: number, minimum: 0, maximum: 1000 }
+        paddingBottomMm: { type: number, minimum: 0, maximum: 1000 }
+        paddingLeftMm: { type: number, minimum: 0, maximum: 1000 }
+        align: { type: string, enum: [top, middle, bottom] }
+      description: Horizontal flow with content-dependent label width and fixed height. Visible elements
+        use rowOrder and physical rowWidthMm/rowHeightMm; text defaults to content width. Padding and
+        element heights must fit heightMm. Null selects free layout; omitted PATCH layout stays unchanged.
     LabelSetupInput:
       type: object
       properties:
@@ -8812,6 +8903,10 @@ components:
           type: number
           exclusiveMinimum: 0
           maximum: 1000
+        layout:
+          oneOf:
+            - $ref: "#/components/schemas/LabelRowLayout"
+            - type: "null"
         elements:
           $ref: "#/components/schemas/LabelElements"
         inverted:
@@ -8841,6 +8936,10 @@ components:
           type: number
           exclusiveMinimum: 0
           maximum: 1000
+        layout:
+          oneOf:
+            - $ref: "#/components/schemas/LabelRowLayout"
+            - type: "null"
         elements:
           $ref: "#/components/schemas/LabelElements"
         inverted:
@@ -8878,6 +8977,10 @@ components:
           type: number
           exclusiveMinimum: 0
           maximum: 1000
+        layout:
+          oneOf:
+            - $ref: "#/components/schemas/LabelRowLayout"
+            - type: "null"
         elements:
           $ref: "#/components/schemas/LabelElements"
         revision:

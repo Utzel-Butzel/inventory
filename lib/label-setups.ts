@@ -5,6 +5,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { labelSetups, type LabelSetupRecord } from "@/db/schema";
 import { db } from "@/lib/db";
 import { isLabelSetupNameConflict, LABEL_SETUP_NAME_CONFLICT } from "@/lib/label-setup-name";
+import { labelSetupCreateSchema } from "@/lib/label-setup-contract";
 import type {
   LabelSetupCreate,
   LabelSetupDto,
@@ -47,6 +48,7 @@ const labelSetupDto = (row: LabelSetupRecord): LabelSetupDto => ({
   heightMm: row.heightMm,
   elements: row.elements,
   inverted: row.inverted,
+  layout: row.layout,
   revision: row.revision,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
@@ -130,6 +132,11 @@ export async function updateLabelSetup(
     }
 
     const { revision, ...changes } = patch;
+    const validation = labelSetupCreateSchema.safeParse({
+      name: current.name, widthMm: current.widthMm, heightMm: current.heightMm,
+      elements: current.elements, inverted: current.inverted, layout: current.layout, ...changes,
+    });
+    if (!validation.success) throw new LabelSetupError(validation.error.issues[0].message, 422);
     try {
       const [saved] = await transaction
         .update(labelSetups)

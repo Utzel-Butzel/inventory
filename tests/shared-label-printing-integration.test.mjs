@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import postgres from "postgres";
+import sharp from "sharp";
+import { DEFAULT_PRINT_MEDIA } from "../lib/label-document.ts";
 import { readFile } from "node:fs/promises";
 import { randomUUID, randomBytes } from "node:crypto";
 import { encodePtouchRaster } from "../lib/ptouch-raster.ts";
@@ -28,6 +30,7 @@ test(
           "utf8",
         ),
       );
+      await connection.unsafe(await readFile(new URL("../db/migrations/0074_general_printing.sql", import.meta.url), "utf8"));
       const {
         enqueueSharedPrint,
         claimSharedPrint,
@@ -108,6 +111,38 @@ test(
         )[0].status,
         "expired",
       );
+      const systemPrinter = randomUUID();
+      await connection`INSERT INTO label_printers(id,organization_id,name,token_hash,kind,max_width_mm,max_height_mm) VALUES(${systemPrinter},${org},'Office',${printHash('system-token')},'system',210,297)`;
+      const png = await sharp({create:{width:600,height:300,channels:3,background:'white'}}).png().toBuffer();
+      const snapshot = {png:'data:image/png;base64,'+png.toString('base64'),widthMm:60,heightMm:30};
+      const pdfInput = {id:randomUUID(),printerId:systemPrinter,format:'pdf',document:{labels:[snapshot],media:DEFAULT_PRINT_MEDIA}};
+      const firstPdf = await enqueueSharedPrint(identity,pdfInput);
+      assert.equal((await enqueueSharedPrint(identity,pdfInput)).id,firstPdf.id);
+      await assert.rejects(()=>enqueueSharedPrint({...identity,organizationId:otherOrg},{...pdfInput,id:randomUUID()}),e=>e.status===404);
+      await assert.rejects(()=>enqueueSharedPrint(identity,{...pdfInput,printerId:printer,id:randomUUID()}),e=>e.status===409);
+      await assert.rejects(()=>enqueueSharedPrint(identity,{...input,printerId:systemPrinter,id:randomUUID()}),e=>e.status===409);
+      const pdfClaim = await claimSharedPrint(systemPrinter,randomUUID());
+      assert.equal(pdfClaim.format,'pdf');
+      assert.equal(pdfClaim.pageWidthMm,60);
+      assert.equal(pdfClaim.pageHeightMm,30);
+      const pdfBytes=Buffer.from(pdfClaim.data,'base64');
+      assert.ok(pdfBytes.toString('ascii',0,5)==='%PDF-');
+      assert.equal(printHash(pdfBytes),pdfClaim.sha256);
+      await assert.rejects(()=>enqueueSharedPrint(identity,{...pdfInput,id:randomUUID(),document:{labels:[snapshot],media:{...DEFAULT_PRINT_MEDIA,mode:'sheet',pageWidthMm:220}}}),e=>e.status===409);
+      await assert.rejects(()=>enqueueSharedPrint(identity,{...pdfInput,id:randomUUID(),document:{labels:[snapshot,{...snapshot,widthMm:50,heightMm:25}],media:DEFAULT_PRINT_MEDIA}}),e=>e.status===422);
+      await connection`CREATE TABLE users(id uuid PRIMARY KEY)`;
+      await connection.unsafe(await readFile(new URL("../db/migrations/0071_label_workspaces.sql",import.meta.url),"utf8"));
+      const { updateLabelWorkspace, readLabelWorkspace } = await import("../lib/label-workspace.ts");
+      const userId=randomUUID();
+      await connection`INSERT INTO users(id) VALUES(${userId})`;
+      const resource={id:randomUUID(),name:'Frozen',sku:null,barcode:null,location:null,type:'product',quantity:1,cover:null};
+      const prepared={id:randomUUID(),name:'Frozen',template:'Generic',tape:24,widthMm:60,data:'',preview:snapshot.png,snapshot,resource,original:resource,
+        setup:{id:'generic',name:'Generic',widthMm:60,heightMm:30,elements:[],revision:1,createdAt:'',updatedAt:''}};
+      await updateLabelWorkspace(org,userId,{action:'queue',revision:0,labels:[prepared]});
+      assert.deepEqual((await readLabelWorkspace(org,userId)).labels[0].snapshot,snapshot);
+      assert.deepEqual((await readLabelWorkspace(otherOrg,userId)).labels,[]);
+      await assert.rejects(()=>updateLabelWorkspace(org,userId,{action:'queue',revision:1,labels:[{...prepared,snapshot:{...snapshot,png:'data:image/png;base64,aGVsbG8='}}]}),e=>e.status===422);
+      assert.equal((await readLabelWorkspace(org,userId)).revision,1);
       const authRequest = new Request("https://example.test", {
         headers: { Authorization: "Bearer " + token },
       });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   defaultLabelTextContent, formatLabelText, labelPlaceholderValues,
-  labelUsesPlaceholder, normalizeLabelText, replaceLabelText, resolveLabelText,
+  labelUsesPlaceholder, normalizeLabelText, replaceLabelText, resolveLabelText, labelTextDecoration,
 } from "../lib/label-rich-text.ts";
 import { labelElementsSchema, labelSetupCreateSchema, labelSetupPatchSchema, labelTextContentSchema } from "../lib/label-setup-contract.ts";
 import { applyLabelTextOverride } from "../lib/label-target.ts";
@@ -65,6 +65,20 @@ test("replacing selections spanning styles preserves surrounding text and suppor
   ]);
   assert.deepEqual(replaceLabelText(source, 0, 6, ""), []);
   assert.deepEqual(replaceLabelText([], 0, 0, "New\n\nline"), [{ text: "New\n\nline" }]);
+});
+
+test("all text weights and combined decorations survive selection edits and saving", () => {
+  for (let weight = 100; weight <= 900; weight += 100) {
+    const content = formatLabelText([{ text: "A[Title]Z" }], 1, 8, { weight, italic: true, underline: true, strikethrough: true });
+    const saved = labelSetupPatchSchema.parse(JSON.parse(JSON.stringify({ revision: 1, elements: [{ ...field, content }] })));
+    assert.deepEqual(resolveLabelText(saved.elements[0].content, values), [
+      { text: "A" }, { text: "Drill", weight, italic: true, underline: true, strikethrough: true }, { text: "Z" },
+    ]);
+    assert.equal(labelTextDecoration(content[1]), "underline line-through");
+    assert.deepEqual(formatLabelText(content, 1, 8, { weight: undefined, italic: false, underline: false, strikethrough: false }), [{ text: "A[Title]Z" }]);
+    assert.equal(labelTextDecoration({}), "none");
+  }
+  assert.deepEqual(normalizeLabelText([{ text: "A", strikethrough: true }, { text: "B" }]), [{ text: "A", strikethrough: true }, { text: "B" }]);
 });
 
 test("normalization preserves intentional blank lines, merges styles and does not mutate input", () => {

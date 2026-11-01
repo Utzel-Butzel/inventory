@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { labelDocumentSchema, LABEL_DOCUMENT_LIMIT } from "@/lib/label-document";
 import {
   combinePtouchLabels,
   encodePtouchRaster,
@@ -8,8 +9,8 @@ import {
 } from "@/lib/ptouch-raster";
 
 export const SHARED_PRINT_BODY_LIMIT =
-  Math.ceil((PTOUCH_MAX_JOB_BYTES * 4) / 3) + 40_000;
-export const sharedPrintSchema = z
+  LABEL_DOCUMENT_LIMIT;
+const ptouchPrintSchema = z
   .object({
     id: z.uuid(),
     printerId: z.uuid(),
@@ -26,9 +27,25 @@ export const sharedPrintSchema = z
       .max(100),
   })
   .strict();
+export const sharedPrintSchema = z.union([
+  ptouchPrintSchema,
+  z.object({ id: z.uuid(), printerId: z.uuid(), format: z.literal("pdf"), document: labelDocumentSchema }).strict(),
+]);
+export const printerCreateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  kind: z.enum(["ptouch", "system"]).default("ptouch"),
+  location: z.string().trim().max(120).default(""),
+  tape: z.number().refine(n => PTOUCH_TAPES.includes(n as PtouchTape)).default(24),
+  maxWidthMm: z.number().finite().positive().max(1000).default(1000),
+  maxHeightMm: z.number().finite().positive().max(1000).default(1000),
+}).strict();
 export type SharedPrinter = {
   id: string;
   name: string;
+  kind: "ptouch" | "system";
+  location: string;
+  maxWidthMm: number;
+  maxHeightMm: number;
   tape: PtouchTape;
   online: boolean;
   enabled: boolean;

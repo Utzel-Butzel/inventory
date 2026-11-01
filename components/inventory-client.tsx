@@ -122,7 +122,7 @@ function ResourceVisual({
         widths={compact ? [96, 192] : [384, 640, 960]}
         sizes={
           compact
-            ? "48px"
+            ? "96px"
             : "(max-width: 639px) calc(100vw - 32px), (max-width: 1279px) calc(50vw - 32px), (max-width: 1535px) 33vw, 25vw"
         }
         eager={eager}
@@ -195,7 +195,7 @@ export function InventoryClient({
   });
   const list = useListView(favoritesOnly ? "inventory.favorites" : "inventory", {
     query: normalizedInitialQuery, sort: "updatedAt", direction: "desc",
-    layout: "table", density: "compact", pageSize: normalizedInitialPageSize,
+    layout: "grid", density: "compact", pageSize: normalizedInitialPageSize,
     filters: { type: "all", status: "all", priority: "all", tag: "all", category: "all", excludeCategory: "all" },
     columns: ["name", "quantity", "location", "status"],
   }, ["name", "quantity", "location", "status", "sku", "valueCents"]);
@@ -781,7 +781,7 @@ export function InventoryClient({
             const selected = selectedSet.has(resource.id);
             const content = (
               <>
-                <div data-list-image className="relative aspect-[4/3] overflow-hidden bg-surface-muted">
+                <div data-list-image className="relative aspect-square overflow-hidden bg-surface-muted">
                   <ResourceVisual
                     resource={resource}
                     eager={resource.id === eagerCoverId}
@@ -925,7 +925,7 @@ export function InventoryClient({
                         <Check size={12} />
                       </span>
                     ) : null}
-                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
+                    <div className="size-24 shrink-0 overflow-hidden rounded-lg bg-surface-muted">
                       <ResourceVisual
                         resource={resource}
                         compact

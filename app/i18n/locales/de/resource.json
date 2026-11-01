@@ -115,6 +115,11 @@
     "emptyDescription": "Administratoren können in den Einstellungen Felder für Datensätze des Typs {{type}} oder passende Kategorien konfigurieren."
   },
   "media": {
+    "originalVideo": "Originalvideo",
+    "videoPreview": "Vorschauvideo",
+    "videoPoster": "Vorschaubild",
+    "noVideoPreview": "Original verwenden",
+    "noVideoPoster": "Kein Vorschaubild",
     "title": "Medien",
     "description_one": "Bilder, Videos, PDFs und 3D-Modelle · {{count}} Datei",
     "description_other": "Bilder, Videos, PDFs und 3D-Modelle · {{count}} Dateien",

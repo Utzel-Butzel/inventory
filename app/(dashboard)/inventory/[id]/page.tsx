@@ -8,10 +8,11 @@ import { organizationPath } from "@/lib/organization-path";
 import { primaryResourceReference } from "@/lib/resource-slug-contract";
 import { redirect } from "next/navigation";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ src?: string | string[] }> };
 
-export default async function InventoryItemPage({ params }: Props) {
+export default async function InventoryItemPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const { src } = await searchParams;
   const identity = await getSessionIdentity();
   const resource = identity
     ? await getResourceRecordByReference(id, identity.organizationId)
@@ -22,7 +23,7 @@ export default async function InventoryItemPage({ params }: Props) {
       redirect(
         organizationPath(
           identity.organization.slug,
-          `/inventory/${primaryReference}`,
+          `/inventory/${primaryReference}${src === "qr" ? "?src=qr" : ""}`,
         ),
       );
     }

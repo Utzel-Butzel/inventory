@@ -21,6 +21,30 @@ The Compose service forwards the optional `AUTH0_*`, `AUTH_OIDC_*`, and
 as described in the root
 [authentication provider guide](../../README.md#authentication-providers).
 
+## App name and logo
+
+Set `APP_NAME` and `APP_LOGO_URL` under **Environment**, then redeploy the
+`inventory` service. For example:
+
+```dotenv
+APP_NAME="My Inventory"
+APP_LOGO_URL=https://example.com/logo.png
+```
+
+Both settings apply to navigation and sign-in across all organizations. The
+name also appears in browser titles. Use a publicly accessible HTTPS image URL;
+empty values preserve the built-in branding, and unavailable images fall back
+to the built-in logo. These are runtime settings: after deploying a version
+with branding support, later changes do not require an image rebuild.
+
+The current Compose definition forwards both variables. Existing services
+imported from an older template must also add the two environment mappings from
+[`docker-compose.yml`](docker-compose.yml). See the
+[branding configuration guide](https://docs.openinventory.polyxo.de/configuration#app-name-and-logo)
+for details.
+
+## Demo access
+
 To add the bundled public product demo to an existing deployment, set
 `DEMO_ACCESS_ENABLED=true` on the `inventory` service and redeploy. The startup
 process reconciles the fixed, read-only `Werkstatt Nord · Demo` organization

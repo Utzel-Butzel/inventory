@@ -1,4 +1,6 @@
 import "server-only";
+import { createLabelPdf } from "@/lib/label-document-pdf";
+import { layoutLabelPages } from "@/lib/label-document";
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -64,28 +66,43 @@ export async function enqueueSharedPrint(
   const parsed = sharedPrintSchema.safeParse(value);
   if (!parsed.success) throw new PrintFailure("Invalid print job.");
   const input = parsed.data;
-  let raster: Uint8Array;
+  const isPdf = "format" in input && input.format === "pdf";
+  let bytes: Uint8Array;
+  let pageWidth: number | null = null, pageHeight: number | null = null;
+  let count: number;
   try {
-    raster = validateSharedRasters(
-      input.labels.map((s) => {
-        const bytes = Buffer.from(s, "base64");
-        if (bytes.toString("base64") !== s) throw new Error("Invalid base64");
-        return bytes;
-      }),
-      input.tape,
-    );
-  } catch {
-    throw new PrintFailure("Invalid or oversized P-touch raster data.");
+    if ("document" in input) {
+      const pages = layoutLabelPages(input.document.labels, input.document.media);
+      pageWidth = pages[0].width; pageHeight = pages[0].height;
+      if (pages.some(page => page.width !== pageWidth || page.height !== pageHeight))
+        throw new Error("Remote jobs must use one paper size. Use a sheet layout or separate jobs.");
+      bytes = await createLabelPdf(input.document);
+      count = input.document.labels.length;
+    } else {
+      bytes = validateSharedRasters(input.labels.map(s => {
+        const data = Buffer.from(s, "base64");
+        if (data.toString("base64") !== s) throw new Error("Invalid base64");
+        return data;
+      }), input.tape);
+      count = input.labels.length;
+    }
+    if (bytes.length > 24 * 1024 * 1024) throw new Error("Print document is too large.");
+  } catch (error) {
+    throw new PrintFailure(error instanceof Error ? error.message : "Invalid print document.", 422);
   }
-  const payload = Buffer.from(raster).toString("base64"),
-    hash = printHash(raster);
+  const payload = Buffer.from(bytes).toString("base64"), hash = printHash(bytes);
+  const format = isPdf ? "pdf" : "ptouch";
   return db.transaction(async (tx) => {
     // The printer row serializes enqueue limits and dispatch for this device.
     const [printer] = await tx.execute(
       sql`SELECT * FROM label_printers WHERE id=${input.printerId} AND organization_id=${identity.organizationId} AND enabled=true FOR UPDATE`,
     );
     if (!printer) throw new PrintFailure("Printer not found.", 404);
-    if (Number(printer.tape_width) !== input.tape)
+    if ((printer.kind ?? "ptouch") !== (isPdf ? "system" : "ptouch"))
+      throw new PrintFailure("Print format does not match this printer.", 409);
+    if (isPdf && (pageWidth! > Number(printer.max_width_mm) || pageHeight! > Number(printer.max_height_mm)))
+      throw new PrintFailure("The document exceeds this printer's paper size.", 409);
+    if ("tape" in input && Number(printer.tape_width) !== input.tape)
       throw new PrintFailure(
         "The label tape width does not match the shared printer.",
         409,
@@ -115,7 +132,7 @@ export async function enqueueSharedPrint(
         429,
       );
     const [row] = await tx.execute(
-      sql`INSERT INTO label_print_jobs(id,organization_id,printer_id,created_by,label_count,payload,payload_hash) VALUES(${input.id},${identity.organizationId},${input.printerId},${identity.subject},${input.labels.length},${payload},${hash}) RETURNING *`,
+      sql`INSERT INTO label_print_jobs(id,organization_id,printer_id,created_by,label_count,payload,payload_hash,format,page_width_mm,page_height_mm) VALUES(${input.id},${identity.organizationId},${input.printerId},${identity.subject},${count},${payload},${hash},${format},${pageWidth},${pageHeight}) RETURNING *`,
     );
     return jobDto(row);
   });
@@ -156,6 +173,7 @@ export async function claimSharedPrint(printerId: string, claimId: string) {
             id: existing.id,
             data: existing.payload,
             sha256: existing.payload_hash,
+            format: existing.format, pageWidthMm: existing.page_width_mm, pageHeightMm: existing.page_height_mm,
           }
         : null;
     const [active] = await tx.execute(
@@ -169,6 +187,6 @@ export async function claimSharedPrint(printerId: string, claimId: string) {
     const [job] = await tx.execute(
       sql`UPDATE label_print_jobs SET status='claimed',claim_id=${claimId},claimed_at=now() WHERE id=${next.id} RETURNING *`,
     );
-    return { id: job.id, data: job.payload, sha256: job.payload_hash };
+    return { id: job.id, data: job.payload, sha256: job.payload_hash, format: job.format, pageWidthMm: job.page_width_mm, pageHeightMm: job.page_height_mm };
   });
 }

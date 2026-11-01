@@ -21,6 +21,7 @@ export const labelTextRunSchema = z.object({
   weight: z.number().int().min(100).max(900).multipleOf(100).optional(),
   italic: z.boolean().optional(),
   underline: z.boolean().optional(),
+  strikethrough: z.boolean().optional(),
 }).strict();
 
 export const labelTextContentSchema = z.array(labelTextRunSchema).max(500).refine(
@@ -43,6 +44,15 @@ export const labelFontFamilies = [
   "roboto",
   "roboto-condensed",
   "nunito-sans",
+  "source-sans-3",
+  "source-serif-4",
+  "jetbrains-mono",
+  "lora",
+  "montserrat",
+  "libre-franklin",
+  "bitter",
+  "alegreya",
+  "zilla-slab",
 ] as const;
 export const labelImageFits = ["cover", "contain"] as const;
 
@@ -65,11 +75,16 @@ const labelElementBoxShape = {
   width: normalizedSizeSchema,
   height: normalizedSizeSchema,
   visible: z.boolean(),
+  rowOrder: z.number().int().min(0).max(MAX_LABEL_ELEMENTS - 1).optional(),
+  rowWidthMm: z.number().finite().min(0.1).max(1000).optional(),
+  rowHeightMm: z.number().finite().min(0.1).max(1000).optional(),
   layer: z.number().int().min(0).max(MAX_LABEL_ELEMENTS - 1).optional(),
 };
 
 const textElementOptions = {
+  rowSizing: z.enum(["content", "fixed"]).optional(),
   autoWidth: z.boolean().optional(),
+  autoWidthRightMarginMm: z.number().finite().min(0).max(1000).optional(),
   fontSizeMm: z.number().finite().positive().max(100).optional(),
   minFontSizeMm: z.number().finite().positive().max(100).optional(),
   fontFamily: z.enum(labelFontFamilies).optional(),
@@ -103,6 +118,7 @@ const labelElementSchemaBase = z.discriminatedUnion("type", [
     .object({
       type: z.literal("qr"),
       ...labelElementBoxShape,
+      useShortcode: z.boolean().optional(),
       foregroundColor: labelColorSchema.optional(),
       backgroundColor: labelColorSchema.optional(),
       quietZoneModules: z.number().int().min(0).max(4).optional(),
@@ -178,7 +194,7 @@ export const labelElementSchema = labelElementSchemaBase.superRefine(
   },
 );
 
-export const labelElementsSchema = z
+const labelElementsBaseSchema = z
   .array(labelElementSchema)
   .max(MAX_LABEL_ELEMENTS)
   .superRefine((elements, context) => {
@@ -194,28 +210,57 @@ export const labelElementsSchema = z
       }
       seen.add(key);
     });
-    const imageIndex = overlappingImageIndex(elements);
-    if (imageIndex >= 0) {
-      context.addIssue({
-        code: "custom",
-        path: [imageIndex],
-        message: "The object image must not overlap the QR code.",
-      });
-    }
     if (elements.filter(element => "autoWidth" in element && element.autoWidth).length > 1) {
       context.addIssue({ code: "custom", message: "Only one text element can control the label length." });
     }
   });
 
+export const labelElementsSchema = labelElementsBaseSchema.superRefine((elements, context) => {
+  const imageIndex = overlappingImageIndex(elements);
+  if (imageIndex >= 0) {
+    context.addIssue({
+      code: "custom",
+      path: [imageIndex],
+      message: "The object image must not overlap the QR code.",
+    });
+  }
+});
+
+export const labelRowLayoutSchema = z.object({
+  mode: z.literal("row"),
+  gapMm: z.number().finite().min(0).max(1000),
+  paddingTopMm: z.number().finite().min(0).max(1000),
+  paddingRightMm: z.number().finite().min(0).max(1000),
+  paddingBottomMm: z.number().finite().min(0).max(1000),
+  paddingLeftMm: z.number().finite().min(0).max(1000),
+  align: z.enum(labelTextVerticalAlignments),
+}).strict();
+export type LabelRowLayout = z.infer<typeof labelRowLayoutSchema>;
+
 const labelSetupShape = {
   name: z.string().trim().min(1).max(160),
   widthMm: z.number().finite().positive().max(1_000),
   heightMm: z.number().finite().positive().max(1_000),
-  elements: labelElementsSchema,
+  elements: labelElementsBaseSchema,
+  layout: labelRowLayoutSchema.nullable().optional(),
   inverted: z.boolean().optional(),
 };
 
-export const labelSetupCreateSchema = z.object(labelSetupShape).strict();
+export const labelSetupCreateSchema = z.object(labelSetupShape).strict().superRefine((setup, context) => {
+  if (!setup.layout && hasVisibleQrImageOverlap(setup.elements)) {
+    context.addIssue({ code: "custom", path: ["elements"], message: "The object image must not overlap the QR code." });
+  }
+  if (labelRowHeightError(setup)) {
+    context.addIssue({ code: "custom", path: ["layout"], message: "Auto Layout elements and padding must fit the fixed label height." });
+  }
+});
+
+export function labelRowHeightError(setup: Pick<LabelSetupDto, "layout" | "elements" | "heightMm">) {
+  if (!setup.layout) return false;
+  const available = setup.heightMm - setup.layout.paddingTopMm - setup.layout.paddingBottomMm;
+  return available < 0.1 || setup.elements.some(element => element.visible && element.type !== "background" &&
+    (element.rowHeightMm ?? element.height / 100 * setup.heightMm) > available + 0.000001);
+}
 
 export const labelSetupPatchSchema = z
   .object({
@@ -225,6 +270,7 @@ export const labelSetupPatchSchema = z
     heightMm: labelSetupShape.heightMm.optional(),
     elements: labelSetupShape.elements.optional(),
     inverted: labelSetupShape.inverted,
+    layout: labelSetupShape.layout,
   })
   .strict()
   .refine((value) => Object.keys(value).some((key) => key !== "revision"), {
@@ -283,6 +329,7 @@ export type LabelSetupDto = {
   heightMm: number;
   elements: LabelElement[];
   inverted?: boolean;
+  layout?: LabelRowLayout | null;
   revision: number;
   createdAt: string;
   updatedAt: string;

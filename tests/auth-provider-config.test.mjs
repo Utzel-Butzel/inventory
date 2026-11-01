@@ -12,6 +12,7 @@ test("password login remains the backward-compatible default", () => {
     passwordEnabled: true,
     auth0: null,
     oidc: null,
+    supabase: null,
     externalProviders: [],
   });
 });

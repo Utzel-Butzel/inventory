@@ -1,4 +1,212 @@
 @font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-LightItalic.ttf") format("truetype");
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-MediumItalic.ttf") format("truetype");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Zilla Slab";
+  src: url("/fonts/label-print/ZillaSlab-SemiBoldItalic.ttf") format("truetype");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Source Sans 3";
+  src: url("/fonts/label-print/SourceSans3-Variable.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Source Sans 3";
+  src: url("/fonts/label-print/SourceSans3-Italic-Variable.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Source Serif 4";
+  src: url("/fonts/label-print/SourceSerif4-Variable.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Source Serif 4";
+  src: url("/fonts/label-print/SourceSerif4-Italic-Variable.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory JetBrains Mono";
+  src: url("/fonts/label-print/JetBrainsMono-Variable.ttf") format("truetype");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory JetBrains Mono";
+  src: url("/fonts/label-print/JetBrainsMono-Italic-Variable.ttf") format("truetype");
+  font-weight: 100 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Lora";
+  src: url("/fonts/label-print/Lora-Variable.ttf") format("truetype");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Lora";
+  src: url("/fonts/label-print/Lora-Italic-Variable.ttf") format("truetype");
+  font-weight: 400 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Montserrat";
+  src: url("/fonts/label-print/Montserrat-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Montserrat";
+  src: url("/fonts/label-print/Montserrat-Italic-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Libre Franklin";
+  src: url("/fonts/label-print/LibreFranklin-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Libre Franklin";
+  src: url("/fonts/label-print/LibreFranklin-Italic-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Bitter";
+  src: url("/fonts/label-print/Bitter-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Bitter";
+  src: url("/fonts/label-print/Bitter-Italic-Variable.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Alegreya";
+  src: url("/fonts/label-print/Alegreya-Variable.ttf") format("truetype");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inventory Alegreya";
+  src: url("/fonts/label-print/Alegreya-Italic-Variable.ttf") format("truetype");
+  font-weight: 400 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "Inventory Inter";
   src: url("/fonts/label-print/Inter-Italic-Variable.ttf") format("truetype");
   font-weight: 100 900;

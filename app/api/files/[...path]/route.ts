@@ -1,3 +1,4 @@
+import { mediaByteResponse } from "@/lib/media-byte-response";
 import { and, eq } from "drizzle-orm";
 
 import { media } from "@/db/schema";
@@ -77,15 +78,13 @@ export async function GET(request: Request, context: Context) {
       });
     }
     const bytes = await readLocalMedia(item.storageKey);
-    return new Response(bytes, {
-      headers: {
+    return mediaByteResponse(bytes, request.headers.get("Range"), {
         "Content-Type": item.mimeType,
         "Content-Length": String(bytes.length),
         "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(item.name)}`,
         "Cache-Control": "private, max-age=3600",
         Vary: "Cookie",
         "X-Content-Type-Options": "nosniff",
-      },
     });
   } catch {
     return Response.json({ error: "File not found" }, { status: 404 });

@@ -8,14 +8,49 @@ import {
 const id = "00000000-0000-4000-8000-000000000063";
 const config = createListViewConfig({ sort: "name", filters: { status: "available" }, columns: ["name", "sku"] });
 
-test("compact inventory defaults preserve saved optional columns and layouts", () => {
-  const defaults = createListViewConfig({ columns: ["name", "quantity", "location", "status"], density: "compact" });
-  const saved = { ...config, columns: ["name", "sku", "valueCents"], layout: "grid" };
+test("grid inventory defaults preserve a saved list layout and optional columns", () => {
+  const defaults = createListViewConfig({ columns: ["name", "quantity", "location", "status"], density: "compact", layout: "grid" });
+  const saved = { ...config, columns: ["name", "sku", "valueCents"], layout: "table" };
   const restored = restoreListView(saved, defaults, [...defaults.columns, "sku", "valueCents"]);
   assert.deepEqual(restored.columns, saved.columns);
-  assert.equal(restored.layout, "grid");
+  assert.equal(restored.layout, "table");
 });
 const view = { id, name: "Werkzeuge", config };
+
+test("saving a new default persists its layout and restores it after a round-trip", () => {
+  const empty = { views: [], defaultId: null };
+  const saved = saveListView({ personal: empty, organization: empty }, view, "personal", undefined, true);
+  const personal = listViewCollectionSchema.parse(JSON.parse(JSON.stringify(saved.personal)));
+  const loaded = combineListViews({ ...saved, personal });
+  const start = loaded.views.find((entry) => entry.key === loaded.defaultId);
+  assert.equal(start.id, id);
+  assert.equal(restoreListView(start.config, createListViewConfig({ layout: "grid" })).layout, "table");
+  assert.deepEqual(saved.organization, empty);
+});
+
+test("saving changes can retain, replace or clear the default without clearing another view's default", () => {
+  const other = { ...view, id: "00000000-0000-4000-8000-000000000066", name: "Andere Ansicht" };
+  const collections = { personal: { views: [view, other], defaultId: id }, organization: { views: [], defaultId: null } };
+  const [previous, previousOther] = combineListViews(collections).views;
+  const changed = { ...view, config: { ...config, layout: "grid" } };
+  const retained = saveListView(collections, changed, "personal", previous);
+  assert.equal(retained.personal.defaultId, id);
+  assert.equal(retained.personal.views[0].config.layout, "grid");
+  assert.equal(saveListView(collections, changed, "personal", previous, false).personal.defaultId, null);
+  assert.equal(saveListView(collections, other, "personal", previousOther, false).personal.defaultId, id);
+  assert.equal(saveListView(collections, other, "personal", previousOther, true).personal.defaultId, other.id);
+});
+
+test("an explicitly selected organization default is saved with the current configuration", () => {
+  const collections = { personal: { views: [view], defaultId: id }, organization: { views: [], defaultId: null } };
+  const previous = combineListViews(collections).views[0];
+  const changed = { ...view, config: { ...config, layout: "grid" } };
+  const saved = saveListView(collections, changed, "organization", previous, true);
+  assert.equal(saved.personal.defaultId, null);
+  assert.equal(saved.organization.defaultId, id);
+  assert.equal(saved.organization.views[0].config.layout, "grid");
+  assert.equal(combineListViews(saved).defaultId, "organization:" + id);
+});
 
 test("saved views round-trip all controls and validate the default reference", () => {
   const collection = { views: [view], defaultId: id };

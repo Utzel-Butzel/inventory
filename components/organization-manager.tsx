@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "next-i18next/client";
+import { labelQrRedirectUrlSchema } from "@/lib/label-redirect-contract";
 
 import { Badge, Button, Card, EmptyState, Skeleton, cn } from "@/components/ui";
 import {
@@ -33,6 +34,7 @@ type ManagedOrganization = {
   role: string;
   roleName: string;
   allowNegativeStock: boolean;
+  labelQrRedirectUrl?: string | null;
   isActive?: boolean;
   canManage?: boolean;
 };
@@ -97,6 +99,7 @@ export function OrganizationManager({
   const [editingName, setEditingName] = useState("");
   const [editingSlug, setEditingSlug] = useState("");
   const [editingAllowNegativeStock, setEditingAllowNegativeStock] = useState(false);
+  const [editingQrRedirectUrl, setEditingQrRedirectUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (quiet = false) => {
@@ -187,6 +190,7 @@ export function OrganizationManager({
     setEditingName(organization.name);
     setEditingSlug(organization.slug);
     setEditingAllowNegativeStock(organization.allowNegativeStock);
+    setEditingQrRedirectUrl(organization.labelQrRedirectUrl ?? "");
   }
 
   function closeEditor() {
@@ -194,6 +198,7 @@ export function OrganizationManager({
     setEditingName("");
     setEditingSlug("");
     setEditingAllowNegativeStock(false);
+    setEditingQrRedirectUrl("");
   }
 
   async function updateOrganization(
@@ -206,6 +211,11 @@ export function OrganizationManager({
     if (!name || !slug) return;
 
     clearMessages();
+    const qrRedirect = labelQrRedirectUrlSchema.safeParse(editingQrRedirectUrl);
+    if (!qrRedirect.success) {
+      setActionError(t("organizations.form.qrRedirectInvalid"));
+      return;
+    }
     setSaving(true);
     try {
       const response = await fetch(
@@ -217,6 +227,7 @@ export function OrganizationManager({
             name,
             slug,
             allowNegativeStock: editingAllowNegativeStock,
+            labelQrRedirectUrl: qrRedirect.data,
           }),
         },
       );
@@ -402,6 +413,19 @@ export function OrganizationManager({
                             </span>
                           </span>
                         </label>
+                        <label className="mt-4 block">
+                          <span className="text-xs font-semibold text-muted-strong">
+                            {t("organizations.form.qrRedirectUrl")}
+                          </span>
+                          <input type="url" value={editingQrRedirectUrl}
+                            onChange={event => setEditingQrRedirectUrl(event.target.value)}
+                            maxLength={2048} placeholder="https://example.org/slack"
+                            autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                            className="mt-2 h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm text-foreground shadow-sm outline-none transition focus:border-focus focus:ring-4 focus:ring-focus/10" />
+                          <span className="mt-1.5 block text-xs leading-5 text-muted">
+                            {t("organizations.form.qrRedirectHint")}
+                          </span>
+                        </label>
                         <div className="mt-3 flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={closeEditor} disabled={saving}>
                             {t("organizations.actions.cancel")}
@@ -430,6 +454,9 @@ export function OrganizationManager({
                           <p className="mt-1 text-xs text-muted">
                             {t("organizations.list.slug", { slug: organization.slug })}
                           </p>
+                          {organization.labelQrRedirectUrl ? <p className="mt-1 break-all text-xs text-muted">
+                            {t("organizations.form.qrRedirectUrl")}: {organization.labelQrRedirectUrl}
+                          </p> : null}
                         </div>
                         {canManage ? (
                           <Button variant="ghost" size="sm" onClick={() => editOrganization(organization)}>

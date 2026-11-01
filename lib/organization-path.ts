@@ -32,6 +32,7 @@ export const RESERVED_ORGANIZATION_SLUGS = new Set([
   "api",
   "login",
   "r",
+  "q",
   "share",
 ]);
 
@@ -135,6 +136,8 @@ export function organizationPath(organizationReference: string, href: string) {
     pathname.startsWith("/share/") ||
     pathname === "/r" ||
     pathname.startsWith("/r/") ||
+    pathname === "/q" ||
+    pathname.startsWith("/q/") ||
     pathname === "/_next" ||
     pathname.startsWith("/_next/")
   ) {

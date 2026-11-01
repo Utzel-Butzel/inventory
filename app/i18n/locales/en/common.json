@@ -77,6 +77,8 @@
     "unsetOrganizationDefault": "Unset organization start view",
     "namePlaceholder": "e.g. Tools in maintenance",
     "setDefault": "Set as default",
+    "useAsDefault": "Use as default view",
+    "useAsOrganizationDefault": "Use as organization default view",
     "unsetDefault": "Remove default",
     "delete": "Delete view",
     "confirmDelete": "Confirm deletion",

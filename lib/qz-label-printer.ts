@@ -1,4 +1,5 @@
 import { waitForLabelImageCrops } from "@/lib/label-image-crop";
+import { readyLabelQr } from "@/lib/label-qr-ready";
 import { labelFontEmbedCss } from "@/lib/label-fonts";
 import { combinePtouchLabels, encodePtouchRaster, PTOUCH_FEED_DPI, PTOUCH_PIXELS_PER_MM, ptouchPrintableDots, type PtouchTape } from "@/lib/ptouch-raster";
 import { halftonePtouchPhoto } from "@/lib/ptouch-photo";
@@ -46,6 +47,7 @@ export async function findPtouchPrinters(): Promise<string[]> {
 }
 
 export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heightMm: number, tape: PtouchTape, expectedQr?: string) {
+  expectedQr = await readyLabelQr(node, expectedQr);
   await waitForLabelImageCrops(node);
   await Promise.all(Array.from(node.querySelectorAll<HTMLImageElement>("img"), image => image.decode()));
   const fontEmbedCSS = await labelFontEmbedCss(node);
@@ -110,7 +112,7 @@ export async function renderPtouchLabel(node: HTMLElement, widthMm: number, heig
         monochrome[i] = monochrome[i + 1] = monochrome[i + 2] = value;
         monochrome[i + 3] = 255;
       }
-      if (jsQR(monochrome, scanWidth, scanHeight, { inversionAttempts: "attemptBoth" })?.data !== expectedQr) {
+      if (jsQR(monochrome, scanWidth, scanHeight, { inversionAttempts: "attemptBoth" })?.data !== (qr.dataset.labelQrValue ?? expectedQr)) {
         throw new Error("QR code is too small or unreadable at print resolution. Enlarge it or use wider tape.");
       }
     }

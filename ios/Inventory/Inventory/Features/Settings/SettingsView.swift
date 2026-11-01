@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var errorMessage: String?
 
     let onboarding: Bool
+    var initialServer: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -22,7 +23,7 @@ struct SettingsView: View {
                 }
             }
             .onAppear {
-                if server.isEmpty { server = state.serverAddress }
+                if server.isEmpty { server = initialServer ?? state.serverAddress }
             }
             .alert(
                 "Aktion fehlgeschlagen",

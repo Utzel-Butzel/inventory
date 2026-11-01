@@ -13,6 +13,8 @@ host = "${main_domain}"
 path = "/"
 
 [config.env]
+APP_NAME = ""
+APP_LOGO_URL = ""
 POSTGRES_PASSWORD = "${postgres_password}"
 AUTH_SECRET = "${auth_secret}"
 AUTH_URL = "https://${main_domain}"

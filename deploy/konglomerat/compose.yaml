@@ -1,0 +1,121 @@
+services:
+  inventory:
+    image: konglo-openinventory:supabase-sso-20261031
+    pull_policy: never
+    restart: unless-stopped
+    init: true
+    expose:
+      - "3000"
+    environment:
+      DATABASE_URL: postgresql://inventory:${POSTGRES_PASSWORD}@konglo-inventory-db:5432/inventory
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL}
+      APP_NAME: ${APP_NAME:-}
+      APP_LOGO_URL: ${APP_LOGO_URL:-}
+      AUTH_TRUST_HOST: "true"
+      AUTH_PASSWORD_ENABLED: ${AUTH_PASSWORD_ENABLED:-true}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME}
+      SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
+      USERS_CAN_CREATE_ORGANIZATIONS: ${USERS_CAN_CREATE_ORGANIZATIONS:-false}
+      DEMO_ACCESS_ENABLED: ${DEMO_ACCESS_ENABLED:-false}
+      DEMO_ORGANIZATION_SLUG: ${DEMO_ORGANIZATION_SLUG:-demo}
+      DEMO_USER_EMAIL: ${DEMO_USER_EMAIL:-demo@inventory.invalid}
+      AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID:-}
+      AUTH0_CLIENT_SECRET: ${AUTH0_CLIENT_SECRET:-}
+      AUTH0_DOMAIN: ${AUTH0_DOMAIN:-}
+      AUTH0_ISSUER_BASE_URL: ${AUTH0_ISSUER_BASE_URL:-}
+      AUTH_OIDC_PROVIDER_ID: ${AUTH_OIDC_PROVIDER_ID:-oidc}
+      AUTH_OIDC_PROVIDER_NAME: ${AUTH_OIDC_PROVIDER_NAME:-OpenID Connect}
+      AUTH_OIDC_ISSUER: ${AUTH_OIDC_ISSUER:-}
+      AUTH_OIDC_CLIENT_ID: ${AUTH_OIDC_CLIENT_ID:-}
+      AUTH_OIDC_CLIENT_SECRET: ${AUTH_OIDC_CLIENT_SECRET:-}
+      AUTH_OIDC_SCOPES: ${AUTH_OIDC_SCOPES:-openid email profile}
+      AUTH_SUPABASE_URL: ${AUTH_SUPABASE_URL:-}
+      AUTH_SUPABASE_ANON_KEY: ${AUTH_SUPABASE_ANON_KEY:-}
+      AUTH_SUPABASE_CLIENT_ID: ${AUTH_SUPABASE_CLIENT_ID:-}
+      AUTH_SUPABASE_CLIENT_SECRET: ${AUTH_SUPABASE_CLIENT_SECRET:-}
+      AUTH_SUPABASE_PROVIDER_NAME: ${AUTH_SUPABASE_PROVIDER_NAME:-Supabase}
+      MCP_ENABLED: ${MCP_ENABLED:-false}
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+      MCP_REQUEST_RATE_LIMIT_PER_MINUTE: ${MCP_REQUEST_RATE_LIMIT_PER_MINUTE:-240}
+      MCP_READ_RATE_LIMIT_PER_MINUTE: ${MCP_READ_RATE_LIMIT_PER_MINUTE:-120}
+      MCP_WRITE_RATE_LIMIT_PER_MINUTE: ${MCP_WRITE_RATE_LIMIT_PER_MINUTE:-30}
+      MCP_AUDIT_HASH_SECRET: ${MCP_AUDIT_HASH_SECRET:-}
+      INTEGRATION_ENCRYPTION_KEY: ${INTEGRATION_ENCRYPTION_KEY:-}
+      INTEGRATION_ALLOW_PRIVATE_NETWORKS: ${INTEGRATION_ALLOW_PRIVATE_NETWORKS:-false}
+      WP_URL: ${WP_URL:-}
+      WC_KEY: ${WC_KEY:-}
+      WC_SECRET: ${WC_SECRET:-}
+      STORAGE_PROVIDER: local
+      STORAGE_LOCAL_PATH: /app/data/uploads
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      IMAGE_EDIT_PROVIDER: ${IMAGE_EDIT_PROVIDER:-openai}
+      OPENAI_IMAGE_EDIT_MODEL: ${OPENAI_IMAGE_EDIT_MODEL:-gpt-image-2.5-sunburst}
+      GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
+      GOOGLE_IMAGE_EDIT_MODEL: ${GOOGLE_IMAGE_EDIT_MODEL:-gemini-2.5-flash-image}
+      IMAGE_EDIT_MODELS: ${IMAGE_EDIT_MODELS:-}
+      IMAGE_EDIT_DEFAULT_MODEL: ${IMAGE_EDIT_DEFAULT_MODEL:-}
+      AI_IMAGE_RATE_LIMIT_PER_HOUR: ${AI_IMAGE_RATE_LIMIT_PER_HOUR:-60}
+      NODE_OPTIONS: --max-old-space-size=512
+    volumes:
+      - inventory-uploads:/app/data/uploads
+    depends_on:
+      konglo-inventory-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    mem_limit: 768m
+    cpus: 1.5
+    networks:
+      - backend
+      - dokploy-network
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+  konglo-inventory-db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: inventory
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - inventory-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - backend
+    mem_limit: 384m
+    cpus: 0.75
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+volumes:
+  inventory-postgres: null
+  inventory-uploads: null
+networks:
+  backend:
+    internal: true
+  dokploy-network:
+    external: true

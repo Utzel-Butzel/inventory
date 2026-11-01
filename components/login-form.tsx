@@ -15,6 +15,7 @@ export function LoginForm({
   demoHighlighted = false,
   callbackUrl = "/inventory",
   demoCallbackUrl = "/demo/inventory",
+  initialError = null,
 }: {
   passwordEnabled?: boolean;
   externalProviders?: ExternalAuthProviderOption[];
@@ -22,13 +23,33 @@ export function LoginForm({
   demoHighlighted?: boolean;
   callbackUrl?: string;
   demoCallbackUrl?: string;
+  initialError?: string | null;
 }) {
   const { t } = useT("auth");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [pendingSignIn, setPendingSignIn] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const isSubmitting = pendingSignIn !== null;
   const hasAccountProviders = passwordEnabled || externalProviders.length > 0;
+  const rememberMeField = (
+    <label className="flex cursor-pointer items-start gap-3 text-[14px] text-foreground">
+      <input
+        type="checkbox"
+        name="rememberMe"
+        checked={rememberMe}
+        onChange={(event) => setRememberMe(event.target.checked)}
+        disabled={isSubmitting}
+        className="mt-0.5 size-4 shrink-0 rounded border-border accent-brand-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      />
+      <span>
+        <span className="block font-medium">{t("form.rememberMe.label")}</span>
+        <span className="mt-0.5 block text-[12px] leading-5 text-muted">
+          {t("form.rememberMe.description")}
+        </span>
+      </span>
+    </label>
+  );
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,6 +64,7 @@ export function LoginForm({
       const result = await signIn("credentials", {
         email,
         password,
+        rememberMe: String(rememberMe),
         redirect: false,
         redirectTo: callbackUrl,
       });
@@ -86,7 +108,10 @@ export function LoginForm({
     setError(null);
     setPendingSignIn(providerId);
     try {
-      await signIn(providerId, { redirectTo: callbackUrl });
+      await signIn(providerId, {
+        redirectTo: callbackUrl,
+        rememberMe: String(rememberMe),
+      });
     } catch {
       setError("form.errors.external");
       setPendingSignIn(null);
@@ -208,6 +233,8 @@ export function LoginForm({
             </div>
           </div>
 
+          {rememberMeField}
+
           <Button
             type="submit"
             size="lg"
@@ -236,6 +263,7 @@ export function LoginForm({
 
       {externalProviders.length > 0 ? (
         <div className={passwordEnabled ? "mt-5" : undefined}>
+          {!passwordEnabled ? <div className="mb-5">{rememberMeField}</div> : null}
           {passwordEnabled ? (
             <div className="flex items-center gap-3 text-[12px] uppercase tracking-[0.12em] text-muted before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
               {t("form.separator")}

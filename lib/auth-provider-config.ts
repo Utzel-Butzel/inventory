@@ -17,7 +17,15 @@ export type AuthProviderConfiguration = {
   passwordEnabled: boolean;
   auth0: ExternalAuthProviderConfig | null;
   oidc: ExternalAuthProviderConfig | null;
+  supabase: SupabaseAuthConfiguration | null;
   externalProviders: ExternalAuthProviderOption[];
+};
+
+export type SupabaseAuthConfiguration = ExternalAuthProviderOption & {
+  origin: string;
+  apiKey: string;
+  clientId: string;
+  clientSecret: string;
 };
 
 const providerIdPattern = /^[a-z][a-z0-9-]{0,31}$/;
@@ -115,11 +123,29 @@ export function getAuthProviderConfiguration(
         }
       : null;
 
+  const supabaseValues = [
+    value(environment, "AUTH_SUPABASE_URL"),
+    value(environment, "AUTH_SUPABASE_ANON_KEY"),
+    value(environment, "AUTH_SUPABASE_CLIENT_ID"),
+    value(environment, "AUTH_SUPABASE_CLIENT_SECRET"),
+  ];
+  const supabase = hasCompleteValues(...supabaseValues)
+    ? {
+        id: "supabase",
+        name: value(environment, "AUTH_SUPABASE_PROVIDER_NAME") || "Supabase",
+        origin: normalizeIssuer(supabaseValues[0]),
+        apiKey: supabaseValues[1],
+        clientId: supabaseValues[2],
+        clientSecret: supabaseValues[3],
+      }
+    : null;
+
   return {
     passwordEnabled,
     auth0,
     oidc,
-    externalProviders: [auth0, oidc].flatMap((provider) =>
+    supabase,
+    externalProviders: [auth0, oidc, supabase].flatMap((provider) =>
       provider ? [{ id: provider.id, name: provider.name }] : [],
     ),
   };
@@ -212,12 +238,33 @@ export function validateAuthProviderEnvironment(
   validateIssuer("AUTH_OIDC_ISSUER", oidcValues[0], errors);
 
   const configuration = getAuthProviderConfiguration(environment);
+  const supabaseKeys = ["AUTH_SUPABASE_URL", "AUTH_SUPABASE_ANON_KEY", "AUTH_SUPABASE_CLIENT_ID", "AUTH_SUPABASE_CLIENT_SECRET"];
+  if (supabaseKeys.some((key) => value(environment, key)) && !configuration.supabase) {
+    errors.push("Supabase configuration is incomplete; set AUTH_SUPABASE_URL, AUTH_SUPABASE_ANON_KEY, AUTH_SUPABASE_CLIENT_ID, and AUTH_SUPABASE_CLIENT_SECRET.");
+  }
+  const supabaseUrl = value(environment, "AUTH_SUPABASE_URL");
+  validateIssuer("AUTH_SUPABASE_URL", supabaseUrl, errors);
+  if (supabaseUrl) {
+    try {
+      const url = new URL(supabaseUrl);
+      if (!["https:", "http:"].includes(url.protocol) || url.pathname !== "/" || url.username || url.password) {
+        errors.push("AUTH_SUPABASE_URL must be an origin without a path or credentials.");
+      }
+    } catch { /* Reported by validateIssuer. */ }
+  }
+  if (value(environment, "AUTH_SUPABASE_PROVIDER_NAME").length > 64) {
+    errors.push("AUTH_SUPABASE_PROVIDER_NAME must contain at most 64 characters.");
+  }
+  if (configuration.supabase && configuration.oidc?.id === "supabase") {
+    errors.push("The generic OIDC provider cannot use the ID supabase while Supabase OAuth is configured.");
+  }
   const demoEnabled =
     value(environment, "DEMO_ACCESS_ENABLED").toLowerCase() === "true";
   if (
     !configuration.passwordEnabled &&
     !configuration.auth0 &&
     !configuration.oidc &&
+    !configuration.supabase &&
     !demoEnabled
   ) {
     errors.push(

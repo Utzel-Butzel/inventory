@@ -21,14 +21,15 @@ export async function generateMetadata(): Promise<Metadata> {
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ unit?: string | string[]; task?: string | string[]; unitView?: string | string[]; tab?: string | string[]; variant?: string | string[] }>;
+  searchParams: Promise<{ unit?: string | string[]; task?: string | string[]; unitView?: string | string[]; tab?: string | string[]; variant?: string | string[]; src?: string | string[] }>;
 };
 
 export default async function ResourceStockPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { unit, task, unitView, tab, variant } = await searchParams;
+  const { unit, task, unitView, tab, variant, src } = await searchParams;
   const initialTask = parseStockBookingTask(task);
   const query = new URLSearchParams();
+  if (src === "qr") query.set("src", "qr");
   if (typeof variant === "string" && isResourceId(variant)) query.set("variant", variant);
   if (typeof task === "string") query.set("task", initialTask);
   const selectedUnitId = typeof unit === "string" && isResourceId(unit) ? unit.toLowerCase() : undefined;
