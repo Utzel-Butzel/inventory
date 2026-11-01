@@ -1,4 +1,4 @@
-export const DEMO_SEED_VERSION = 6;
+export const DEMO_SEED_VERSION = 7;
 
 export const DEMO_ORGANIZATION = Object.freeze({
   id: "d3e00000-0000-4000-8000-000000000001",
@@ -712,6 +712,55 @@ export const DEMO_RELATIONS = Object.freeze([
   relationTypeKey,
 })));
 
+export const DEMO_SCAN_WORKFLOWS = Object.freeze([
+  {
+    id: "d3e00000-0000-4000-8000-000000002001",
+    name: "Materialentnahme · Projekt Lastenrad",
+    description: "Beispiel: 12 Kabelbinder für den Kabelbaum eines Lastenrads entnehmen. Unter „Code manuell eingeben“ VERB-KB-200-S eintragen, die Entnahmemenge 12 und den Verwendungszweck wählen. „Alle Aktionen prüfen“ zeigt die geplante Änderung von 34 auf 22 Stück. Die Demo bleibt eine Vorschau; es wird nichts gebucht.",
+    enabled: true,
+    resourceId: "d3e00000-0000-4000-8000-000000000205",
+    resourceIds: ["d3e00000-0000-4000-8000-000000000205"],
+    targetSelectionMode: "all",
+    allowVariantSelection: false,
+    codeTypes: ["qr_code", "code_128"],
+    extraction: { mode: "full" },
+    identifierPropertyKey: "artikelnummer",
+    identifierStorage: "execution",
+    operation: { type: "stock-adjustment", delta: -12 },
+    createMissingUnit: false,
+    unitStatus: null,
+    extractedFields: [],
+    fixedProperties: [
+      { key: "projekt", label: "Projekt", value: "Projekt Lastenrad", storage: "execution" },
+    ],
+    inputFields: [
+      { key: "menge", label: "Entnahmemenge (Stück)", type: "number", required: true, storage: "execution", placeholder: "Zum Beispiel 12", options: [], visibleWhen: null },
+      { key: "verwendung", label: "Verwendungszweck", type: "radio", required: true, storage: "execution", placeholder: "", options: [
+        { value: "kabelbaum", label: "Kabelbaum befestigen" },
+        { value: "beleuchtung", label: "Beleuchtung montieren" },
+        { value: "restarbeiten", label: "Restarbeiten" },
+      ], visibleWhen: null },
+      { key: "notiz", label: "Notiz (optional)", type: "textarea", required: false, storage: "execution", placeholder: "Zum Beispiel: Lastenrad Nr. 3", options: [], visibleWhen: null },
+    ],
+    actions: [
+      { id: "artikel-pruefen", label: "Artikelcode prüfen", type: "assert", enabled: true, when: null,
+        check: { mode: "all", rules: [{ left: { source: "scan", field: "identifier" }, operator: "equals", right: { source: "literal", value: "VERB-KB-200-S" } }] },
+        message: "Für dieses Beispiel bitte den Artikelcode VERB-KB-200-S verwenden." },
+      { id: "menge-pruefen", label: "Positive Entnahmemenge prüfen", type: "assert", enabled: true, when: null,
+        check: { mode: "all", rules: [{ left: { source: "input", key: "menge" }, operator: "gte", right: { source: "literal", value: 1 } }] },
+        message: "Bitte mindestens einen Kabelbinder entnehmen." },
+      { id: "material-entnehmen", label: "Kabelbinder für Projekt Lastenrad entnehmen", type: "stock-adjustment", enabled: true, when: null,
+        target: { source: "selected" }, delta: { source: "input", key: "menge" }, factor: -1 },
+    ],
+    oncePerCode: false,
+    quantityInputKey: "menge",
+    publicTriggerEnabled: false,
+    publicTriggerCode: null,
+    triggerWebhook: false,
+    webhookEventName: "inventory.action.executed",
+  },
+]);
+
 export const DEMO_LABEL_SETUP = Object.freeze({
   id: "d3e00000-0000-4000-8000-000000000901",
   name: "Werkstatt 62 × 35 mm",
@@ -988,6 +1037,7 @@ export function validateDemoSeedManifest() {
     ...DEMO_PURCHASE_ORDERS.map(({ id }) => id),
     ...DEMO_PURCHASE_ORDER_LINES.map(({ id }) => id),
     ...DEMO_RELATIONS.map(({ id }) => id),
+    ...DEMO_SCAN_WORKFLOWS.map(({ id }) => id),
     DEMO_LABEL_SETUP.id,
     ...DEMO_MEDIA.map(({ id }) => id),
   ];
@@ -1014,6 +1064,14 @@ export function validateDemoSeedManifest() {
 
   const resourceIds = new Set(DEMO_RESOURCES.map(({ id }) => id));
   const itemResources = DEMO_RESOURCES.filter(({ kind }) => kind === "item");
+  for (const workflow of DEMO_SCAN_WORKFLOWS) {
+    if (!workflow.resourceIds.includes(workflow.resourceId) || workflow.resourceIds.some((id) => !itemResources.some((item) => item.id === id))) {
+      errors.push(`Unknown scan workflow target: ${workflow.id}`);
+    }
+    if (workflow.publicTriggerEnabled || workflow.triggerWebhook || workflow.actions.some(({ type }) => type === "webhook")) {
+      errors.push(`Demo scan workflows must remain private and integration-free: ${workflow.id}`);
+    }
+  }
   if (new Set(DEMO_FAVORITE_RESOURCE_IDS).size !== 2 || DEMO_FAVORITE_RESOURCE_IDS.length !== 2) {
     errors.push("The demo must have exactly two distinct favorites.");
   }

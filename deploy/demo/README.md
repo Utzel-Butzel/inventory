@@ -16,9 +16,11 @@ they cannot reach Internet services. Only the Nginx gateway joins the existing
 the gateway on port 8080 and redirects HTTP to HTTPS.
 
 The gateway rejects every method except GET/HEAD, with exact POST exceptions
-for the demo login and logout. It also rejects Next Server Actions and the AI,
+for the demo login, logout and authenticated action-chain preview (which rolls
+back its transaction without persisting stock changes). Execution remains
+blocked. It also rejects Next Server Actions and the AI,
 cron, MCP and webhook namespaces, including GET requests. Bodies are limited
-to 8 KiB for authentication. The application's tenant permission checks remain
+to 8 KiB. The application's tenant permission checks remain
 in force behind the gateway. A CSP blocks browser connections to external APIs
 and tile services; the map may therefore lack external background tiles.
 
@@ -41,7 +43,10 @@ Validation after deployment:
 - Open `/demo/stock/forecast`: cable ties and screws have 90-day histories with
   receipts and withdrawals, measurable demand and useful replenishment forecasts.
   Tool histories show returns and maintenance without artificial consumption.
-- Check unauthenticated and authenticated POST/PATCH/DELETE requests return 403.
+- Open `/demo/stock/scan`, enter `VERB-KB-200-S`, quantity 12 and a purpose:
+  preview shows 34 → 22 without changing the ledger. Confirmation is disabled.
+- Check unauthenticated and authenticated mutation requests return 403;
+  preview requires authentication and does not persist changes.
 - Check GET and POST under `/api/v1/ai/` return 403.
 - Verify the application container has only the internal network, no provider
   credentials, disabled workers, and cannot connect to external IPs.

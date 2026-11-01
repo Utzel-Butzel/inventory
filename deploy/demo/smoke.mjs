@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { DEMO_FAVORITE_RESOURCE_IDS, DEMO_LIST_VIEWS, DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES, DEMO_STOCK_MOVEMENTS, DEMO_STOCK_SETTINGS } from '../../scripts/demo-seed-manifest.mjs';
+import { DEMO_FAVORITE_RESOURCE_IDS, DEMO_LIST_VIEWS, DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES, DEMO_SCAN_WORKFLOWS, DEMO_STOCK_MOVEMENTS, DEMO_STOCK_SETTINGS } from '../../scripts/demo-seed-manifest.mjs';
 
 const base = new URL(process.argv[2] || 'https://demo.openinventory.polyxo.de');
 assert.equal(base.hostname, 'demo.openinventory.polyxo.de', 'Run only against the isolated demo.');
@@ -35,6 +35,8 @@ async function checkDenied(label) {
     ['GET', '/api/v1/ai/count/jobs'],
     ['POST', '/api/v1/organizations'],
     ['POST', '/api/v1/stock/action-chains/execute'],
+    ['POST', '/api/v1/stock/scans/execute'],
+    ['POST', '/api/v1/stock/scan-workflows'],
     ['GET', '/api/cron/notifications'],
     ['POST', '/demo/inventory'],
   ]) {
@@ -42,13 +44,18 @@ async function checkDenied(label) {
     assert.equal(response.status, 403, `${label}: ${method} ${path}`);
     await response.arrayBuffer();
   }
-  console.log(`${label}: 11 write/upload/AI/worker requests blocked`);
+  console.log(`${label}: 13 write/upload/AI/worker requests blocked`);
 }
 
 const landing = await request('/');
 assert.equal(landing.status, 302);
 assert.equal(new URL(landing.headers.get('location'), base).href, `${base.origin}/login?demo=1`);
 await checkDenied('Unauthenticated');
+const anonymousPreview = await request('/api/v1/stock/action-chains/preview', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+});
+assert.ok([401, 403].includes(anonymousPreview.status), 'Scan preview requires authentication');
+await anonymousPreview.arrayBuffer();
 const csrf = await request('/api/auth/csrf');
 assert.equal(csrf.status, 200);
 const { csrfToken } = await csrf.json();
@@ -161,6 +168,52 @@ const cables = forecast.items.find(({ resourceId }) => resourceId.endsWith('205'
 assert.ok(cables.recentConsumed / 30 > cables.consumed / 90 * 1.5, 'Recent cable-tie demand increased');
 assert.equal(cables.receipts.reduce((sum, receipt) => sum + receipt.quantity, 0), 100);
 console.log(`${bookingCount} historical item bookings, 90-day stock curves and demand classification verified`);
+const [expectedWorkflow] = DEMO_SCAN_WORKFLOWS;
+const workflowsResponse = await request('/api/v1/stock/scan-workflows');
+assert.equal(workflowsResponse.status, 200);
+const { workflows } = await workflowsResponse.json();
+assert.equal(workflows.length, DEMO_SCAN_WORKFLOWS.length);
+const workflow = workflows.find(({ id }) => id === expectedWorkflow.id);
+for (const [key, value] of Object.entries(expectedWorkflow)) {
+  assert.deepEqual(workflow[key], value, `Demo scan workflow: ${key}`);
+}
+const runnerResponse = await request(`/api/v1/stock/scan-workflows/${workflow.id}/runner`);
+assert.equal(runnerResponse.status, 200);
+const { workflow: runner } = await runnerResponse.json();
+assert.equal(runner.targetGroups[0].options[0].quantity, 34);
+const movementPath = `/api/v1/resources/${workflow.resourceId}/stock/movements?limit=100`;
+const beforePreview = await (await request(movementPath)).json();
+const previewBody = {
+  workflowId: workflow.id, code: 'VERB-KB-200-S', codeType: null,
+  selectedResourceIds: workflow.resourceIds, inputs: { menge: 12, verwendung: 'kabelbaum', notiz: 'Lastenrad Nr. 3' },
+};
+const preview = (body) => request('/api/v1/stock/action-chains/preview', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+});
+for (const quantity of [12, 5, 12]) {
+  const response = await preview({ ...previewBody, inputs: { ...previewBody.inputs, menge: quantity } });
+  assert.equal(response.status, 200, await response.clone().text());
+  const report = await response.json();
+  assert.equal(report.steps.length, 3);
+  assert.equal(report.steps.at(-1).quantityBefore, 34);
+  assert.equal(report.steps.at(-1).quantityAfter, 34 - quantity);
+  assert.ok(report.steps.every(({ skipped }) => !skipped));
+}
+for (const invalid of [
+  { ...previewBody, code: 'WRONG-ARTICLE' },
+  { ...previewBody, inputs: { ...previewBody.inputs, menge: -2 } },
+  { ...previewBody, inputs: { ...previewBody.inputs, menge: 1.5 } },
+  { ...previewBody, inputs: { menge: 12 } },
+  { ...previewBody, selectedResourceIds: [nonexistent] },
+]) {
+  const response = await preview(invalid);
+  assert.equal(response.status, 422, 'Invalid demo scan must be rejected');
+  await response.arrayBuffer();
+}
+assert.deepEqual(await (await request(movementPath)).json(), beforePreview, 'Preview must leave the ledger unchanged');
+const afterRunner = await (await request(`/api/v1/stock/scan-workflows/${workflow.id}/runner`)).json();
+assert.deepEqual(afterRunner, { workflow: runner }, 'Preview must leave stock and timestamps unchanged');
+console.log('Scan workflow: variable quantities, validation, repeatable preview and unchanged stock ledger verified');
 const roomResponse = await request('/api/v1/room-scans/d3e00000-0000-4000-8000-000000000901');
 assert.equal(roomResponse.status, 200, 'Demo office scan must be available');
 const { scene: room } = await roomResponse.json();

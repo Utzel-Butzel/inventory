@@ -19,6 +19,9 @@ from an older demo cannot remain public:
   plus 68 dated item bookings over 95 days, serialized units,
   one active checkout, one maintenance case, one low-stock case, and one order
 - one 62 × 35 mm label layout
+- one interactive material-withdrawal scan example for Projekt Lastenrad:
+  enter `VERB-KB-200-S`, choose a purpose and a quantity (e.g. 12), then preview
+  cable ties going from 34 to 22 pieces; confirmation remains disabled
 - a real office RoomPlan scan under Werkbank E1, with the demo soldering station
   and multimeter positioned on its tables (`/demo/spaces`)
 - fixed UUIDs and a transaction-scoped PostgreSQL advisory lock

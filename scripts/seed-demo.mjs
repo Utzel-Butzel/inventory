@@ -28,6 +28,7 @@ import {
   DEMO_RELATION_TYPES,
   DEMO_RESOURCES,
   DEMO_ROLES,
+  DEMO_SCAN_WORKFLOWS,
   DEMO_SEED_VERSION,
   DEMO_STOCK_MOVEMENTS,
   DEMO_STOCK_SETTINGS,
@@ -240,6 +241,9 @@ async function assertTenantRowIdsAreSafe(transaction) {
       UNION ALL
       SELECT 'label_setups', id, organization_id FROM label_setups
       WHERE id = ${DEMO_LABEL_SETUP.id}
+      UNION ALL
+      SELECT 'stock_scan_workflows', id, organization_id FROM stock_scan_workflows
+      WHERE id = ANY(${DEMO_SCAN_WORKFLOWS.map(({ id }) => id)})
       UNION ALL
       SELECT 'media', id, organization_id FROM media
       WHERE id = ANY(${DEMO_MEDIA.map(({ id }) => id)})
@@ -673,6 +677,31 @@ async function seedDemo(transaction, configuration, preparedMedia) {
         source_feature_id = null,
         target_feature_id = null,
         created_by = excluded.created_by
+    `;
+  }
+
+  for (const workflow of DEMO_SCAN_WORKFLOWS) {
+    await transaction`
+      INSERT INTO stock_scan_workflows (
+        organization_id, id, name, description, enabled, resource_id,
+        target_resource_ids, target_selection_mode, allow_variant_selection,
+        code_types, extraction, identifier_property_key, identifier_storage,
+        operation, create_missing_unit, unit_status, extracted_fields,
+        fixed_properties, input_fields, actions, once_per_code, quantity_input_key,
+        public_trigger_enabled, public_trigger_code, trigger_webhook,
+        webhook_event_name, revision, created_by, updated_by
+      ) VALUES (
+        ${DEMO_ORGANIZATION.id}, ${workflow.id}, ${workflow.name}, ${workflow.description},
+        ${workflow.enabled}, ${workflow.resourceId}, ${workflow.resourceIds},
+        ${workflow.targetSelectionMode}, ${workflow.allowVariantSelection}, ${workflow.codeTypes},
+        ${transaction.json(workflow.extraction)}, ${workflow.identifierPropertyKey},
+        ${workflow.identifierStorage}, ${transaction.json(workflow.operation)},
+        ${workflow.createMissingUnit}, ${workflow.unitStatus}, ${transaction.json(workflow.extractedFields)},
+        ${transaction.json(workflow.fixedProperties)}, ${transaction.json(workflow.inputFields)},
+        ${transaction.json(workflow.actions)}, ${workflow.oncePerCode}, ${workflow.quantityInputKey},
+        ${workflow.publicTriggerEnabled}, ${workflow.publicTriggerCode}, ${workflow.triggerWebhook},
+        ${workflow.webhookEventName}, 1, ${DEMO_ACTOR}, ${DEMO_ACTOR}
+      )
     `;
   }
 
