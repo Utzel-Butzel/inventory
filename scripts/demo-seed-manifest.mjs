@@ -1,4 +1,4 @@
-export const DEMO_SEED_VERSION = 7;
+export const DEMO_SEED_VERSION = 8;
 
 export const DEMO_ORGANIZATION = Object.freeze({
   id: "d3e00000-0000-4000-8000-000000000001",
@@ -759,7 +759,7 @@ export const DEMO_SCAN_WORKFLOWS = Object.freeze([
   },
 ]);
 
-export const DEMO_LABEL_SETUP = Object.freeze({
+export const DEMO_LABEL_SETUPS = Object.freeze([{
   id: "d3e00000-0000-4000-8000-000000000901",
   name: "Werkstatt 62 × 35 mm",
   widthMm: 62,
@@ -773,7 +773,67 @@ export const DEMO_LABEL_SETUP = Object.freeze({
     { type: "url", x: 46, y: 66, width: 51, height: 21, visible: true, fontSizeMm: 1.55, align: "left" },
     { type: "location", x: 46, y: 90, width: 51, height: 7, visible: true, fontSizeMm: 1.55, align: "left" },
   ],
-});
+}, {
+  id: "d3e00000-0000-4000-8000-000000003001",
+  name: "Werkzeug kompakt",
+  widthMm: 50,
+  heightMm: 25,
+  elements: [
+    { type: "qr", x: 4, y: 14, width: 36, height: 72, visible: true, quietZoneModules: 4 },
+    { type: "name", x: 44, y: 8, width: 52, height: 40, visible: true, fontSizeMm: 3, minFontSizeMm: 2.3, fontWeight: 700, textOverflow: "shrink" },
+    { type: "identifier", x: 44, y: 55, width: 52, height: 13, visible: true, fontSizeMm: 2, textOverflow: "shrink", content: [{ text: "[Identifier]" }] },
+    { type: "location", x: 44, y: 75, width: 52, height: 14, visible: true, fontSizeMm: 2, textOverflow: "shrink" },
+  ],
+}, {
+  id: "d3e00000-0000-4000-8000-000000003002",
+  name: "Kleinteile mit Bild",
+  widthMm: 70,
+  heightMm: 40,
+  elements: [
+    { type: "name", x: 4, y: 5, width: 92, height: 19, visible: true, fontSizeMm: 3.4, minFontSizeMm: 2.7, fontWeight: 700, textOverflow: "shrink" },
+    { type: "image", x: 4, y: 28, width: 43, height: 50, visible: true, fit: "cover" },
+    { type: "qr", x: 62, y: 28, width: 30, height: 52.5, visible: true, quietZoneModules: 4 },
+    { type: "identifier", x: 4, y: 84, width: 53, height: 10, visible: true, fontSizeMm: 2.2, textOverflow: "shrink", content: [{ text: "[Identifier]" }] },
+    { type: "location", x: 60, y: 84, width: 36, height: 10, visible: true, fontSizeMm: 2.2, textOverflow: "shrink" },
+  ],
+}, {
+  id: "d3e00000-0000-4000-8000-000000003003",
+  name: "Regal & Fach",
+  widthMm: 100,
+  heightMm: 50,
+  elements: [
+    { id: "d3e00000-0000-4000-8000-000000003101", type: "text", x: 4, y: 7, width: 60, height: 10, visible: true, fontSizeMm: 3, fontWeight: 700, letterSpacingEm: 0.1, content: [{ text: "LAGERORT" }] },
+    { type: "name", x: 4, y: 25, width: 60, height: 35, visible: true, fontSizeMm: 8, minFontSizeMm: 5, fontWeight: 800, textOverflow: "shrink" },
+    { type: "identifier", x: 4, y: 68, width: 60, height: 12, visible: true, fontSizeMm: 3, textOverflow: "shrink", content: [{ text: "[Identifier]" }] },
+    { type: "location", x: 4, y: 84, width: 60, height: 9, visible: true, fontSizeMm: 2.4, textOverflow: "shrink" },
+    { type: "qr", x: 70, y: 22, width: 26, height: 52, visible: true, quietZoneModules: 4 },
+  ],
+}, {
+  id: "d3e00000-0000-4000-8000-000000003004",
+  name: "Einzelgerät · Seriennummer",
+  widthMm: 62,
+  heightMm: 35,
+  elements: [
+    { type: "qr", x: 4, y: 10, width: 35, height: 62, visible: true, quietZoneModules: 4 },
+    { id: "d3e00000-0000-4000-8000-000000003102", type: "text", x: 43, y: 8, width: 53, height: 10, visible: true, fontSizeMm: 1.8, fontWeight: 700, content: [{ text: "EINZELGERÄT" }] },
+    { type: "name", x: 43, y: 24, width: 53, height: 26, visible: true, fontSizeMm: 2.7, minFontSizeMm: 2.2, fontWeight: 700, textOverflow: "shrink" },
+    { type: "identifier", x: 43, y: 54, width: 53, height: 12, visible: true, fontSizeMm: 2.1, textOverflow: "shrink", content: [{ text: "[Identifier]" }] },
+    { type: "location", x: 43, y: 69, width: 53, height: 8, visible: true, fontSizeMm: 1.7, textOverflow: "shrink" },
+    { type: "barcode", x: 4, y: 81, width: 92, height: 14, visible: true },
+  ],
+}, {
+  id: "d3e00000-0000-4000-8000-000000003005",
+  name: "Wartung · Nicht verwenden",
+  widthMm: 62,
+  heightMm: 35,
+  elements: [
+    { id: "d3e00000-0000-4000-8000-000000003103", type: "text", x: 4, y: 5, width: 92, height: 19, visible: true, fontSizeMm: 4, fontWeight: 900, content: [{ text: "IN WARTUNG" }] },
+    { type: "qr", x: 4, y: 32, width: 30, height: 53.142857, visible: true, quietZoneModules: 4 },
+    { type: "name", x: 40, y: 32, width: 56, height: 23, visible: true, fontSizeMm: 3, minFontSizeMm: 2.4, fontWeight: 700, textOverflow: "shrink" },
+    { type: "identifier", x: 40, y: 58, width: 56, height: 10, visible: true, fontSizeMm: 2.1, textOverflow: "shrink", content: [{ text: "[Identifier]" }] },
+    { id: "d3e00000-0000-4000-8000-000000003104", type: "text", x: 40, y: 73, width: 56, height: 20, visible: true, fontSizeMm: 2, fontWeight: 600, content: [{ text: "Erst nach Freigabe\nwieder verwenden." }] },
+  ],
+}]);
 
 export const DEMO_MEDIA = Object.freeze([
   {
@@ -1036,7 +1096,7 @@ export function validateDemoSeedManifest() {
     ...DEMO_PURCHASE_ORDER_LINES.map(({ id }) => id),
     ...DEMO_RELATIONS.map(({ id }) => id),
     ...DEMO_SCAN_WORKFLOWS.map(({ id }) => id),
-    DEMO_LABEL_SETUP.id,
+    ...DEMO_LABEL_SETUPS.map(({ id }) => id),
     ...DEMO_MEDIA.map(({ id }) => id),
   ];
   for (const id of stableIds) {

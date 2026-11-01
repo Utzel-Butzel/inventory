@@ -18,7 +18,10 @@ from an older demo cannot remain public:
   pictures (cover, additional perspective, detail) and descriptive content,
   plus 68 dated item bookings over 95 days, serialized units,
   one active checkout, one maintenance case, one low-stock case, and one order
-- one 62 × 35 mm label layout
+- six label layouts: the original workshop label, compact tools (50 × 25 mm),
+  parts with a photo (70 × 40 mm), shelves/bins (100 × 50 mm), serialized devices
+  and a maintenance notice (both 62 × 35 mm); QR codes open the selected resource
+  or unit. Label preferences and prepared labels stay in memory in read-only mode.
 - one interactive goods-receipt scan example for cable ties:
   enter `VERB-KB-200-S`, choose a purpose and a quantity (e.g. 100), then preview
   cable ties going from 34 to 134 pieces; confirmation remains disabled

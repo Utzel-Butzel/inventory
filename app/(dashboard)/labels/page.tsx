@@ -28,6 +28,7 @@ export default async function LabelsPage({
       key={`${initialResourceId ?? "all"}:${initialUnitId ?? ""}`}
       initialResourceId={initialResourceId}
       initialUnitId={initialUnitId}
+      workspaceReadOnly={identity?.organization.isReadOnly ?? true}
       canWrite={Boolean(identity?.permissions.includes("labels.manage"))}
       canManagePrinters={Boolean(identity?.permissions.includes("tokens.manage"))}
     />

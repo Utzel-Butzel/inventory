@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   DEMO_ASSIGNMENTS,
-  DEMO_LABEL_SETUP,
+  DEMO_LABEL_SETUPS,
   DEMO_MEDIA,
   DEMO_ORGANIZATION,
   DEMO_PURCHASE_ORDER_LINES,
@@ -106,8 +106,8 @@ test("workshop scenario covers stock, custody, maintenance, ordering, and labels
     ).orderedQuantity,
     100,
   );
-  assert.equal(DEMO_LABEL_SETUP.widthMm, 62);
-  assert.equal(DEMO_LABEL_SETUP.heightMm, 35);
+  assert.equal(DEMO_LABEL_SETUPS[0].widthMm, 62);
+  assert.equal(DEMO_LABEL_SETUPS[0].heightMm, 35);
 });
 
 test("rollback policy handles partial and colliding fixed identities fail-closed", () => {

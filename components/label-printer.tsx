@@ -78,7 +78,7 @@ const DEFAULT_ELEMENTS: LabelElement[] = [
   { type: "location", x: 46, y: 90, width: 51, height: 7, visible: false, fontSizeMm: 1.55, align: "left" },
 ];
 
-export function LabelPrinter({ canWrite = false, canManagePrinters = false, initialResourceId, initialUnitId }: { canWrite?: boolean; canManagePrinters?: boolean; initialResourceId?: string; initialUnitId?: string }) {
+export function LabelPrinter({ canWrite = false, canManagePrinters = false, workspaceReadOnly = false, initialResourceId, initialUnitId }: { canWrite?: boolean; canManagePrinters?: boolean; workspaceReadOnly?: boolean; initialResourceId?: string; initialUnitId?: string }) {
   const { t } = useT("labels");
   const [origin, setOrigin] = useState("");
   const [query, setQuery] = useState("");
@@ -158,7 +158,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   }, []);
 
   useEffect(() => {
-    if (!workspaceReady || setupsLoading) return;
+    if (!workspaceReady || setupsLoading || workspaceReadOnly) return;
     const preferences = { setupId, printTarget, tape, printer, sharedPrinter };
     const key = JSON.stringify(preferences) + preferenceRetry;
     if (key === preferenceKey.current) return;
@@ -172,10 +172,14 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       } catch (error) { if (preferenceKey.current === key) setPreferenceError(String(error)); }
       finally { if (preferenceKey.current === key) setSavingPreferences(false); }
     });
-  }, [workspaceReady, setupsLoading, setupId, printTarget, tape, printer, sharedPrinter, preferenceRetry]);
+  }, [workspaceReady, setupsLoading, workspaceReadOnly, setupId, printTarget, tape, printer, sharedPrinter, preferenceRetry]);
 
   const saveQueue = async (labels: PreparedLabel[]) => {
     if (!workspaceReady || queueLock.current) throw new Error(t("workspace.busy"));
+    if (workspaceReadOnly) {
+      setPreparedLabels(labels);
+      return;
+    }
     queueLock.current = true;
     setSavingQueue(true);
     setWorkspaceError(null);
@@ -558,10 +562,12 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
     setPrintSuccess(false);
     setQueueNotice(null);
     try {
-      const latest = await fetchJson<LabelWorkspace>("/api/v1/label-workspace", { cache: "no-store" });
-      if (latest.revision !== queueRevision.current) {
-        setWorkspaceError(t("workspace.changed"));
-        return;
+      if (!workspaceReadOnly) {
+        const latest = await fetchJson<LabelWorkspace>("/api/v1/label-workspace", { cache: "no-store" });
+        if (latest.revision !== queueRevision.current) {
+          setWorkspaceError(t("workspace.changed"));
+          return;
+        }
       }
       const { sendPtouchLabels } = await import("@/lib/qz-label-printer");
       const printData = repeatLabelCopies(preparedLabels.map(label => label.data), effectiveSeriesCopies);
@@ -755,7 +761,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
             {t("header.description")}
           </p>
-          <p role="status" className="mt-1 text-xs text-muted">{t(!workspaceReady ? "workspace.loading" : savingQueue || savingPreferences ? "workspace.saving" : preferenceError ? "workspace.unsaved" : "workspace.saved")}</p>
+          <p role="status" className="mt-1 text-xs text-muted">{t(!workspaceReady ? "workspace.loading" : workspaceReadOnly ? "workspace.sessionOnly" : savingQueue || savingPreferences ? "workspace.saving" : preferenceError ? "workspace.unsaved" : "workspace.saved")}</p>
         </div>
         {(isRasterPrint || preparedLabels.length > 0) ? <a href="#prepared-labels" className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium">{t("queue.title")} · {preparedLabels.length}</a> : null}
       </div>

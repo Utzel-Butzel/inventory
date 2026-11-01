@@ -415,6 +415,7 @@
     "disable": "Disable"
   },
   "workspace": {
+    "sessionOnly": "Read-only view: your label selection lasts until you reload the page.",
     "busy": "Wait until the print list has loaded or saved.",
     "loading": "Loading print list…",
     "saving": "Saving…",

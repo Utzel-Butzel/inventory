@@ -415,6 +415,7 @@
     "disable": "Deaktivieren"
   },
   "workspace": {
+    "sessionOnly": "Schreibgeschützte Ansicht: Deine Etikettenauswahl gilt nur bis zum Neuladen der Seite.",
     "busy": "Bitte warten, bis die Druckliste geladen oder gespeichert wurde.",
     "loading": "Druckliste wird geladen…",
     "saving": "Wird gespeichert…",

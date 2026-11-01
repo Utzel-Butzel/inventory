@@ -17,7 +17,7 @@ import {
   DEMO_ASSIGNMENTS,
   DEMO_FAVORITE_RESOURCE_IDS,
   DEMO_INVENTORY_TYPES,
-  DEMO_LABEL_SETUP,
+  DEMO_LABEL_SETUPS,
   DEMO_LIST_VIEWS,
   DEMO_LOCATION_BALANCES,
   DEMO_MEDIA,
@@ -240,7 +240,7 @@ async function assertTenantRowIdsAreSafe(transaction) {
       WHERE id = ANY(${DEMO_RELATIONS.map(({ id }) => id)})
       UNION ALL
       SELECT 'label_setups', id, organization_id FROM label_setups
-      WHERE id = ${DEMO_LABEL_SETUP.id}
+      WHERE id = ANY(${DEMO_LABEL_SETUPS.map(({ id }) => id)})
       UNION ALL
       SELECT 'stock_scan_workflows', id, organization_id FROM stock_scan_workflows
       WHERE id = ANY(${DEMO_SCAN_WORKFLOWS.map(({ id }) => id)})
@@ -705,25 +705,27 @@ async function seedDemo(transaction, configuration, preparedMedia) {
     `;
   }
 
-  await transaction`
-    INSERT INTO label_setups (
-      organization_id, id, name, width_mm, height_mm, elements, revision,
-      created_by, updated_by, updated_at
-    ) VALUES (
-      ${DEMO_ORGANIZATION.id}, ${DEMO_LABEL_SETUP.id}, ${DEMO_LABEL_SETUP.name},
-      ${DEMO_LABEL_SETUP.widthMm}, ${DEMO_LABEL_SETUP.heightMm},
-      ${transaction.json(DEMO_LABEL_SETUP.elements)}, 1,
-      ${DEMO_ACTOR}, ${DEMO_ACTOR}, now()
-    )
-    ON CONFLICT (id) DO UPDATE SET
-      name = excluded.name,
-      width_mm = excluded.width_mm,
-      height_mm = excluded.height_mm,
-      elements = excluded.elements,
-      revision = 1,
-      updated_by = excluded.updated_by,
-      updated_at = now()
-  `;
+  for (const setup of DEMO_LABEL_SETUPS) {
+    await transaction`
+      INSERT INTO label_setups (
+        organization_id, id, name, width_mm, height_mm, elements, revision,
+        created_by, updated_by, updated_at
+      ) VALUES (
+        ${DEMO_ORGANIZATION.id}, ${setup.id}, ${setup.name},
+        ${setup.widthMm}, ${setup.heightMm},
+        ${transaction.json(setup.elements)}, 1,
+        ${DEMO_ACTOR}, ${DEMO_ACTOR}, now()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        name = excluded.name,
+        width_mm = excluded.width_mm,
+        height_mm = excluded.height_mm,
+        elements = excluded.elements,
+        revision = 1,
+        updated_by = excluded.updated_by,
+        updated_at = now()
+    `;
+  }
 
   if (preparedMedia.length === 0) {
     await transaction`

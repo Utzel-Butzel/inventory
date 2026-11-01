@@ -43,7 +43,7 @@
     "test:requests": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/internal-request-contract.test.mjs",
     "test:loans": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/lending-contract.test.mjs tests/internal-request-contract.test.mjs",
     "test:deployment": "node --experimental-strip-types --test tests/auth-provider-config.test.mjs tests/bootstrap-credential.test.mjs tests/ios-deployment.test.mjs tests/organization-administration.test.mjs",
-    "test:demo-seed": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/demo-seed-manifest.test.mjs tests/demo-scan-workflow.test.mjs",
+    "test:demo-seed": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/demo-seed-manifest.test.mjs tests/demo-scan-workflow.test.mjs tests/demo-label-setups.test.mjs",
     "test:demo-read-only": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/organization-read-only.test.mjs",
     "test:route-motion": "node --test tests/route-motion.test.mjs",
     "test:webhooks": "node --experimental-strip-types --test tests/webhook-contract.test.mjs",

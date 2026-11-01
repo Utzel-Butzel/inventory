@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { DEMO_FAVORITE_RESOURCE_IDS, DEMO_LIST_VIEWS, DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES, DEMO_SCAN_WORKFLOWS, DEMO_STOCK_MOVEMENTS, DEMO_STOCK_SETTINGS } from '../../scripts/demo-seed-manifest.mjs';
+import { DEMO_FAVORITE_RESOURCE_IDS, DEMO_LABEL_SETUPS, DEMO_LIST_VIEWS, DEMO_MEDIA, DEMO_ORGANIZATION, DEMO_RESOURCES, DEMO_SCAN_WORKFLOWS, DEMO_STOCK_MOVEMENTS, DEMO_STOCK_SETTINGS } from '../../scripts/demo-seed-manifest.mjs';
 
 const base = new URL(process.argv[2] || 'https://demo.openinventory.polyxo.de');
 assert.equal(base.hostname, 'demo.openinventory.polyxo.de', 'Run only against the isolated demo.');
@@ -37,6 +37,8 @@ async function checkDenied(label) {
     ['POST', '/api/v1/stock/action-chains/execute'],
     ['POST', '/api/v1/stock/scans/execute'],
     ['POST', '/api/v1/stock/scan-workflows'],
+    ['POST', '/api/v1/label-setups'],
+    ['PATCH', '/api/v1/label-workspace'],
     ['GET', '/api/cron/notifications'],
     ['POST', '/demo/inventory'],
   ]) {
@@ -44,7 +46,7 @@ async function checkDenied(label) {
     assert.equal(response.status, 403, `${label}: ${method} ${path}`);
     await response.arrayBuffer();
   }
-  console.log(`${label}: 13 write/upload/AI/worker requests blocked`);
+  console.log(`${label}: 15 write/upload/AI/worker requests blocked`);
 }
 
 const landing = await request('/');
@@ -127,6 +129,17 @@ for (const resource of resources) {
   assert.deepEqual(images.map(({ id }) => id), expectedImages.map(({ id }) => id), `${resource.name}: gallery order`);
 }
 console.log(`Demo viewer, read-only tenant, ${resources.length} resources and ${DEMO_MEDIA.length} attached generated images verified`);
+const labelsResponse = await request('/api/v1/label-setups');
+assert.equal(labelsResponse.status, 200);
+const { labelSetups } = await labelsResponse.json();
+assert.equal(labelSetups.length, DEMO_LABEL_SETUPS.length);
+for (const expected of DEMO_LABEL_SETUPS) {
+  const actual = labelSetups.find(({ id }) => id === expected.id);
+  for (const [key, value] of Object.entries(expected)) {
+    assert.deepEqual(actual?.[key], value, `${expected.name}: label ${key}`);
+  }
+}
+console.log(`${labelSetups.length} label templates with dimensions and complete layouts verified`);
 const forecastResponse = await request('/api/v1/stock/forecast');
 assert.equal(forecastResponse.status, 200);
 const forecast = await forecastResponse.json();
