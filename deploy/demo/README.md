@@ -92,3 +92,18 @@ Repeat the external checks with:
 ```sh
 node deploy/demo/smoke.mjs
 ```
+
+## Office room update, 2026-11-01
+
+- Source: `codex/demo-office-room`; deployed app commit `a746f3e`, building on
+  the existing 24-image gallery deployment (`4a1de49`).
+- `/demo/spaces` now includes the actual office scan under Werkbank E1, with
+  illustrative placements for the demo soldering station and multimeter.
+- The scan is bundled into the startup seed, so reconciliation restores it.
+- Production build and container health passed. External HTTPS smoke checks
+  verified seven surfaces, ten furniture objects, two demo placements, all
+  24 images, viewer login, read-only organization, 22 denied requests, CSP and
+  Server Action denial. Browser verification confirmed the rendered room and
+  both item cards. No gateway restart was needed for this deployment.
+- No source inventory records, keyframe photos, AR assets, AI analysis or map
+  location were copied into the demo.
