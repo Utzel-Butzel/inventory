@@ -388,6 +388,7 @@
     }
   },
   "connectionDiagram": {
+    "create": "Create connection flow",
     "title": "Connection flow",
     "description": "Visualize this item's family, bill of materials, containment, and related inventory across multiple levels.",
     "current": "Current item",
@@ -734,6 +735,7 @@
       "overdue": "Overdue"
     },
     "lending": {
+      "enable": "Enable lending",
       "enabled": "This item can be loaned",
       "description": "Enables direct loans and reservations and makes the item available in internal requests.",
       "approvalRequired": "Internal requests require approval",

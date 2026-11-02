@@ -3,7 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // PDFKit resolves its bundled font metrics relative to its Node module.
+  serverExternalPackages: ["pdfkit"],
   outputFileTracingIncludes: {
+    "/api/v1/**/handovers": ["./node_modules/pdfkit/js/data/**/*"],
     "/api/v1/ai/count/3d": ["./services/bulk-3d/{run_job,worker,geometry}.py"],
   },
   outputFileTracingExcludes: {

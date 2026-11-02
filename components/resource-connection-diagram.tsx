@@ -828,13 +828,56 @@ export function ResourceConnectionDiagram({
       observer.disconnect();
       window.cancelAnimationFrame(frame);
     };
-  }, [model, positions, resource.id, commonParts]);
+  }, [model, positions, resource.id, commonParts, editing]);
 
   useEffect(() => {
     if (!analysisActive || !analysisFocus || !scrollRef.current) return;
     const point = positions.get(analysisFocus.id);
     if (point) scrollRef.current.scrollTo({ left: Math.max(0, point.x + NODE_WIDTH / 2 - scrollRef.current.clientWidth / 2), behavior: "smooth" });
   }, [analysisActive, analysisFocus, positions]);
+
+  if (!model || (!model.connectionCount && !editing)) {
+    if (model && !canEdit && !error && !partial) return null;
+
+    return (
+      <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">
+        {error ? (
+          <div role="alert">
+            <p className="mb-3 text-sm text-danger">{error}</p>
+            <Button variant="secondary" disabled={loading} onClick={() => void load(depth, true)}>
+              {t("connectionDiagram.retry")}
+            </Button>
+          </div>
+        ) : model ? (
+          <>
+            {partial ? (
+              <p className="mb-3 text-xs text-muted">{t("connectionDiagram.partial")}</p>
+            ) : null}
+            {canEdit ? (
+              <Button
+                variant="secondary"
+                disabled={loading}
+                onClick={() => {
+                  setView("graph");
+                  setEditing(true);
+                  setEditorNotice(null);
+                  setEditorSelection({ type: "node", resource });
+                }}
+              >
+                <Plus className="size-4" aria-hidden="true" />
+                {t("connectionDiagram.create")}
+              </Button>
+            ) : null}
+          </>
+        ) : (
+          <p role="status" className="flex items-center gap-2 text-sm text-muted">
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            {t("connectionDiagram.loading")}
+          </p>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-6 sm:px-6 lg:px-8">

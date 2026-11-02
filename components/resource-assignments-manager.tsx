@@ -17,6 +17,8 @@ import { useT } from "next-i18next/client";
 
 import { Badge, Button, Card, EmptyState } from "@/components/ui";
 import { useOrganizationAllowsNegativeStock } from "@/components/organization-routing";
+import { LoanHandoverDialog, LoanHandoverReports } from "@/components/loan-handover-dialog";
+import type { LoanHandoverInput } from "@/lib/loan-handover-contract";
 import { fetchJson } from "@/lib/client-types";
 
 type AssignmentKind = "checkout" | "assignment" | "reservation";
@@ -29,6 +31,8 @@ type Assignment = {
   kind: AssignmentKind;
   status: AssignmentStatus;
   stockApplied: boolean;
+  checkoutDocumentedAt: string | null;
+  returnDocumentedAt: string | null;
   overdue: boolean;
   quantity: number;
   assignee: {
@@ -163,6 +167,13 @@ export function ResourceAssignmentsManager({
   const [savingLending, setSavingLending] = useState(false);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [handoverAction, setHandoverAction] = useState<{
+    phase: "checkout" | "return";
+    assignment?: Assignment;
+    stockUnitId?: string;
+    payload?: Record<string, unknown>;
+    borrower: string;
+  } | null>(null);
   const createRequest = useRef<{ fingerprint: string; key: string } | null>(null);
   const completionKeys = useRef(new Map<string, string>());
 
@@ -253,8 +264,8 @@ export function ResourceAssignmentsManager({
     });
   };
 
-  async function saveLendingSettings() {
-    if (!canEdit) return;
+  async function saveLendingSettings(settings = lendingForm) {
+    if (!canEdit || savingLending) return;
     setSavingLending(true);
     setError(null);
     try {
@@ -263,7 +274,7 @@ export function ResourceAssignmentsManager({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(lendingForm),
+          body: JSON.stringify(settings),
         },
       );
       setLendingForm(response.lending);
@@ -271,6 +282,7 @@ export function ResourceAssignmentsManager({
         current ? { ...current, lending: response.lending } : current,
       );
       if (!response.lending.enabled) setAssignmentKind("assignment");
+      else if (!data?.lending.enabled) setAssignmentKind("checkout");
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -303,6 +315,15 @@ export function ResourceAssignmentsManager({
       ...(form.dueAt ? { dueAt: new Date(form.dueAt).toISOString() } : {}),
       ...(form.note.trim() ? { note: form.note.trim() } : {}),
     };
+    if (form.kind === "checkout") {
+      setHandoverAction({ phase: "checkout", payload, borrower: form.recipientType === "user" ? data.recipients.users.find((user) => user.id === form.recipientUserId)?.name ?? "" : form.recipient.trim() });
+      return;
+    }
+    await saveAssignment(payload);
+  }
+
+  async function saveAssignment(payload: Record<string, unknown>) {
+    if (!data) return;
     const fingerprint = JSON.stringify(payload);
     const idempotency =
       createRequest.current?.fingerprint === fingerprint
@@ -328,6 +349,7 @@ export function ResourceAssignmentsManager({
       });
       await load();
     } catch (saveError) {
+      if (payload.handover) throw saveError;
       setError(
         saveError instanceof Error
           ? saveError.message
@@ -341,8 +363,10 @@ export function ResourceAssignmentsManager({
   async function activateReservation(
     assignment: Assignment,
     stockUnitId?: string,
+    handover?: LoanHandoverInput,
   ) {
-    const operation = `${assignment.id}:checkout:${stockUnitId ?? "bulk"}`;
+    if (!handover) { setHandoverAction({ phase: "checkout", assignment, stockUnitId, borrower: assignment.assignee.label }); return; }
+    const operation = `${assignment.id}:checkout:${stockUnitId ?? "bulk"}:${JSON.stringify(handover)}`;
     const key = completionKeys.current.get(operation) ?? newIdempotencyKey();
     completionKeys.current.set(operation, key);
     setCompletingId(assignment.id);
@@ -356,12 +380,14 @@ export function ResourceAssignmentsManager({
         },
         body: JSON.stringify({
           action: "checkout",
+          handover,
           ...(stockUnitId ? { stockUnitId } : {}),
         }),
       });
       completionKeys.current.delete(operation);
       await load();
     } catch (checkoutError) {
+      if (handover) throw checkoutError;
       setError(
         checkoutError instanceof Error
           ? checkoutError.message
@@ -375,8 +401,10 @@ export function ResourceAssignmentsManager({
   async function completeAssignment(
     assignment: Assignment,
     status: "returned" | "cancelled",
+    handover?: LoanHandoverInput,
   ) {
-    const operation = `${assignment.id}:${status}`;
+    if (status === "returned" && assignment.kind === "checkout" && !handover) { setHandoverAction({ phase: "return", assignment, borrower: assignment.assignee.label }); return; }
+    const operation = `${assignment.id}:${status}:${JSON.stringify(handover)}`;
     const key = completionKeys.current.get(operation) ?? newIdempotencyKey();
     completionKeys.current.set(operation, key);
     setCompletingId(assignment.id);
@@ -388,11 +416,12 @@ export function ResourceAssignmentsManager({
           "Content-Type": "application/json",
           "Idempotency-Key": key,
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...(handover ? { handover } : {}) }),
       });
       completionKeys.current.delete(operation);
       await load();
     } catch (completeError) {
+      if (handover) throw completeError;
       setError(
         completeError instanceof Error
           ? completeError.message
@@ -403,8 +432,55 @@ export function ResourceAssignmentsManager({
     }
   }
 
+  if (!data || !data.lending.enabled) {
+    if (data && !canEdit) return null;
+
+    return (
+      <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">
+        {error ? (
+          <p role="alert" className="mb-3 text-sm text-danger">{error}</p>
+        ) : null}
+        {data ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={savingLending || loading}
+            onClick={() => void saveLendingSettings({ ...data.lending, enabled: true })}
+          >
+            {savingLending ? (
+              <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <HandCoins className="size-4" aria-hidden="true" />
+            )}
+            {t("assignments.lending.enable")}
+          </Button>
+        ) : error ? (
+          <Button type="button" variant="secondary" disabled={loading} onClick={() => void load()}>
+            <RefreshCw className="size-4" aria-hidden="true" />
+            {t("assignments.refresh")}
+          </Button>
+        ) : (
+          <p role="status" className="flex items-center gap-2 text-sm text-muted">
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            {t("assignments.loading")}
+          </p>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section className="app-page mx-auto w-full max-w-[1450px] px-4 pb-8 sm:px-6 lg:px-8">
+      {handoverAction && <LoanHandoverDialog
+        phase={handoverAction.phase} assignmentId={handoverAction.assignment?.id}
+        borrower={handoverAction.borrower} itemName={data?.resource.name ?? ""}
+        onClose={() => setHandoverAction(null)}
+        onConfirm={async (handover) => {
+          if (handoverAction.payload) await saveAssignment({ ...handoverAction.payload, handover });
+          else if (handoverAction.assignment && handoverAction.phase === "checkout") await activateReservation(handoverAction.assignment, handoverAction.stockUnitId, handover);
+          else if (handoverAction.assignment) await completeAssignment(handoverAction.assignment, "returned", handover);
+        }} />}
+
       <Card className="overflow-hidden p-0">
         <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-start gap-3">
@@ -876,6 +952,7 @@ function AssignmentRow({
               </span>
             ) : null}
           </div>
+          {(assignment.checkoutDocumentedAt || assignment.returnDocumentedAt) && <LoanHandoverReports assignmentId={assignment.id} />}
           {assignment.note ? (
             <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted">
               {assignment.note}
@@ -935,7 +1012,7 @@ function AssignmentRow({
                 {t("assignments.actions.return")}
               </Button>
             )}
-            <Button
+            {!assignment.checkoutDocumentedAt && <Button
               size="sm"
               variant="ghost"
               onClick={() => onComplete("cancelled")}
@@ -943,7 +1020,7 @@ function AssignmentRow({
             >
               <XCircle className="size-3.5" aria-hidden="true" />
               {t("assignments.actions.cancel")}
-            </Button>
+            </Button>}
           </div>
         ) : assignment.completedAt ? (
           <span className="shrink-0 text-xs text-muted">

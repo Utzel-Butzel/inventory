@@ -3529,6 +3529,40 @@ paths:
         "200":
           description: Loans and reservations with resource context and management capability
         "403": { description: Assignment read access is required }
+  /assignments/{assignmentId}/handovers:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Assignments]
+      summary: Read immutable checkout and return reports or download their PDF
+      description: Requires assignments.read for the associated item in the current organization. Responses must not be cached.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, pdf], default: json }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [de, en], default: en }
+      responses:
+        "200":
+          description: Stored reports or their PDF, including condition photos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: "#/components/schemas/LoanHandoverDocument" }
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { description: Insufficient permissions }
+        "404": { description: Assignment not found, or PDF requested without any report }
+        "422": { description: Invalid assignment ID }
   /assignments/{assignmentId}:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -4131,6 +4165,48 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Invalid lifecycle transition or duplicate tracking number }
         "422": { description: Invalid shipment details or timestamp }
+  /orders/{orderId}/lines/{lineId}/handovers:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: orderId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: lineId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Orders]
+      summary: Read immutable checkout and return reports or download their PDF
+      description: Requires orders.read in the current organization. Includes separate reports for partial issues and returns. Responses must not be cached.
+      parameters:
+        - name: unitId
+          in: query
+          schema: { type: string, format: uuid }
+          description: Limit reports to this serialized unit.
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, pdf], default: json }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [de, en], default: en }
+      responses:
+        "200":
+          description: Stored reports or their PDF, including condition photos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: "#/components/schemas/LoanHandoverDocument" }
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { description: Insufficient permissions }
+        "404": { description: Loan line not found, or PDF requested without any report }
+        "422": { description: Invalid order, line or unit ID }
   /orders/{orderId}/lines/{lineId}/movements:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -9600,6 +9676,7 @@ components:
       additionalProperties: false
       required: [action, quantity]
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         action: { type: string, enum: [issue, return] }
         quantity: { type: integer, minimum: 1, maximum: 2000000000 }
         occurredAt: { type: string, format: date-time }
@@ -9649,6 +9726,7 @@ components:
       additionalProperties: false
       required: [action, unitIds]
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         action: { type: string, enum: [reserve, release, issue, return] }
         unitIds:
           type: array
@@ -11187,11 +11265,70 @@ components:
             label: { type: string, minLength: 1, maxLength: 240 }
       discriminator:
         propertyName: type
+    LoanHandoverInput:
+      type: object
+      additionalProperties: false
+      required: [condition, givenBy, receivedBy, confirmed]
+      description: Immutable handover evidence saved atomically with checkout or return. Only supported for loans. Damage and missing accessories require notes. Returns must include every accessory from checkout. The names are recorded attestations, not independently authenticated signatures. Existing clients may omit checkout evidence; a documented checkout requires return evidence and cannot be cancelled. Request bodies are limited to 6000000 bytes.
+      properties:
+        condition: { type: string, enum: [good, worn, damaged] }
+        givenBy: { type: string, minLength: 1, maxLength: 240 }
+        receivedBy: { type: string, minLength: 1, maxLength: 240 }
+        confirmed: { type: boolean, const: true }
+        notes: { type: string, maxLength: 4000, default: "" }
+        photos:
+          type: array
+          maxItems: 4
+          items: { type: string, maxLength: 1400000, description: Base64 JPEG/PNG/WebP data URL. Decoded and stored as a metadata-free JPEG snapshot. }
+        accessories:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [name, present]
+            additionalProperties: false
+            properties:
+              name: { type: string, minLength: 1, maxLength: 160 }
+              present: { type: boolean }
+    LoanHandoverDocument:
+      type: object
+      description: Server-generated immutable report. Contains all LoanHandoverInput fields plus the following snapshot fields.
+      required: [version, phase, assignmentId, resourceId, resourceName, quantity, borrower, occurredAt, recordedAt, recordedBy, condition, givenBy, receivedBy, confirmed, accessories, photos, notes]
+      properties:
+        condition: { type: string, enum: [good, worn, damaged] }
+        givenBy: { type: string }
+        receivedBy: { type: string }
+        confirmed: { type: boolean, const: true }
+        notes: { type: string }
+        photos: { type: array, items: { type: string } }
+        accessories:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              present: { type: boolean }
+        version: { type: integer, const: 1 }
+        phase: { type: string, enum: [checkout, return] }
+        assignmentId: { type: [string, "null"], format: uuid }
+        orderId: { type: string, format: uuid }
+        orderLineId: { type: string, format: uuid }
+        movementId: { type: string, format: uuid }
+        resourceId: { type: string, format: uuid }
+        resourceName: { type: string }
+        unitCode: { type: [string, "null"] }
+        quantity: { type: integer }
+        borrower: { type: string }
+        dueAt: { type: [string, "null"], format: date-time }
+        occurredAt: { type: string, format: date-time }
+        recordedAt: { type: string, format: date-time }
+        recordedBy: { type: string }
     InventoryAssignmentInput:
       type: object
       required: [kind, recipient]
       additionalProperties: false
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         kind: { type: string, enum: [checkout, assignment, reservation] }
         quantity: { type: integer, minimum: 1, maximum: 2000000000, default: 1 }
         stockUnitId: { type: [string, "null"], format: uuid, description: Required for serialized stock and omitted for bulk stock. }
@@ -11204,6 +11341,7 @@ components:
       required: [status]
       additionalProperties: false
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         status: { type: string, enum: [returned, cancelled] }
         completedAt: { type: string, format: date-time }
         note: { type: string, maxLength: 20000 }
@@ -11212,6 +11350,7 @@ components:
       required: [action]
       additionalProperties: false
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         action: { type: string, const: checkout }
         stockUnitId: { type: [string, "null"], format: uuid, description: Required when the reserved item uses serialized tracking. }
         checkedOutAt: { type: string, format: date-time }
@@ -11235,6 +11374,8 @@ components:
         kind: { type: string, enum: [checkout, assignment, reservation] }
         status: { type: string, enum: [active, returned, cancelled] }
         stockApplied: { type: boolean }
+        checkoutDocumentedAt: { type: [string, "null"], format: date-time }
+        returnDocumentedAt: { type: [string, "null"], format: date-time }
         overdue: { type: boolean, description: Derived from an active checkout whose due date has passed. }
         quantity: { type: integer, minimum: 1 }
         assignee:

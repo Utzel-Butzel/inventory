@@ -42,7 +42,7 @@
     "test:action-flows": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/action-flow-contract.test.mjs tests/workflow-draft.test.mjs tests/webhook-contract.test.mjs",
     "test:notifications": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/notification-policy.test.mjs",
     "test:requests": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/internal-request-contract.test.mjs",
-    "test:loans": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/lending-contract.test.mjs tests/internal-request-contract.test.mjs",
+    "test:loans": "node --experimental-test-module-mocks --experimental-transform-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/lending-contract.test.mjs tests/internal-request-contract.test.mjs tests/loan-handover-contract.test.mjs tests/loan-handover-integration.test.mjs tests/loan-handover-route.test.mjs",
     "test:deployment": "node --experimental-strip-types --test tests/auth-provider-config.test.mjs tests/auth-session.test.mjs tests/bootstrap-credential.test.mjs tests/ios-deployment.test.mjs tests/organization-administration.test.mjs",
     "test:demo-seed": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/demo-seed-manifest.test.mjs tests/demo-scan-workflow.test.mjs",
     "test:demo-read-only": "node --experimental-strip-types --experimental-loader ./tests/support/typescript-paths-loader.mjs --test tests/organization-read-only.test.mjs",

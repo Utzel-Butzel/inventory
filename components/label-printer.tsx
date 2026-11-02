@@ -31,6 +31,7 @@ import { LabelCopyCount } from "@/components/label-copy-count";
 import { repeatLabelCopies } from "@/lib/label-print-copies";
 import { LabelTextFields } from "@/components/label-text-fields";
 import { LabelRenderer } from "@/components/label-renderer";
+import { LabelTemplateSelect } from "@/components/label-template-select";
 import { automaticLabelText } from "@/lib/label-dynamic-layout";
 import { DEFAULT_PRINT_MEDIA, printMediaSchema, layoutLabelPages, type PrintMedia, type LabelSnapshot } from "@/lib/label-document";
 import { captureLabel, preparedSnapshot, ptouchSnapshot, printLabelDocument } from "@/lib/label-document-client";
@@ -1058,24 +1059,14 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <label className="block min-w-0 flex-1 basis-52">
-                  <span className="sr-only">{t("setup.label")}</span>
-                  <select
-                    value={activeSetup?.id ?? ""}
-                    onChange={(event) => setSetupId(event.target.value)}
-                    disabled={setupsLoading || availableSetups.length === 0}
-                    className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-muted-strong outline-none focus:border-focus focus:ring-4 focus:ring-focus/10 disabled:bg-surface-subtle"
-                  >
-                    {availableSetups.length === 0 ? (
-                      <option value="">{t("setup.empty")}</option>
-                    ) : null}
-                    {availableSetups.map((setup) => (
-                      <option key={setup.id} value={setup.id}>
-                        {setup.name} · {setup.widthMm} × {setup.heightMm} mm
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <LabelTemplateSelect
+                  setups={availableSetups}
+                  value={activeSetup?.id ?? ""}
+                  onChange={setSetupId}
+                  loading={setupsLoading}
+                  sampleResource={labels[0]?.resource ?? resources[0] ?? null}
+                  origin={origin}
+                />
                 {canWrite ? (
                   <div className="flex gap-2">
                     <Button

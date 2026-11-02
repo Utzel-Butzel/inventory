@@ -17,6 +17,7 @@ import {
   internalRequestLines,
   internalRequests,
   inventoryAssignments,
+  loanHandovers,
   organizationMemberships,
   organizations,
   resourceLendingSettings,
@@ -36,6 +37,15 @@ import { isLoanOverdue, loanWindowDurationDays } from "@/lib/lending-contract";
 import { lendingSettingsDto } from "@/lib/resource-lending";
 import { enqueueStockMovementWebhookEvents } from "@/lib/webhooks";
 
+import { normalizeHandoverPhotos, saveLoanHandover } from "@/lib/loan-handovers";
+import { validateHandoverTransition, type LoanHandoverInput } from "@/lib/loan-handover-contract";
+
+async function prepareHandover(input?: LoanHandoverInput) {
+  if (!input) return undefined;
+  try { return await normalizeHandoverPhotos(input); }
+  catch { throw new InventoryAssignmentError("Invalid handover report or photo. Use still JPEG, PNG or WebP images up to 1 MB each.", 422); }
+}
+
 const MAX_STOCK_QUANTITY = 2_000_000_000;
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -45,6 +55,7 @@ export type AssignmentRecipient =
   | { type: "label"; label: string };
 
 export type CreateInventoryAssignmentInput = {
+  handover?: LoanHandoverInput;
   kind: AssignmentKind;
   quantity: number;
   stockUnitId?: string | null;
@@ -55,12 +66,14 @@ export type CreateInventoryAssignmentInput = {
 };
 
 export type CompleteInventoryAssignmentInput = {
+  handover?: LoanHandoverInput;
   status: Exclude<AssignmentStatus, "active">;
   completedAt?: Date;
   note?: string;
 };
 
 export type ActivateInventoryReservationInput = {
+  handover?: LoanHandoverInput;
   stockUnitId?: string | null;
   checkedOutAt?: Date;
   note?: string;
@@ -139,6 +152,8 @@ const assignmentDto = (
     kind: row.kind,
     status: row.status,
     stockApplied: row.stockApplied,
+    checkoutDocumentedAt: row.checkoutDocumentedAt?.toISOString() ?? null,
+    returnDocumentedAt: row.returnDocumentedAt?.toISOString() ?? null,
     overdue: isLoanOverdue(row),
     quantity: row.quantity,
     assignee,
@@ -602,6 +617,7 @@ export async function createInventoryAssignment(
   actor: string,
   idempotency: AssignmentIdempotency,
 ) {
+  const handover = await prepareHandover(input.handover);
   const replayExpected = {
     resourceId,
     actor,
@@ -834,6 +850,8 @@ export async function createInventoryAssignment(
         }
       }
 
+      const handoverError = validateHandoverTransition({ phase: "checkout", kind: input.kind, documentedCheckout: false, handover });
+      if (handoverError) throw new InventoryAssignmentError(handoverError, 422);
       const now = new Date();
       const [assignment] = await transaction
         .insert(inventoryAssignments)
@@ -842,6 +860,7 @@ export async function createInventoryAssignment(
           resourceId,
           stockUnitId: unit?.id ?? null,
           kind: input.kind,
+          checkoutDocumentedAt: handover ? now : null,
           status: "active",
           stockApplied: input.kind !== "reservation",
           quantity: input.quantity,
@@ -853,6 +872,8 @@ export async function createInventoryAssignment(
           updatedAt: now,
         })
         .returning();
+
+      if (handover) await saveLoanHandover(transaction, assignment, resource.name, unit?.code ?? null, "checkout", handover, actor, now, startsAt);
 
       const balanceAfter =
         input.kind === "reservation"
@@ -1078,6 +1099,7 @@ export async function activateInventoryReservation(
   actor: string,
   idempotency: AssignmentIdempotency,
 ) {
+  const handover = await prepareHandover(input.handover);
   const replayExpected = { actor, requestHash: idempotency.requestHash };
 
   try {
@@ -1277,6 +1299,7 @@ export async function activateInventoryReservation(
         .update(inventoryAssignments)
         .set({
           kind: "checkout",
+          checkoutDocumentedAt: handover ? now : null,
           stockUnitId: unit?.id ?? null,
           stockApplied: true,
           startsAt: checkedOutAt,
@@ -1290,6 +1313,7 @@ export async function activateInventoryReservation(
           ),
         )
         .returning();
+      if (handover) await saveLoanHandover(transaction, savedAssignment, resource.name, unit?.code ?? null, "checkout", handover, actor, now, checkedOutAt);
       if (!assignment.stockApplied) {
         await transaction
           .update(resources)
@@ -1376,6 +1400,7 @@ export async function completeInventoryAssignment(
   actor: string,
   idempotency: AssignmentIdempotency,
 ) {
+  const handover = await prepareHandover(input.handover);
   const replayExpected = {
     actor,
     requestHash: idempotency.requestHash,
@@ -1465,6 +1490,16 @@ export async function completeInventoryAssignment(
         );
       }
 
+      const [checkoutReport] = assignment.checkoutDocumentedAt ? await transaction
+        .select({ document: loanHandovers.document }).from(loanHandovers)
+        .where(and(eq(loanHandovers.organizationId, organizationId), eq(loanHandovers.assignmentId, assignment.id), eq(loanHandovers.phase, "checkout"))).limit(1) : [];
+      const handoverError = validateHandoverTransition({
+        phase: input.status === "returned" ? "return" : "cancel", kind: assignment.kind,
+        documentedCheckout: Boolean(assignment.checkoutDocumentedAt), handover,
+        originalAccessories: checkoutReport?.document.accessories,
+      });
+      if (handoverError) throw new InventoryAssignmentError(handoverError, 422);
+
       let unit: typeof stockUnits.$inferSelect | null = null;
       if (assignment.stockUnitId) {
         [unit] = await transaction
@@ -1509,6 +1544,7 @@ export async function completeInventoryAssignment(
         .update(inventoryAssignments)
         .set({
           status: input.status,
+          returnDocumentedAt: handover ? now : null,
           completedAt,
           completedBy: actor,
           note: input.note ?? assignment.note,
@@ -1521,6 +1557,7 @@ export async function completeInventoryAssignment(
           ),
         )
         .returning();
+      if (handover) await saveLoanHandover(transaction, savedAssignment, resource.name, unit?.code ?? null, "return", handover, actor, now, completedAt);
       if (unit && assignment.stockApplied) {
         await transaction
           .update(stockUnits)

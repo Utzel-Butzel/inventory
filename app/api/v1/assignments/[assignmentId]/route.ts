@@ -1,3 +1,4 @@
+import { loanHandoverSchema, readHandoverRequest, HandoverBodyError } from "@/lib/loan-handover-contract";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -26,6 +27,7 @@ const assignmentUpdateSchema = z.union([
       status: z.enum(["returned", "cancelled"]),
       completedAt: z.string().datetime().optional(),
       note: z.string().trim().max(20_000).optional(),
+      handover: loanHandoverSchema.optional(),
     })
     .strict(),
   z
@@ -34,6 +36,7 @@ const assignmentUpdateSchema = z.union([
       stockUnitId: z.string().uuid().nullable().optional(),
       checkedOutAt: z.string().datetime().optional(),
       note: z.string().trim().max(20_000).optional(),
+      handover: loanHandoverSchema.optional(),
     })
     .strict(),
 ]);
@@ -83,8 +86,9 @@ export async function PATCH(request: Request, context: Context) {
 
   let payload: unknown;
   try {
-    payload = await request.json();
-  } catch {
+    payload = await readHandoverRequest(request);
+  } catch (error) {
+    if (error instanceof HandoverBodyError) return Response.json({ error: error.message }, { status: error.status });
     return Response.json({ error: "Expected a JSON request body." }, { status: 400 });
   }
   const parsed = assignmentUpdateSchema.safeParse(payload);
@@ -103,6 +107,7 @@ export async function PATCH(request: Request, context: Context) {
             assignmentId.data,
             {
               stockUnitId: parsed.data.stockUnitId,
+              handover: parsed.data.handover,
               checkedOutAt: parsed.data.checkedOutAt
                 ? new Date(parsed.data.checkedOutAt)
                 : undefined,
