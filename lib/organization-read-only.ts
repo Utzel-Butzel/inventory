@@ -6,6 +6,9 @@ import {
 
 export const PUBLIC_DEMO_ORGANIZATION_ID =
   "d3e00000-0000-4000-8000-000000000001";
+// Public demo selector, not a secret. Accepted only when demo access is enabled
+// and the fixed, sole read-only viewer membership is revalidated on every request.
+export const PUBLIC_DEMO_NATIVE_TOKEN = "inv_demo_public_openinventory";
 export const PUBLIC_DEMO_USER_ID =
   "d3e00000-0000-4000-8000-000000000002";
 
