@@ -1,6 +1,6 @@
 services:
   inventory:
-    image: konglo-openinventory:supabase-sso-20261031
+    image: konglo-openinventory:main-20261104-4d94f23
     pull_policy: never
     restart: unless-stopped
     init: true

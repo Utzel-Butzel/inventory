@@ -18,6 +18,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          # The retired SDK "tools" package is no longer available from Google.
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon
         working-directory: android

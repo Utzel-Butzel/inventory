@@ -14,14 +14,24 @@ Dedicated production instance on the existing Konglomerat Dokploy server.
 
 `compose.yaml` is the raw Compose definition stored in Dokploy. Secrets are
 stored in Dokploy's Environment settings; they are not part of this repository.
-The app runs `konglo-openinventory:supabase-sso-20261031`, image ID
-`sha256:f1116ba4b868606c2ff137c0a669d9184934f95d2b0ffc5c47e5e71fef099c2f`.
-The release adds the scoped Supabase SSO changes to the previously tested
-`video-preview-20261031` source (base commit
-`60dadb70c1e3acde4e83fdae478d1a926554793a` plus the video-preview overlay).
-It excludes unrelated local development changes. `pull_policy: never` keeps
-Dokploy from replacing the local release. Both images and reproducible source
-overlays are retained for rollback.
+The app runs `konglo-openinventory:main-20261104-4d94f23`, image ID
+`sha256:396dc84b58fdaacd94da772bbc0d6b1db669aca160c64af2476f085daf005ed4`,
+built from application commit `4d94f23b0d22446526a2de5af84757856f6cc696` on
+`main`. The November 4 update includes the separate label editor, negative X/Y
+positions, native browser SSO, domain-specific provider discovery, and migration
+`0080_native_browser_auth.sql`. `pull_policy: never` keeps Dokploy on the explicit
+local release. Dokploy's stored Compose definition and runtime definition agree.
+
+Database and upload backups, build logs, the previous Compose/environment, and
+the release record are retained in `/root/openinventory-release-20261104/` with
+operator-only permissions. The previous `release-20261102` image is retained for
+code rollback. No data restore is needed to roll back this additive migration.
+Never restore an older database over subsequent user edits.
+
+Verified after rollout: database/migration/storage health; native password login,
+capabilities and resource/label-setup reads; authenticated resource label and
+editor pages; configured Konglomerat SSO metadata. Verification sessions were
+signed out and the test device credential revoked.
 
 ## Access and bootstrap
 
@@ -219,13 +229,14 @@ with the intended personal administrator and all 596 items. The technical passwo
 login, database/storage health, anonymous API/media denial and video byte-range
 responses passed after deployment. The temporary build swap was removed.
 
-## Native iOS and Android SSO support (prepared, not deployed)
+## Native iOS and Android SSO support
 
 The iOS and Android apps can use the existing Konglomerat Supabase sign-in
 through the system authentication browser or Custom Tabs. Each app discovers
 providers from the entered server’s `/api/v1/auth/options`; Konglomerat is never
-a global provider shown on unrelated installations. Deploy the native browser handoff server changes and
-`0080_native_browser_auth.sql` before distributing that app build. Provider client
+a global provider shown on unrelated installations. The browser handoff server
+changes and migration `0080_native_browser_auth.sql` are deployed as of November 4.
+Updated native app builds still need to be distributed. Provider client
 credentials and the existing web callback URI remain unchanged. Use the canonical
 `https://inventar.konglomerat.org` address in the app. See
 [native SSO](../../docs/native-sso.md) for the release acceptance checks.
