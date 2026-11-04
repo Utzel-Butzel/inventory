@@ -63,16 +63,16 @@ class InventoryJourneyTest {
     @Test fun stockChangesAreReviewedBeforeSendingAndUseWorkspaceAndKey() {
         screenshot("inventory")
         ui.onNodeWithText("Akku-Bohrschrauber").performClick()
-        ui.waitUntil(15_000) { ui.onAllNodesWithText("Bestand & Einheiten").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(15_000) { ui.onAllNodesWithText(L10n.text(R.string.ui_stock_units_a61769ad)).fetchSemanticsNodes().isNotEmpty() }
         screenshot("details")
-        ui.onNodeWithText("Bestand & Einheiten").performScrollTo().performClick()
-        ui.waitUntil(15_000) { ui.onAllNodesWithText("Bestand buchen").fetchSemanticsNodes().isNotEmpty() }
-        ui.onNodeWithText("Bestand buchen").performClick()
-        ui.onNodeWithText("Speichern").performClick()
-        ui.onNodeWithText("Bestandsänderung prüfen").assertIsDisplayed()
+        ui.onNodeWithText(L10n.text(R.string.ui_stock_units_a61769ad)).performScrollTo().performClick()
+        ui.waitUntil(15_000) { ui.onAllNodesWithText(L10n.text(R.string.ui_book_stock_e4df72bd)).fetchSemanticsNodes().isNotEmpty() }
+        ui.onNodeWithText(L10n.text(R.string.ui_book_stock_e4df72bd)).performClick()
+        ui.onNodeWithText(L10n.text(R.string.ui_save_f6b2ff39)).performClick()
+        ui.onNodeWithText(L10n.text(R.string.ui_review_stock_change_6bb00922)).assertIsDisplayed()
         screenshot("stock-confirmation")
         assertTrue(writes.none { it.path!!.contains("/stock/movements") })
-        ui.onNodeWithText("Bestätigen").performClick()
+        ui.onNodeWithText(L10n.text(R.string.ui_confirm_15b63b4d)).performClick()
         ui.waitUntil(15_000) { writes.any { it.path!!.contains("/stock/movements") } }
         val request = writes.first { it.path!!.contains("/stock/movements") }
         assertEquals("test-org", request.getHeader("X-Organization-ID"))
@@ -93,9 +93,9 @@ class InventoryJourneyTest {
     }
     @Test fun listAndDetailSurviveActivityRecreation() {
         ui.onNodeWithText("Akku-Bohrschrauber").performClick()
-        ui.waitUntil(15_000) { ui.onAllNodesWithText("Bearbeiten").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(15_000) { ui.onAllNodesWithText(L10n.text(R.string.ui_edit_84e45ee7)).fetchSemanticsNodes().isNotEmpty() }
         scenario.recreate()
-        ui.waitUntil(15_000) { ui.onAllNodesWithText("Bearbeiten").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(15_000) { ui.onAllNodesWithText(L10n.text(R.string.ui_edit_84e45ee7)).fetchSemanticsNodes().isNotEmpty() }
         ui.onNodeWithText("Akku-Bohrschrauber").assertExists()
     }
 }
