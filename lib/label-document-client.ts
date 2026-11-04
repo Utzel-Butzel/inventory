@@ -2,7 +2,7 @@ import { readyLabelDimensions } from "@/lib/label-print-dimensions";
 import { readyLabelQr } from "@/lib/label-qr-ready";
 import { waitForLabelImageCrops } from "@/lib/label-image-crop";
 import { labelFontEmbedCss } from "@/lib/label-fonts";
-import { labelSnapshotSchema, layoutLabelPages, type LabelSnapshot, type PrintMedia } from "@/lib/label-document";
+import { clipLabelRegion, labelSnapshotSchema, layoutLabelPages, type LabelSnapshot, type PrintMedia } from "@/lib/label-document";
 import type { PreparedLabel } from "@/lib/label-workspace-client";
 import type { PtouchTape } from "@/lib/ptouch-raster";
 
@@ -19,14 +19,15 @@ export async function captureLabel(node: HTMLElement, widthMm: number, heightMm:
     backgroundColor: node.dataset.labelInverted === "true" ? "black" : "white", skipFonts: !fontEmbedCSS, fontEmbedCSS,
     style: { boxShadow: "none", margin: "0" } });
   const bounds = node.getBoundingClientRect();
-  const regions = Array.from(node.querySelectorAll<HTMLElement>("[data-label-qr],.printable-label-image"), element => {
+  const regions = Array.from(node.querySelectorAll<HTMLElement>("[data-label-qr],.printable-label-image")).flatMap(element => {
     const box = element.getBoundingClientRect();
-    const clamp = (n: number) => Math.min(1, Math.max(0, n));
-    return { type: element.hasAttribute("data-label-qr") ? "qr" as const : "photo" as const,
+    const region = clipLabelRegion({ x: (box.left - bounds.left) / bounds.width, y: (box.top - bounds.top) / bounds.height,
+      width: box.width / bounds.width, height: box.height / bounds.height });
+    if (!region) return [];
+    return [{ type: element.hasAttribute("data-label-qr") ? "qr" as const : "photo" as const,
       ...(element.dataset.labelQrValue ? { expectedQr: element.dataset.labelQrValue } : {}),
-      x: clamp((box.left - bounds.left) / bounds.width), y: clamp((box.top - bounds.top) / bounds.height),
-      width: clamp(box.width / bounds.width), height: clamp(box.height / bounds.height),
-      optimization: element.dataset.labelPhotoOptimization === "standard" ? "standard" as const : "auto" as const };
+      ...region,
+      optimization: element.dataset.labelPhotoOptimization === "standard" ? "standard" as const : "auto" as const }];
   });
   return labelSnapshotSchema.parse({ png: canvas.toDataURL("image/png"), widthMm, heightMm, regions, expectedQr, inverted: node.dataset.labelInverted === "true" });
 }

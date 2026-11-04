@@ -78,3 +78,11 @@ export function layoutLabelPages(labels: Pick<LabelSnapshot, "widthMm" | "height
   });
   return pages;
 }
+
+/** Intersect a normalized print region with the label, preserving clipped photo bounds. */
+export function clipLabelRegion(box: { x: number; y: number; width: number; height: number }) {
+  const x = Math.max(0, box.x), y = Math.max(0, box.y);
+  const right = Math.min(1, box.x + box.width), bottom = Math.min(1, box.y + box.height);
+  if (right <= x || bottom <= y) return null;
+  return { x, y, width: right - x, height: bottom - y };
+}

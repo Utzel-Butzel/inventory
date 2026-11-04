@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
-import { DEFAULT_PRINT_MEDIA, layoutLabelPages, labelDocumentSchema } from '../lib/label-document.ts';
+import { DEFAULT_PRINT_MEDIA, layoutLabelPages, labelDocumentSchema, clipLabelRegion } from '../lib/label-document.ts';
 import { createLabelPdf } from '../lib/label-document-pdf.ts';
 import { sharedPrintSchema, printerCreateSchema } from '../lib/shared-label-print-contract.ts';
 import { labelWorkspaceMutationSchema } from '../lib/label-workspace-contract.ts';
@@ -70,4 +70,11 @@ test('remote formats remain explicit, legacy P-touch inputs work and printer con
  assert.equal(printerCreateSchema.parse({name:'Office',kind:'system',maxWidthMm:210}).maxWidthMm,210);
  assert.equal(printerCreateSchema.safeParse({name:'Office',kind:'system',maxWidthMm:0}).success,false);
  assert.ok(labelWorkspaceMutationSchema.safeParse({action:'preferences',preferences:{media:sheet}}).success);
+});
+
+test('negative image positions clip photo processing to the visible part of the label', () => {
+ assert.deepEqual(clipLabelRegion({x:-0.25,y:-0.125,width:0.5,height:0.5}), {x:0,y:0,width:0.25,height:0.375});
+ assert.deepEqual(clipLabelRegion({x:0.75,y:0.5,width:0.5,height:1}), {x:0.75,y:0.5,width:0.25,height:0.5});
+ assert.equal(clipLabelRegion({x:-0.5,y:0,width:0.25,height:0.5}), null);
+ assert.equal(clipLabelRegion({x:0,y:-0.5,width:0.5,height:0.5}), null);
 });
