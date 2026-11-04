@@ -15,6 +15,9 @@ export default defineConfig([
     ".next/**",
     "data/**",
     "dist/**",
+    "android/**/build/**",
+    "output/**",
+    "outputs/**",
     "out/**",
     // Distributed third-party bundles are copied verbatim, not authored here.
     "public/opencv/**",

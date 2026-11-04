@@ -146,13 +146,15 @@ test("identity and conditional resource access fail closed", async () => {
 });
 
 test("organization and native token creation reject read-only tenants", async () => {
-  const [organizationRoute, nativeLoginRoute] = await Promise.all([
+  const [organizationRoute, nativeLoginRoute, nativeSession] = await Promise.all([
     read("../app/api/v1/organizations/route.ts"),
     read("../app/api/v1/auth/login/route.ts"),
+    read("../lib/native-session.ts"),
   ]);
   assert.match(organizationRoute, /identity\.organization\.isReadOnly/);
-  assert.match(nativeLoginRoute, /organization\.isReadOnly/);
-  assert.match(nativeLoginRoute, /Native API access is disabled/);
+  assert.match(nativeLoginRoute, /await issueNativeSession\(/);
+  assert.match(nativeSession, /organization\.isReadOnly/);
+  assert.match(nativeSession, /Native API access is disabled/);
 });
 
 test("notification writes are guarded and reads avoid initialization", async () => {
