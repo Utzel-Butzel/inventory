@@ -21,22 +21,22 @@ struct InventoryMapView: View {
                     loadingOverlay
                 } else if filteredResources.isEmpty {
                     unavailableOverlay(
-                        title: queryTerms.isEmpty ? "Keine Einträge" : "Keine Treffer",
+                        title: queryTerms.isEmpty ? L10n.text("ui_no_items_35719c23") : L10n.text("ui_no_matches_6df7e9f7"),
                         description: queryTerms.isEmpty
-                            ? "Sobald Inventar erfasst wurde, erscheint es hier."
-                            : "Passe den Suchbegriff an."
+                            ? L10n.text("ui_captured_inventory_will_appear_here_4d4f188f")
+                            : L10n.text("ui_adjust_the_search_term_eda746bc")
                     )
                 } else if positionedResources.isEmpty {
                     unavailableOverlay(
-                        title: "Keine Kartenpositionen",
-                        description: "Die gefundenen Einträge haben noch keine GPS-Koordinaten."
+                        title: L10n.text("ui_no_map_locations_09ad3255"),
+                        description: L10n.text("ui_the_matching_items_do_not_have_gps_b4d2d444")
                     )
                 }
             }
             .background(InventoryTheme.canvas)
-            .navigationTitle("Karte")
+            .navigationTitle(L10n.text("ui_map_36a8c499"))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "Name, SKU, Tag oder Ort")
+            .searchable(text: $query, prompt: L10n.text("ui_name_sku_tag_or_location_a7c32941"))
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -49,7 +49,7 @@ struct InventoryMapView: View {
                         }
                     }
                     .disabled(loading)
-                    .accessibilityLabel("Karte aktualisieren")
+                    .accessibilityLabel(L10n.text("ui_refresh_map_95a65088"))
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 8) {
@@ -66,16 +66,16 @@ struct InventoryMapView: View {
                 cameraPosition = .automatic
             }
             .alert(
-                "Karte konnte nicht geladen werden",
+                L10n.text("ui_could_not_load_map_7837f152"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
                 )
             ) {
-                Button("Erneut laden") { Task { await loadResources() } }
-                Button("Abbrechen", role: .cancel) { errorMessage = nil }
+                Button(L10n.text("ui_retry_1b8b908f")) { Task { await loadResources() } }
+                Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { errorMessage = nil }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }
@@ -107,8 +107,8 @@ struct InventoryMapView: View {
                 if unpositionedCount > 0 {
                     Label(
                         unpositionedCount == 1
-                            ? "1 Treffer ohne GPS wird nicht auf der Karte angezeigt."
-                            : "\(unpositionedCount) Treffer ohne GPS werden nicht auf der Karte angezeigt.",
+                            ? L10n.text("ui_1_result_without_gps_is_not_shown_a12489a9")
+                            : L10n.text("ui_0_results_without_gps_are_not_shown_9dbb6dfa", unpositionedCount),
                         systemImage: "location.slash.fill"
                     )
                     .font(.caption.weight(.medium))
@@ -135,7 +135,7 @@ struct InventoryMapView: View {
     private var loadingOverlay: some View {
         VStack(spacing: 10) {
             ProgressView()
-            Text("Kartenpositionen werden geladen …")
+            Text(L10n.text("ui_loading_map_locations_c19f04c2"))
                 .font(.subheadline.weight(.medium))
         }
         .padding(20)
@@ -186,7 +186,7 @@ struct InventoryMapView: View {
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
 
-                Text("Bestand \(resource.quantity)")
+                Text(L10n.text("ui_stock_0_7d245045", resource.quantity))
                     .font(.caption2.monospacedDigit().weight(.semibold))
                     .foregroundStyle(.secondary)
             }

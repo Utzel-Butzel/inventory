@@ -93,7 +93,7 @@ struct CaptureView: View {
                 .environmentObject(state)
             }
             .alert(
-                "Foto konnte nicht hinzugefügt werden",
+                L10n.text("ui_could_not_add_photo_e4fcc8de"),
                 isPresented: Binding(
                     get: { model.errorMessage != nil },
                     set: { if !$0 { model.errorMessage = nil } }
@@ -101,7 +101,7 @@ struct CaptureView: View {
             ) {
                 Button("OK", role: .cancel) { model.errorMessage = nil }
             } message: {
-                Text(model.errorMessage ?? "Unbekannter Fehler")
+                Text(model.errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }
@@ -159,7 +159,7 @@ struct CaptureView: View {
                                 .background(.black.opacity(0.36), in: Circle())
                         }
                         .foregroundStyle(.white)
-                        .accessibilityLabel("Erfassen schließen")
+                        .accessibilityLabel(L10n.text("ui_close_capture_dcb1dca3"))
                     }
 
                     topUploadButton
@@ -233,8 +233,8 @@ struct CaptureView: View {
                         .opacity(camera.canSwitchCamera ? 1 : 0.45)
                         .accessibilityLabel(
                             camera.isUsingFrontCamera
-                                ? "Zur Rückkamera wechseln"
-                                : "Zur Frontkamera wechseln"
+                                ? L10n.text("ui_switch_to_rear_camera_33a18d67")
+                                : L10n.text("ui_switch_to_front_camera_ac6c89db")
                         )
                     }
                     .transition(.opacity)
@@ -288,9 +288,9 @@ struct CaptureView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
-            "Aufgenommene Fotos: \(model.photos.count) von \(CaptureViewModel.maximumPhotos)"
+            L10n.text("ui_photos_taken_0_of_1_c20e6760", model.photos.count, CaptureViewModel.maximumPhotos)
         )
-        .accessibilityHint("Öffnet die aufgenommenen Fotos")
+        .accessibilityHint(L10n.text("ui_opens_captured_photos_6d56cfef"))
     }
 
     private var detailsButton: some View {
@@ -312,7 +312,7 @@ struct CaptureView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Öffnet Namen, Ort und weitere Angaben")
+        .accessibilityHint(L10n.text("ui_opens_name_location_and_other_details_d534fc78"))
     }
 
     private var spatialCaptureButton: some View {
@@ -321,7 +321,7 @@ struct CaptureView: View {
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: model.spatialPlacement == nil ? "cube.transparent" : "mappin.and.ellipse")
-                Text(model.spatialPlacement == nil ? "Im Raum" : model.spatialPlacement?.roomName ?? "Im Raum")
+                Text(model.spatialPlacement == nil ? L10n.text("ui_in_room_da48d729") : model.spatialPlacement?.roomName ?? L10n.text("ui_in_room_da48d729"))
                     .lineLimit(1)
             }
             .font(.subheadline.weight(.semibold))
@@ -337,14 +337,14 @@ struct CaptureView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Erfasst Foto und 3D-Position in einem gescannten Raum")
+        .accessibilityHint(L10n.text("ui_captures_a_photo_and_3d_position_in_91e09d30"))
     }
 
     private var detailsSummary: String {
         let count = [model.name, model.locationName, model.sku, model.barcode, model.serialNumber]
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .count + (model.locationService.coordinates == nil ? 0 : 1)
-        return count == 0 ? "Details" : "Details · \(count) Angaben"
+        return count == 0 ? L10n.text("ui_details_45989de4") : L10n.text("ui_details_0_fields_72ce2ae9", count)
     }
 
     private var detailsSheet: some View {
@@ -360,11 +360,11 @@ struct CaptureView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(InventoryTheme.canvas)
-            .navigationTitle("Details")
+            .navigationTitle(L10n.text("ui_details_45989de4"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Fertig") {
+                    Button(L10n.text("ui_done_25d52d7e")) {
                         showDetails = false
                     }
                 }
@@ -382,7 +382,7 @@ struct CaptureView: View {
                 } else {
                     Image(systemName: "arrow.up")
                 }
-                Text("Hochladen")
+                Text(L10n.text("ui_upload_6638ef84"))
             }
             .font(.caption.weight(.bold))
             .foregroundStyle(InventoryTheme.ink)
@@ -393,7 +393,7 @@ struct CaptureView: View {
         .buttonStyle(.plain)
         .disabled(!model.canSubmit || model.processingCount > 0 || (state.canUseAI && !model.aiDefaultsLoaded))
         .opacity(model.canSubmit && model.processingCount == 0 ? 1 : 0.55)
-        .accessibilityHint("Legt den Gegenstand an und startet den Upload")
+        .accessibilityHint(L10n.text("ui_creates_the_item_and_starts_the_upload_0fa46231"))
     }
 
     @ViewBuilder
@@ -427,15 +427,15 @@ struct CaptureView: View {
     private var intakeOptions: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 7) {
-                Text("Name (optional)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                TextField("Wird sonst aus Fotos erkannt", text: $model.name)
+                Text(L10n.text("ui_name_optional_e09b37bc")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                TextField(L10n.text("ui_otherwise_detected_from_photos_c4cfd713"), text: $model.name)
                     .textInputAutocapitalization(.sentences)
                     .padding(13)
                     .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
             }
 
             HStack(spacing: 12) {
-                Picker("Typ", selection: $model.resourceType) {
+                Picker(L10n.text("ui_type_1b024183"), selection: $model.resourceType) {
                     ForEach(captureTypes, id: \.self) { type in
                         Text(captureTypeLabel(type)).tag(type)
                     }
@@ -449,7 +449,7 @@ struct CaptureView: View {
                     model.locationService.requestCurrentLocation()
                 } label: {
                     Label(
-                        model.locationService.coordinates == nil ? "GPS" : "GPS gesetzt",
+                        model.locationService.coordinates == nil ? "GPS" : L10n.text("ui_gps_set_8af94f20"),
                         systemImage: model.locationService.coordinates == nil ? "location" : "location.fill"
                     )
                     .frame(maxWidth: .infinity)
@@ -458,7 +458,7 @@ struct CaptureView: View {
                 .tint(InventoryTheme.ink)
             }
 
-            TextField("Ort, Regal oder Raum", text: $model.locationName)
+            TextField(L10n.text("ui_location_shelf_or_room_5161bf8f"), text: $model.locationName)
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
 
@@ -467,14 +467,14 @@ struct CaptureView: View {
                     Image(systemName: "mappin.and.ellipse")
                         .foregroundStyle(InventoryTheme.accent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("3D-Position in \(placement.roomName)")
+                        Text(L10n.text("ui_3d_position_in_0_cf6a0309", placement.roomName))
                             .font(.caption.weight(.semibold))
                         Text(placement.position.map { String(format: "%.2f", $0) }.joined(separator: " · ") + " m")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Entfernen") { model.clearSpatialPlacement() }
+                    Button(L10n.text("ui_remove_3828375a")) { model.clearSpatialPlacement() }
                         .font(.caption.weight(.semibold))
                 }
                 .padding(12)
@@ -484,12 +484,12 @@ struct CaptureView: View {
             VStack(alignment: .leading, spacing: 9) {
                 HStack {
                     Label(
-                        codeScanning ? "Code ins Kamerabild halten" : "QR-/Barcode-Zuordnung",
+                        codeScanning ? L10n.text("ui_hold_the_code_in_the_camera_view_bb6b0370") : "QR-/Barcode-Zuordnung",
                         systemImage: codeScanning ? "viewfinder" : "qrcode"
                     )
                     .font(.caption.weight(.semibold))
                     Spacer()
-                    Button(codeScanning ? "Abbrechen" : "Scannen") {
+                    Button(codeScanning ? L10n.text("ui_cancel_f7ff1178") : L10n.text("ui_scan_2a53b078")) {
                         toggleCodeScanning()
                     }
                     .font(.caption.weight(.semibold))
@@ -499,12 +499,12 @@ struct CaptureView: View {
                     .autocorrectionDisabled()
                     .padding(12)
                     .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                TextField("Barcode", text: $model.barcode)
+                TextField(L10n.text("ui_barcode_a401f372"), text: $model.barcode)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .padding(12)
                     .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                TextField("Seriennummer", text: $model.serialNumber)
+                TextField(L10n.text("ui_serial_number_760abc3d"), text: $model.serialNumber)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .padding(12)
@@ -514,20 +514,20 @@ struct CaptureView: View {
             if state.canUseAI {
                 VStack(alignment: .leading, spacing: 3) {
                     if !model.aiDefaultsLoaded {
-                        Button("KI-Vorgaben erneut laden") { Task { await model.loadAIDefaults(from: state) } }
+                        Button(L10n.text("ui_reload_ai_defaults_647b46ea")) { Task { await model.loadAIDefaults(from: state) } }
                     }
-                    Toggle("Fotos analysieren", isOn: $model.autoAnalyze)
+                    Toggle(L10n.text("ui_analyze_photos_957b01f7"), isOn: $model.autoAnalyze)
                     if model.autoAnalyze {
-                        Toggle("Vorhandene Texte überschreiben", isOn: $model.analysisOverwrite)
+                        Toggle(L10n.text("ui_overwrite_existing_text_e3d8f4dd"), isOn: $model.analysisOverwrite)
                     }
                     if state.canResearchInventory {
-                        Toggle("Nach dem Anlegen recherchieren", isOn: $model.autoResearch)
-                        Text("Recherche ergänzt fehlende Angaben aus dem Web und verursacht zusätzliche KI-Kosten.")
+                        Toggle(L10n.text("ui_research_after_creating_3b405147"), isOn: $model.autoResearch)
+                        Text(L10n.text("ui_research_adds_missing_details_from_the_web_4e5d6382"))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if let estimate = state.aiCostEstimate(for: "inventoryAnalysis") {
                         Label(
-                            "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                            L10n.text("ui_estimated_api_cost_0_f15c8c17", estimate.formattedUSD),
                             systemImage: "dollarsign.circle"
                         )
                         .font(.caption2)
@@ -535,11 +535,11 @@ struct CaptureView: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Toggle("Cover erzeugen", isOn: $model.autoCover)
+                    Toggle(L10n.text("ui_generate_cover_a4f5e57d"), isOn: $model.autoCover)
                         .disabled(!model.autoAnalyze)
                     if let estimate = state.imageGenerationCostEstimate() {
                         Label(
-                            "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                            L10n.text("ui_estimated_api_cost_0_f15c8c17", estimate.formattedUSD),
                             systemImage: "dollarsign.circle"
                         )
                         .font(.caption2)
@@ -553,11 +553,11 @@ struct CaptureView: View {
     private var permissionOverlay: some View {
         VStack(spacing: 12) {
             Image(systemName: "camera.fill").font(.largeTitle)
-            Text("Kamerazugriff fehlt").font(.headline)
-            Text("Aktiviere die Kamera in den iOS-Einstellungen.")
+            Text(L10n.text("ui_camera_access_missing_f7ed6654")).font(.headline)
+            Text(L10n.text("ui_enable_the_camera_in_ios_settings_3f9e91ac"))
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
-            Button("Einstellungen öffnen") {
+            Button(L10n.text("ui_open_settings_b05424fb")) {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                 UIApplication.shared.open(url)
             }
@@ -644,15 +644,15 @@ struct CaptureView: View {
 extension InventoryResourceType {
     var localizedName: String {
         switch self {
-        case .place: "Ort"
-        case .person: "Person"
-        case .vehicle: "Fahrzeug"
-        case .tool: "Werkzeug"
-        case .project: "Projekt"
-        case .clothing: "Kleidung"
-        case .furniture: "Möbel"
-        case .object: "Gegenstand"
-        case .other: "Sonstiges"
+        case .place: L10n.text("ui_place_30fb2591")
+        case .person: L10n.text("ui_person_6007db63")
+        case .vehicle: L10n.text("ui_vehicle_56f7557e")
+        case .tool: L10n.text("ui_tool_bf1349a8")
+        case .project: L10n.text("ui_project_40ebf93a")
+        case .clothing: L10n.text("ui_clothing_e6bb4b3e")
+        case .furniture: L10n.text("ui_furniture_c895b27d")
+        case .object: L10n.text("ui_item_72e2f335")
+        case .other: L10n.text("ui_other_9f3d5f8d")
         case .custom(let value): value
         }
     }

@@ -264,7 +264,9 @@
       "succeeded": "Abgeschlossen",
       "failed": "Fehlgeschlagen"
     },
-    "notices": { "saved": "Das monatliche KI-Limit wurde gespeichert." },
+    "notices": {
+      "saved": "Das monatliche KI-Limit wurde gespeichert."
+    },
     "errors": {
       "load": "Die KI-Auswertung konnte nicht geladen werden.",
       "save": "Das KI-Limit konnte nicht gespeichert werden.",
@@ -652,28 +654,28 @@
       "scope": "Was soll freigegeben werden?",
       "scopes": {
         "inventory": "Inventar",
-      "item": "Einzelner Eintrag"
-    },
-    "accessMode": "Zugriffsart",
-    "accessModes": {
-      "view": {
-        "label": "Nur ansehen",
-        "description": "Öffentlicher Katalog ohne Schreibzugriff"
+        "item": "Einzelner Eintrag"
       },
-      "stock": {
-        "label": "Bestandstool",
-        "description": "Passwortgeschütztes Ein- und Ausbuchen"
-      }
-    },
-    "password": "Passwort für das Bestandstool",
-    "passwordPlaceholder": "Mindestens 8 Zeichen",
-    "passwordHint": "Das Passwort wird nur gehasht gespeichert und schützt Katalog, Medien, Scanner und Buchungen.",
+      "accessMode": "Zugriffsart",
+      "accessModes": {
+        "view": {
+          "label": "Nur ansehen",
+          "description": "Öffentlicher Katalog ohne Schreibzugriff"
+        },
+        "stock": {
+          "label": "Bestandstool",
+          "description": "Passwortgeschütztes Ein- und Ausbuchen"
+        }
+      },
+      "password": "Passwort für das Bestandstool",
+      "passwordPlaceholder": "Mindestens 8 Zeichen",
+      "passwordHint": "Das Passwort wird nur gehasht gespeichert und schützt Katalog, Medien, Scanner und Buchungen.",
       "name": "Linkname",
       "namePlaceholder": "Werkstattmuster",
       "filter": "Filter für benutzerdefiniertes Feld",
       "optional": "· optional",
-    "allInventory": "Gesamtes Inventar · kein Filter",
-    "stockTool": "Bestandstool",
+      "allInventory": "Gesamtes Inventar · kein Filter",
+      "stockTool": "Bestandstool",
       "filterHint": "Nur Einträge, deren Wert für {{field}} exakt dem folgenden Wert entspricht, sind sichtbar.",
       "item": "Inventareintrag",
       "itemPlaceholder": "Nach Name, SKU, Standort oder benutzerdefiniertem Feld suchen…",
@@ -705,7 +707,8 @@
       "copied": "Kopiert",
       "open": "Öffnen",
       "revoke": "Widerrufen",
-      "confirmRevoke": "Widerruf bestätigen"
+      "confirmRevoke": "Widerruf bestätigen",
+      "stockTool": "Bestandswerkzeug"
     },
     "notices": {
       "created": "Öffentlicher Link „{{name}}“ wurde erstellt.",
@@ -716,8 +719,8 @@
       "loadItems": "Inventareinträge konnten nicht geladen werden.",
       "nameRequired": "Gib dem Link einen Namen, damit er später leicht zu erkennen ist.",
       "itemRequired": "Wähle den Eintrag aus, den dieser Link freigeben soll.",
-    "filterValueRequired": "Wähle einen Wert für den Filter des benutzerdefinierten Feldes.",
-    "passwordRequired": "Lege für das Bestandstool ein Passwort mit mindestens 8 Zeichen fest.",
+      "filterValueRequired": "Wähle einen Wert für den Filter des benutzerdefinierten Feldes.",
+      "passwordRequired": "Lege für das Bestandstool ein Passwort mit mindestens 8 Zeichen fest.",
       "create": "Der öffentliche Link konnte nicht erstellt werden.",
       "clipboard": "Der Zugriff auf die Zwischenablage wurde blockiert. Öffne den Link und kopiere ihn stattdessen aus dem Browser.",
       "revoke": "Der öffentliche Link konnte nicht widerrufen werden."
@@ -770,9 +773,18 @@
       "customExpiration": "Benutzerdefiniertes Ablaufdatum",
       "scopes": "Berechtigungsbereiche",
       "scope": {
-        "read": { "label": "Lesen", "description": "Einträge und Medien anzeigen" },
-        "write": { "label": "Schreiben", "description": "Erstellen, bearbeiten und zusammenführen" },
-        "ai": { "label": "KI", "description": "Analyse und Erzeugung ausführen" }
+        "read": {
+          "label": "Lesen",
+          "description": "Einträge und Medien anzeigen"
+        },
+        "write": {
+          "label": "Schreiben",
+          "description": "Erstellen, bearbeiten und zusammenführen"
+        },
+        "ai": {
+          "label": "KI",
+          "description": "Analyse und Erzeugung ausführen"
+        }
       },
       "cancel": "Abbrechen",
       "dismissError": "Fehler schließen",
@@ -1413,6 +1425,31 @@
     }
   },
   "csv": {
+    "migration": {
+      "value": "Kaufpreis",
+      "exportCsv": "CSV für {{system}}",
+      "exportCsvDescription": "Spalten und Werte für das gewählte Zielsystem.",
+      "fileHint": "UTF-8 · maximal 5 MB und 1.000 Einträge · Vorschau vor dem Import",
+      "source": "Importieren aus",
+      "target": "Exportieren für",
+      "systems": {
+        "open-inventory": "Open Inventory",
+        "snipe-it": "Snipe-IT (Assets)",
+        "homebox": "Homebox"
+      },
+      "currency": "Währung der Kaufpreise",
+      "mapping": "Spaltenzuordnung prüfen",
+      "notes": "Notizen (Originalwert)",
+      "limitations": "Übertragen werden Inventareinträge. Bilder, Anhänge, Ausleihen, Benutzer und Historien sind nicht enthalten. Zusatzfelder und Quell-IDs bleiben als Text in den Notizen erhalten; Beziehungen werden nicht neu verknüpft. Unbekannte Statuswerte werden als „Verfügbar“ angelegt und im Original in den Notizen gesichert. Es werden nur neue Einträge erstellt.",
+      "importHints": {
+        "snipe-it": "Exportiere deine Assets in Snipe-IT als CSV und wähle die Datei hier aus. Name, Asset-Tag, Seriennummer, Standort, Kategorie und Kaufpreis werden zugeordnet. Ein Asset entspricht einem Stück.",
+        "homebox": "Wähle den CSV-Export aus Homebox mit HB.-Spalten. Mengen, Standorte, Tags, Seriennummern und Kaufpreise werden übernommen. Mengen müssen ganze Zahlen sein. Komma, Semikolon und Tabulator werden als Trennzeichen erkannt."
+      },
+      "exportHints": {
+        "snipe-it": "CSV für den Asset-Import in Snipe-IT. Alle Einträge müssen genau ein Stück enthalten. Name dient als Modell, die erste Kategorie als Modellkategorie. Statusbezeichnungen und Währung im Zielsystem prüfen; Ausleihen werden nicht angelegt. Asset-Tags können dort bestehende Assets aktualisieren. Zusatzdaten stehen in den Notizen.",
+        "homebox": "CSV für den Homebox-Import. SKU, Barcode und Währung werden als Zusatzfelder übertragen. Weitere Daten stehen in den Notizen. Für portable CSV-Dateien gelten maximal 1.000 Zeichen für Notizen und 255 für Beschreibungen; längere Inhalte blockieren den Export. Wiederholte Importe können über die Import-Referenz vorhandene Einträge aktualisieren."
+      }
+    },
     "title": "Inventarimport und -export",
     "description": "Exportiere das Inventar als CSV, Excel oder PDF oder prüfe bis zu 1.000 neue Einträge vor dem CSV-Import.",
     "exportOnlyDescription": "Exportiere das aktuelle Inventar als CSV, Excel oder PDF.",
@@ -1420,9 +1457,18 @@
     "exporting": "{{format}} wird vorbereitet…",
     "exportFormats": "Exportformate",
     "formats": {
-      "csv": { "label": "CSV-Daten", "description": "Importkompatible UTF-8-Daten mit allen Feldern." },
-      "xlsx": { "label": "Excel-Arbeitsmappe", "description": "Formatierte Arbeitsmappe mit Filtern, fixierten Kopfzeilen und passenden Datentypen." },
-      "pdf": { "label": "PDF-Bericht", "description": "Kompakte, druckbare Inventarübersicht mit Seitenzahlen." }
+      "csv": {
+        "label": "CSV-Daten",
+        "description": "Importkompatible UTF-8-Daten mit allen Feldern."
+      },
+      "xlsx": {
+        "label": "Excel-Arbeitsmappe",
+        "description": "Formatierte Arbeitsmappe mit Filtern, fixierten Kopfzeilen und passenden Datentypen."
+      },
+      "pdf": {
+        "label": "PDF-Bericht",
+        "description": "Kompakte, druckbare Inventarübersicht mit Seitenzahlen."
+      }
     },
     "chooseFile": "UTF-8-CSV-Datei auswählen",
     "fileHint": "Verwende die exportierten Spaltenüberschriften; ID und Zeitstempel werden beim Import ignoriert.",

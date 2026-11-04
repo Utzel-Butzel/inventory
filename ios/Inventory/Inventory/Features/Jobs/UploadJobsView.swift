@@ -14,7 +14,7 @@ private struct UploadJobsContent: View {
     var body: some View {
         Group {
             if queue.visibleJobs.isEmpty {
-                ContentUnavailableView("Keine Uploads", systemImage: "arrow.up.circle")
+                ContentUnavailableView(L10n.text("ui_no_uploads_c1d7982a"), systemImage: "arrow.up.circle")
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
@@ -34,7 +34,7 @@ private struct UploadJobsContent: View {
             }
         }
         .background(InventoryTheme.canvas)
-        .navigationTitle("Uploads")
+        .navigationTitle(L10n.text("ui_uploads_d084236c"))
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -71,9 +71,9 @@ private struct UploadJobsContent: View {
             }
 
             HStack {
-                Label("\(job.filenames.count) Foto(s)", systemImage: "photo.stack")
+                Label(L10n.text("ui_photos_0_a51c1926", job.filenames.count), systemImage: "photo.stack")
                 if job.resourceID != nil {
-                    Label("Servereintrag erstellt", systemImage: "checkmark.circle")
+                    Label(L10n.text("ui_server_item_created_0b17d4a5"), systemImage: "checkmark.circle")
                 }
                 Spacer()
             }
@@ -85,7 +85,7 @@ private struct UploadJobsContent: View {
                     Button {
                         queue.retry(job.id)
                     } label: {
-                        Label("Erneut versuchen", systemImage: "arrow.clockwise")
+                        Label(L10n.text("ui_retry_948643cb"), systemImage: "arrow.clockwise")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(InventoryTheme.ink)
@@ -104,7 +104,7 @@ private struct UploadJobsContent: View {
                 Button {
                     queue.remove(job.id)
                 } label: {
-                    Label("Aus Liste entfernen", systemImage: "checkmark")
+                    Label(L10n.text("ui_remove_from_list_c86c7c08"), systemImage: "checkmark")
                 }
                 .buttonStyle(.bordered)
             }
@@ -116,17 +116,17 @@ private struct UploadJobsContent: View {
 private extension IntakeJobStage {
     var localizedName: String {
         switch self {
-        case .preparing: "Fotos vorbereiten"
-        case .queued: "Wartet auf Upload"
-        case .creating: "Gegenstand anlegen"
-        case .placing: "Position im Raum speichern"
-        case .uploading: "Fotos hochladen"
-        case .analyzing: "Fotos analysieren"
-        case .researching: "Webrecherche"
-        case .generatingCover: "Cover erzeugen"
-        case .complete: "Fertig"
-        case .warning: "Gespeichert mit Hinweis"
-        case .failed: "Fehlgeschlagen"
+        case .preparing: L10n.text("ui_prepare_photos_77e4bda8")
+        case .queued: L10n.text("ui_waiting_for_upload_459b3e1f")
+        case .creating: L10n.text("ui_create_item_dcbe30ea")
+        case .placing: L10n.text("ui_save_position_in_room_b6186254")
+        case .uploading: L10n.text("ui_upload_photos_e80309b4")
+        case .analyzing: L10n.text("ui_analyze_photos_957b01f7")
+        case .researching: L10n.text("ui_web_research_f9c82c1b")
+        case .generatingCover: L10n.text("ui_generate_cover_a4f5e57d")
+        case .complete: L10n.text("ui_done_25d52d7e")
+        case .warning: L10n.text("ui_saved_with_a_notice_fc397c49")
+        case .failed: L10n.text("ui_failed_1c47a973")
         }
     }
 

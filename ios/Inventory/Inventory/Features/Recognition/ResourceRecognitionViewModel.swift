@@ -160,7 +160,7 @@ final class ResourceRecognitionViewModel: ObservableObject {
         taskID: UUID
     ) async throws {
         guard let photoURL else {
-            throw APIClientError.invalidUpload("Das Erkennungsfoto fehlt.")
+            throw APIClientError.invalidUpload(L10n.text("ui_the_recognition_photo_is_missing_ffb32546"))
         }
         let attemptID = recognitionAttemptID ?? UUID()
         recognitionAttemptID = attemptID

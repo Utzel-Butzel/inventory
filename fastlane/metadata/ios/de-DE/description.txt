@@ -1,0 +1,21 @@
+Wissen, was da ist. Open Inventory verbindet dein Smartphone mit deinem eigenen Open-Inventory-Server.
+
+Erfasse Werkzeuge, Materialien und Geräte direkt vor Ort. Suche im Inventar, scanne QR- und Barcodes, ergänze Fotos und Dokumente und behalte Bestände, Standorte und Ausleihen im Blick.
+
+• Inventar durchsuchen, anlegen und bearbeiten
+• QR- und Barcodes scannen
+• Fotos, Videos und Dokumente zu Einträgen hinzufügen
+• Wareneingänge und Warenausgänge buchen
+• Ausleihen, Rücknahmen und Reservierungen verwalten
+• Varianten, Beziehungen und Stücklisten anzeigen
+• Standorte auf der Karte und vorhandene Raumdaten ansehen
+• Konfigurierte Scan-Abläufe ausführen
+• Optionale KI-Funktionen des verbundenen Servers nutzen
+
+Du benötigst einen erreichbaren Open-Inventory-Server und ein bestehendes Benutzerkonto oder einen API-Token. Die Funktionen richten sich nach Serverkonfiguration und Zugriffsrechten. Externe Server und optionale Dienste können eigene Kosten verursachen.
+
+Open Inventory ist Open Source. Weitere Informationen und die Dokumentation findest du auf openinventory.polyxo.de.
+
+Auf kompatiblen Apple-Geräten stehen zusätzlich RoomPlan und Object Capture zur Verfügung.
+
+Mit „Demo ausprobieren“ kannst du die öffentliche, schreibgeschützte Demo ohne eigenes Konto öffnen.

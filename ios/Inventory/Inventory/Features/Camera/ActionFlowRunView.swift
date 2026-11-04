@@ -34,7 +34,7 @@ struct ActionFlowRunView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     if loading {
-                        ProgressView("Aktion wird vorbereitet …")
+                        ProgressView(L10n.text("ui_preparing_action_e8e6d8bf"))
                             .frame(maxWidth: .infinity, minHeight: 180)
                             .inventoryCard()
                     } else if let chainConfiguration {
@@ -58,7 +58,7 @@ struct ActionFlowRunView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(chainReview.completed ? "Nächster Scan" : result == nil ? "Abbrechen" : "Fertig") { dismiss() }
+                    Button(chainReview.completed ? L10n.text("ui_next_scan_79829c72") : result == nil ? L10n.text("ui_cancel_f7ff1178") : L10n.text("ui_done_25d52d7e")) { dismiss() }
                         .disabled(executing || chainReview.confirmationUncertain)
                 }
             }
@@ -99,12 +99,12 @@ struct ActionFlowRunView: View {
         if let report = chainReview.report {
             ActionChainReportCard(report: report, completed: chainReview.completed)
             if chainReview.completed {
-                Button("Nächsten Code scannen") { dismiss() }
+                Button(L10n.text("ui_scan_another_code_583eca16")) { dismiss() }
                     .buttonStyle(.borderedProminent).tint(InventoryTheme.ink)
                     .frame(minHeight: 48)
             } else {
                 VStack(spacing: 12) {
-                    Text("Alle Schritte werden gemeinsam ausgeführt. Wenn ein Schritt fehlschlägt, wird nichts gebucht.")
+                    Text(L10n.text("ui_all_steps_run_together_if_a_step_9074faab"))
                         .font(.subheadline).foregroundStyle(.secondary)
                     chainError
                     Button {
@@ -112,23 +112,23 @@ struct ActionFlowRunView: View {
                     } label: {
                         HStack {
                             if executing { ProgressView().tint(.white) }
-                            Text(chainReview.confirmationUncertain ? "Bestätigung erneut senden" : "Alle Änderungen bestätigen")
+                            Text(chainReview.confirmationUncertain ? L10n.text("ui_retry_confirmation_28f2f7ed") : L10n.text("ui_confirm_all_changes_1d0e068c"))
                         }.frame(maxWidth: .infinity, minHeight: 48)
                     }
                     .buttonStyle(.borderedProminent).tint(InventoryTheme.ink)
                     .disabled(executing || !state.canManageWorkflows)
-                    Button("Angaben ändern") { chainReview.invalidate(); errorMessage = nil }
+                    Button(L10n.text("ui_edit_details_37e4d9e8")) { chainReview.invalidate(); errorMessage = nil }
                         .disabled(executing || chainReview.confirmationUncertain)
-                    if !state.canManageWorkflows { Label("Du kannst diesen Ablauf nur ansehen.", systemImage: "lock.fill").font(.footnote) }
+                    if !state.canManageWorkflows { Label(L10n.text("ui_you_can_only_view_this_workflow_dbbe3317"), systemImage: "lock.fill").font(.footnote) }
                 }.inventoryCard()
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Code erkannt", systemImage: "qrcode.viewfinder").font(.headline)
+                Label(L10n.text("ui_code_detected_5b4af761"), systemImage: "qrcode.viewfinder").font(.headline)
                 Text(configuration.identifier).font(.body.monospaced()).textSelection(.enabled)
-                Text("Wähle die passenden Angaben. Fertigungsabläufe mit vollständig ausgefüllten Auswahlfeldern werden automatisch geprüft. Gebucht wird erst nach deiner Bestätigung.")
+                Text(L10n.text("ui_select_the_appropriate_details_manufacturing_workflows_with_e699191c"))
                     .font(.subheadline).foregroundStyle(.secondary)
-                DisclosureGroup("\(configuration.actions.filter { $0.enabled != false }.count) Schritte im Ablauf") {
+                DisclosureGroup(L10n.text("ui_steps_in_workflow_0_4237e8f0", configuration.actions.filter { $0.enabled != false }.count)) {
                     ForEach(configuration.actions.filter { $0.enabled != false }) { action in
                         Label(action.label, systemImage: "circle").font(.subheadline)
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
@@ -144,11 +144,11 @@ struct ActionFlowRunView: View {
                 } label: {
                     HStack {
                         if executing { ProgressView().tint(.white) }
-                        Text(executing ? "Ablauf wird geprüft …" : "Alle Aktionen prüfen")
+                        Text(executing ? L10n.text("ui_checking_workflow_31431fe4") : L10n.text("ui_review_all_actions_4b9427c8"))
                     }.frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.borderedProminent).tint(InventoryTheme.ink).disabled(executing)
-                Text("Dabei wird noch kein Bestand verändert.").font(.footnote).foregroundStyle(.secondary)
+                Text(L10n.text("ui_no_stock_is_changed_yet_616e8c8f")).font(.footnote).foregroundStyle(.secondary)
             }.inventoryCard()
         }
     }
@@ -180,7 +180,7 @@ struct ActionFlowRunView: View {
                     .accessibilityAddTraits(selectedTargets[group.id] == nil ? [] : [.isSelected])
                 }
                 if selectedTargets[group.id] != nil && group.options.count > 1 {
-                    Picker("Variante", selection: Binding(
+                    Picker(L10n.text("ui_variant_a0f6dc64"), selection: Binding(
                         get: { selectedTargets[group.id] },
                         set: { selectedTargets[group.id] = $0 }
                     )) {
@@ -218,11 +218,11 @@ struct ActionFlowRunView: View {
         let fields = visibleChainFields(configuration)
         errorMessage = nil
         let selected = configuration.targetGroups.compactMap { selectedTargets[$0.id] }
-        guard let uploadTarget = selected.first else { errorMessage = "Bitte mindestens ein Produkt auswählen."; return }
+        guard let uploadTarget = selected.first else { errorMessage = L10n.text("ui_please_select_at_least_one_product_350b11e8"); return }
         guard validate(fields: fields) else { return }
         for field in fields where field.resolvedType == "number" {
             let raw = textInputs[field.key, default: ""].trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
-            if !raw.isEmpty && !(Double(raw)?.isFinite ?? false) { errorMessage = "Bitte bei \(field.label) eine gültige Zahl eingeben."; return }
+            if !raw.isEmpty && !(Double(raw)?.isFinite ?? false) { errorMessage = L10n.text("ui_please_enter_a_valid_number_for_0_2b6d74c2", field.label); return }
         }
         executing = true
         defer { executing = false }
@@ -249,10 +249,10 @@ struct ActionFlowRunView: View {
             if let status = (error as? APIClientError)?.statusCode, (400..<500).contains(status) {
                 chainReview.confirmationUncertain = false
                 chainReview.invalidate()
-                errorMessage = status == 409 ? "Die Angaben oder der Bestand haben sich geändert. Bitte den Ablauf erneut prüfen." : error.localizedDescription
+                errorMessage = status == 409 ? L10n.text("ui_the_details_or_stock_have_changed_please_145b2950") : error.localizedDescription
             } else {
                 chainReview.confirmationUncertain = true
-                errorMessage = "Die Bestätigung ist noch unklar. Bitte erneut senden; dieselbe Buchung wird dabei nicht doppelt ausgeführt."
+                errorMessage = L10n.text("ui_the_confirmation_result_is_unclear_send_it_9f8305c0")
             }
         }
     }
@@ -269,7 +269,7 @@ struct ActionFlowRunView: View {
                 .textSelection(.enabled)
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Bestand vorher")
+                    Text(L10n.text("ui_stock_before_581ca2cf"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("\(value.quantityBefore)")
@@ -280,7 +280,7 @@ struct ActionFlowRunView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text("Bestand danach")
+                    Text(L10n.text("ui_stock_after_ec7c409a"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("\(value.quantityAfter)")
@@ -323,7 +323,7 @@ struct ActionFlowRunView: View {
                     .textFieldStyle(.roundedBorder)
                 case "checkbox":
                     Toggle(
-                        field.placeholder ?? "Aktiv",
+                        field.placeholder ?? L10n.text("ui_active_8163454f"),
                         isOn: checkboxBinding(for: field.key)
                     )
                 case "select", "radio":
@@ -353,10 +353,10 @@ struct ActionFlowRunView: View {
                         }
                     } else {
                         Picker(
-                            field.placeholder ?? "Bitte auswählen",
+                            field.placeholder ?? L10n.text("ui_please_select_fd148453"),
                             selection: textBinding(for: field.key)
                         ) {
-                            Text("Bitte auswählen").tag("")
+                            Text(L10n.text("ui_please_select_fd148453")).tag("")
                             ForEach(field.options ?? []) { option in
                                 Text(option.label).tag(option.value)
                             }
@@ -372,8 +372,8 @@ struct ActionFlowRunView: View {
                     ) {
                         Label(
                             selectedPhotoCount == 0
-                                ? "Fotos auswählen"
-                                : "\(selectedPhotoCount) Foto(s) ausgewählt",
+                                ? L10n.text("ui_select_photos_507da54a")
+                                : L10n.text("ui_photos_selected_0_455bea2d", selectedPhotoCount),
                             systemImage: "photo.on.rectangle.angled"
                         )
                         .frame(maxWidth: .infinity, minHeight: 42)
@@ -386,8 +386,8 @@ struct ActionFlowRunView: View {
                     } label: {
                         Label(
                             fileInputs[field.key, default: []].isEmpty
-                                ? "Dateien auswählen"
-                                : "\(fileInputs[field.key, default: []].count) Datei(en) ausgewählt",
+                                ? L10n.text("ui_select_files_2fa2abd5")
+                                : L10n.text("ui_files_selected_0_2760c084", fileInputs[field.key, default: []].count),
                             systemImage: "paperclip"
                         )
                         .frame(maxWidth: .infinity, minHeight: 42)
@@ -421,7 +421,7 @@ struct ActionFlowRunView: View {
                     if executing {
                         ProgressView().tint(.white)
                     } else {
-                        Label("Aktion ausführen", systemImage: "checkmark.circle.fill")
+                        Label(L10n.text("ui_run_action_87493957"), systemImage: "checkmark.circle.fill")
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 48)
@@ -438,14 +438,14 @@ struct ActionFlowRunView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 54))
                 .foregroundStyle(InventoryTheme.success)
-            Text("Aktion ausgeführt")
+            Text(L10n.text("ui_action_completed_b4779173"))
                 .font(.title2.bold())
             Text(value.operation.summary)
                 .font(.headline)
-            Text("Neuer Bestand: \(value.resource.quantity)")
+            Text(L10n.text("ui_new_stock_0_ffec1434", value.resource.quantity))
                 .font(.body.monospacedDigit())
                 .foregroundStyle(.secondary)
-            Button("Fertig") { dismiss() }
+            Button(L10n.text("ui_done_25d52d7e")) { dismiss() }
                 .buttonStyle(.borderedProminent)
                 .tint(InventoryTheme.ink)
         }
@@ -458,13 +458,13 @@ struct ActionFlowRunView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.largeTitle)
                 .foregroundStyle(.red)
-            Text("Aktion konnte nicht vorbereitet werden")
+            Text(L10n.text("ui_could_not_prepare_the_action_5cac4653"))
                 .font(.headline)
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Erneut versuchen") {
+            Button(L10n.text("ui_retry_948643cb")) {
                 Task { await loadResolution() }
             }
             .buttonStyle(.bordered)
@@ -477,7 +477,7 @@ struct ActionFlowRunView: View {
     private func loadResolution() async {
         guard let client = state.client else {
             loading = false
-            errorMessage = "Keine Verbindung zum Inventarserver."
+            errorMessage = L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
             return
         }
         loading = true
@@ -508,7 +508,7 @@ struct ActionFlowRunView: View {
     @MainActor
     private func execute(_ value: ScanActionResolution) async {
         guard state.canManageWorkflows, let client = state.client, pinnedContext == state.organizationContextIdentifier else {
-            errorMessage = "Du hast keine Berechtigung, diesen Ablauf auszuführen."
+            errorMessage = L10n.text("ui_you_do_not_have_permission_to_run_feaf4d86")
             return
         }
         errorMessage = nil
@@ -547,7 +547,7 @@ struct ActionFlowRunView: View {
                 .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }
             if missing {
-                errorMessage = "\(field.label) ist erforderlich."
+                errorMessage = L10n.text("ui_0_is_required_29ab9a54", field.label)
                 return false
             }
         }
@@ -614,7 +614,7 @@ struct ActionFlowRunView: View {
     ) async throws -> [MediaUploadFile] {
         var files: [MediaUploadFile] = []
         for item in items {
-            guard let data = try await item.loadTransferable(type: Data.self) else { throw APIClientError.invalidUpload("Ein Foto konnte nicht geladen werden. Bitte erneut auswählen.") }
+            guard let data = try await item.loadTransferable(type: Data.self) else { throw APIClientError.invalidUpload(L10n.text("ui_a_photo_could_not_be_loaded_please_660012f2")) }
             let contentType = item.supportedContentTypes.first ?? .jpeg
             let fileExtension = contentType.preferredFilenameExtension ?? "jpg"
             let url = FileManager.default.temporaryDirectory

@@ -1,3 +1,4 @@
+import { loanHandoverSchema, readHandoverRequest, HandoverBodyError } from "@/lib/loan-handover-contract";
 import { z } from "zod";
 
 import { assignmentKinds } from "@/db/schema";
@@ -34,6 +35,7 @@ const createSchema = z
     startsAt: z.string().datetime().optional(),
     dueAt: z.string().datetime().nullable().optional(),
     note: z.string().trim().max(20_000).optional(),
+    handover: loanHandoverSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -103,8 +105,9 @@ export async function POST(request: Request, context: Context) {
 
   let payload: unknown;
   try {
-    payload = await request.json();
-  } catch {
+    payload = await readHandoverRequest(request);
+  } catch (error) {
+    if (error instanceof HandoverBodyError) return Response.json({ error: error.message }, { status: error.status });
     return Response.json({ error: "Expected a JSON request body." }, { status: 400 });
   }
   const parsed = createSchema.safeParse(payload);

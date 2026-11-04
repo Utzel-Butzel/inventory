@@ -3,6 +3,12 @@ import Foundation
 
 @MainActor
 final class AppState: ObservableObject {
+    @Published private(set) var isRestoringSession = true
+    @Published private(set) var isChangingConnection = false
+    @Published private(set) var savedAccounts: [SavedAccount] = []
+    @Published private(set) var activeAccountID: UUID?
+    @Published private(set) var restorationFailed = false
+    @Published private var isClearingCredential = false
     @Published private(set) var serverAddress: String
     @Published private(set) var hasStoredToken = false
     @Published private(set) var client: APIClient?
@@ -31,6 +37,9 @@ final class AppState: ObservableObject {
     let intakeQueue = IntakeQueue()
 
     private let credentialStore: any CredentialStore
+    private let accountStore: any CredentialStore
+    private let session: URLSession?
+    private var accountVault = SavedAccountVault()
     private let defaults: UserDefaults
     private let serverKey = "inventory.serverURL"
     private let scopesKey = "inventory.tokenScopes"
@@ -43,14 +52,18 @@ final class AppState: ObservableObject {
     private var currentToken: String?
     private var activeClientID = UUID()
     private var authenticationOperationID = UUID()
-    private var isVerifyingStoredCredential = false
+    @Published private(set) var isVerifyingStoredCredential = false
     private var hasGranularPermissions = false
 
     init(
         credentialStore: any CredentialStore = KeychainCredentialStore(),
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        accountStore: any CredentialStore = KeychainCredentialStore(account: "inventory-saved-accounts-v1"),
+        session: URLSession? = nil
     ) {
         self.credentialStore = credentialStore
+        self.accountStore = accountStore
+        self.session = session
         self.defaults = defaults
         self.serverAddress = defaults.string(forKey: serverKey) ?? ""
         self.maximumUploadImagePixelSize = ImageSizePreferences
@@ -64,6 +77,10 @@ final class AppState: ObservableObject {
             .flatMap(StoredAuthenticationMethod.init(rawValue:))
         self.tokenExpiresAt = defaults.object(forKey: tokenExpiresAtKey) as? Date
         Task { await restoreConfiguration() }
+    }
+
+    var isConnecting: Bool {
+        isRestoringSession || isVerifyingStoredCredential || isChangingConnection || isClearingCredential
     }
 
     var isConfigured: Bool { client != nil && hasStoredToken }
@@ -185,6 +202,8 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func saveConfiguration(server: String, token: String?) async throws -> ResourceListResponse {
+        try beginConnectionChange()
+        defer { isChangingConnection = false }
         let operationID = beginAuthenticationOperation()
         let url = try serverURL(from: server)
         let normalizedURL = try makeClient(serverURL: url, token: nil).serverURL
@@ -197,11 +216,11 @@ final class AppState: ObservableObject {
             candidateToken = submittedToken
             candidateMethod = .apiToken
             candidateExpiration = nil
-        } else if let storedToken = try await credentialStore.loadBearerToken(),
+        } else if let storedToken = currentToken,
                   !storedToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             try ensureCurrent(operationID)
             guard let storedURL = URL(string: serverAddress),
-                  sameOrigin(normalizedURL, storedURL) else {
+                  sameDeployment(normalizedURL, storedURL) else {
                 throw APIClientError.missingCredential
             }
             if authenticationMethod == .login, isLoginExpired {
@@ -230,6 +249,8 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func login(server: String, email: String, password: String) async throws -> ResourceListResponse {
+        try beginConnectionChange()
+        defer { isChangingConnection = false }
         let operationID = beginAuthenticationOperation()
         let url = try serverURL(from: server)
         let bootstrapClient = try makeClient(serverURL: url, token: nil)
@@ -250,10 +271,53 @@ final class AppState: ObservableObject {
                 token: token,
                 method: .login,
                 expiresAt: response.expiresAt,
-                operationID: operationID
+                operationID: operationID,
+                accountLabel: response.user.email,
+                accountUserID: response.user.id
             )
         } catch {
             await revokeBestEffort(serverURL: url, token: token)
+            throw error
+        }
+    }
+
+    @discardableResult
+    func loginWithBrowser(
+        server: String,
+        privateSession: Bool = false,
+        authenticate: @MainActor (URL, Bool) async throws -> URL
+    ) async throws -> ResourceListResponse {
+        try beginConnectionChange()
+        defer { isChangingConnection = false }
+        let operationID = beginAuthenticationOperation()
+        let bootstrap = try makeClient(serverURL: serverURL(from: server), token: nil)
+        let attempt = try BrowserSignInAttempt()
+        let start: BrowserSignInStartResponse
+        do {
+            start = try await bootstrap.startBrowserSignIn(challenge: attempt.challenge, state: attempt.state)
+        } catch let error as APIClientError where error.statusCode == 404 {
+            throw APIClientError.invalidRequest(L10n.text("ui_browser_sign_in_update_server"))
+        }
+        guard start.expiresAt > Date() else { throw APIClientError.invalidResponse }
+        try ensureCurrent(operationID)
+        let url = try attempt.authorizationURL(serverURL: bootstrap.serverURL, requestID: start.requestId)
+        let callback = try await authenticate(url, privateSession)
+        try ensureCurrent(operationID)
+        let code = try attempt.code(from: callback)
+        let response = try await bootstrap.exchangeBrowserSignIn(requestID: start.requestId, code: code, verifier: attempt.verifier)
+        let token = response.token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { throw APIClientError.invalidResponse }
+        do {
+            guard response.expiresAt > Date() else { throw APIClientError.invalidResponse }
+            try ensureCurrent(operationID)
+            return try await validateAndActivate(
+                serverURL: bootstrap.serverURL, token: token, method: .login,
+                expiresAt: response.expiresAt, operationID: operationID,
+                accountLabel: response.user.email,
+                accountUserID: response.user.id
+            )
+        } catch {
+            await revokeBestEffort(serverURL: bootstrap.serverURL, token: token)
             throw error
         }
     }
@@ -263,13 +327,23 @@ final class AppState: ObservableObject {
         token: String,
         method: StoredAuthenticationMethod,
         expiresAt: Date?,
-        operationID: UUID
+        operationID: UUID,
+        accountLabel: String? = nil,
+        accountUserID: String? = nil,
+        preferredOrganizationID: UUID? = nil
     ) async throws -> ResourceListResponse {
-        let previousCredential = credentialSnapshot
-        let bootstrapClient = try makeClient(serverURL: serverURL, token: token)
+        let replacingSession = isConfigured
+        let submittedClient = try makeClient(serverURL: serverURL, token: token)
+        // Preserve the stored deployment spelling so adding a trailing slash or
+        // an explicit default port cannot duplicate an account or its caches.
+        let knownServer = savedAccounts.compactMap { URL(string: $0.serverAddress) }
+            .first { sameDeployment($0, submittedClient.serverURL) }
+        let bootstrapClient = try knownServer.map { try makeClient(serverURL: $0, token: token) }
+            ?? submittedClient
         let organizationContext = try await resolveOrganizationContext(
             using: bootstrapClient,
-            token: token
+            token: token,
+            preferredOrganizationID: preferredOrganizationID
         )
 
         try ensureCurrent(operationID)
@@ -277,51 +351,10 @@ final class AppState: ObservableObject {
         let candidatePermissions = Set(organizationContext.capabilities.permissions ?? [])
         let candidateHasGranularPermissions = organizationContext.capabilities.permissions != nil
         guard Self.supportsInventory(scopes: candidateScopes) else {
-            throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht anzeigen.")
+            throw APIClientError.invalidRequest(L10n.text("ui_this_account_cannot_view_inventory_323e491b"))
         }
         let testResult = try await organizationContext.client.listResources(page: 1, pageSize: 1)
         try ensureCurrent(operationID)
-
-        var previousLoginWasRevoked = false
-        if let previousCredential,
-           previousCredential.method == .login,
-           isCredentialSwitch(
-               from: previousCredential,
-               toServerURL: organizationContext.client.serverURL,
-               token: token
-           ) {
-            let previousClient = try makeClient(
-                serverURL: previousCredential.serverURL,
-                token: previousCredential.token
-            )
-            do {
-                try await previousClient.logout()
-            } catch let error as APIClientError where error.statusCode == 401 {
-                // The old device credential is already invalid, so switching is safe.
-            } catch {
-                throw error
-            }
-            previousLoginWasRevoked = true
-            do {
-                try ensureCurrent(operationID)
-            } catch {
-                await clearRevokedCredentialIfCurrent(previousCredential)
-                throw error
-            }
-        }
-
-        do {
-            try await credentialStore.saveBearerToken(token)
-            try ensureCurrent(operationID)
-        } catch {
-            if authenticationOperationID != operationID {
-                _ = try? await credentialStore.deleteBearerToken(matching: token)
-            }
-            if previousLoginWasRevoked, let previousCredential {
-                await clearRevokedCredentialIfCurrent(previousCredential)
-            }
-            throw error
-        }
 
         let (nextClient, nextClientID) = try makeActiveClient(
             serverURL: organizationContext.client.serverURL,
@@ -329,6 +362,16 @@ final class AppState: ObservableObject {
             organizationID: organizationContext.activeOrganization?.id,
             principalIdentifier: organizationContext.principalIdentifier
         )
+        try await saveAccount(
+            context: organizationContext,
+            token: token,
+            method: method,
+            expiresAt: expiresAt,
+            label: accountLabel,
+            userID: accountUserID
+        )
+        try ensureCurrent(operationID)
+
         defaults.set(nextClient.serverURL.absoluteString, forKey: serverKey)
         defaults.set(Array(candidateScopes).sorted(), forKey: scopesKey)
         defaults.set(method.rawValue, forKey: authenticationMethodKey)
@@ -344,10 +387,6 @@ final class AppState: ObservableObject {
         hasGranularPermissions = candidateHasGranularPermissions
         organizations = organizationContext.organizations
         activeOrganization = organizationContext.activeOrganization
-        rememberActiveOrganization(
-            organizationContext.activeOrganization,
-            for: nextClient.serverURL
-        )
         authenticationMethod = method
         tokenExpiresAt = expiresAt
         currentToken = token
@@ -357,7 +396,9 @@ final class AppState: ObservableObject {
         presentedTool = nil
         pendingScanCode = nil
         pendingCaptureCode = nil
+        if replacingSession { pendingInventoryLink = nil }
         configurationError = nil
+        restorationFailed = false
         intakeQueue.configure(
             client: nextClient,
             canWrite: canProcessIntakeQueue(
@@ -380,90 +421,46 @@ final class AppState: ObservableObject {
     }
 
     func switchOrganization(to organizationID: UUID) async throws {
-        guard activeOrganization?.id != organizationID else { return }
-        guard organizations.contains(where: { $0.id == organizationID }),
-              let token = currentToken,
-              let serverURL = URL(string: serverAddress) else {
-            throw APIClientError.invalidRequest("Die Organisation ist nicht verfügbar.")
-        }
+        guard let activeAccountID else { throw APIClientError.missingCredential }
+        try await switchAccount(to: activeAccountID, organizationID: organizationID)
+    }
 
-        let operationID = beginAuthenticationOperation()
+    func switchAccount(to accountID: UUID, organizationID: UUID? = nil) async throws {
+        if isConfigured, accountID == activeAccountID,
+           organizationID == nil || organizationID == activeOrganization?.id { return }
+        try beginConnectionChange()
+        defer {
+            isChangingConnection = false
+            isSwitchingOrganization = false
+        }
+        guard let account = savedAccounts.first(where: { $0.id == accountID }) else {
+            throw APIClientError.missingCredential
+        }
+        guard !account.requiresSignIn else {
+            throw APIClientError.invalidRequest(L10n.text("ui_please_sign_in_again_9429828e"))
+        }
         isSwitchingOrganization = true
-        defer { isSwitchingOrganization = false }
-
-        let bootstrapClient = try makeClient(serverURL: serverURL, token: token)
-        let selection = try await bootstrapClient.selectOrganization(id: organizationID)
-        try ensureCurrent(operationID)
-        guard selection.organization.id == organizationID else {
-            throw APIClientError.invalidResponse
-        }
-
-        let nextOrganizations = normalizedOrganizations(
-            organizations.map { organization in
-                organization.id == selection.organization.id
-                    ? selection.organization
-                    : organization
-            }
-        )
-        guard nextOrganizations.contains(where: { $0.id == organizationID }) else {
-            throw APIClientError.invalidRequest("Du bist kein Mitglied dieser Organisation.")
-        }
-        let nextOrganization = selection.organization
-
-        let validationClient = try makeClient(
-            serverURL: serverURL,
-            token: token,
-            organizationID: organizationID
-        )
-        let capabilities = try await validationClient.capabilities()
-        let nextScopes = Set(capabilities.scopes)
-        let nextPermissions = Set(capabilities.permissions ?? [])
-        let nextHasGranularPermissions = capabilities.permissions != nil
-        guard Self.supportsInventory(scopes: nextScopes) else {
-            throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht anzeigen.")
-        }
-        _ = try await validationClient.listResources(page: 1, pageSize: 1)
-        try ensureCurrent(operationID)
-
-        let (nextClient, nextClientID) = try makeActiveClient(
-            serverURL: serverURL,
-            token: token,
-            organizationID: organizationID,
-            principalIdentifier: principalIdentifier(
-                from: capabilities,
-                token: token
-            )
-        )
-        organizations = nextOrganizations
-        activeOrganization = capabilities.activeOrganization ?? nextOrganization
-        rememberActiveOrganization(nextOrganization, for: nextClient.serverURL)
-        grantedScopes = nextScopes
-        grantedPermissions = nextPermissions
-        hasGranularPermissions = nextHasGranularPermissions
-        defaults.set(Array(nextScopes).sorted(), forKey: scopesKey)
-        activeClientID = nextClientID
-        client = nextClient
-        selectedTab = .inventory
-        presentedTool = nil
-        pendingScanCode = nil
-        pendingCaptureCode = nil
-        configurationError = nil
-        intakeQueue.configure(
-            client: nextClient,
-            canWrite: canProcessIntakeQueue(
-                scopes: nextScopes,
-                permissions: nextPermissions,
-                hasGranularPermissions: nextHasGranularPermissions
-            )
-        )
-        scheduleImageModelDiscovery(
-            using: nextClient,
-            activeClient: nextClient,
-            scopes: nextScopes
+        let operationID = beginAuthenticationOperation()
+        _ = try await validateAndActivate(
+            serverURL: serverURL(from: account.serverAddress),
+            token: account.token,
+            method: account.method,
+            expiresAt: account.expiresAt,
+            operationID: operationID,
+            accountLabel: account.label,
+            accountUserID: account.userID,
+            preferredOrganizationID: organizationID
         )
     }
 
+    private func beginConnectionChange() throws {
+        guard !isConnecting, !restorationFailed else { throw CancellationError() }
+        isChangingConnection = true
+    }
+
     func disconnect() async throws {
+        try beginConnectionChange()
+        defer { isChangingConnection = false }
         let operationID = beginAuthenticationOperation()
         guard let token = currentToken else {
             try await credentialStore.deleteBearerToken()
@@ -477,15 +474,14 @@ final class AppState: ObservableObject {
 
         if authenticationMethod == .login {
             guard let currentClient else {
-                let error = APIClientError.transport("Abmeldung derzeit nicht möglich.")
+                let error = APIClientError.transport(L10n.text("ui_unable_to_sign_out_at_the_moment_c899142d"))
                 configurationError = error.localizedDescription
                 throw error
             }
             do {
                 try await currentClient.logout()
             } catch let error as APIClientError where error.statusCode == 401 {
-                await clearLocalCredential(matching: token, message: nil)
-                return
+                // The server has already invalidated this device credential.
             } catch {
                 if authenticationOperationID == operationID,
                    activeClientID == currentClientID,
@@ -496,39 +492,29 @@ final class AppState: ObservableObject {
                 throw error
             }
             guard authenticationOperationID == operationID else { return }
-            await clearLocalCredential(
-                matching: token,
-                message: nil,
-                expectedOperationID: operationID
-            )
-            return
         }
 
-        do {
-            _ = try await credentialStore.deleteBearerToken(matching: token)
-            try ensureCurrent(operationID)
-            guard currentToken == token else { return }
-            activeClientID = UUID()
-            clearCredentialState(message: nil)
-        } catch {
-            if authenticationOperationID == operationID,
-               activeClientID == currentClientID,
-               let currentClient {
-                intakeQueue.configure(
-                    client: currentClient,
-                    canWrite: canCaptureInventory
-                )
-                configurationError = error.localizedDescription
-            }
-            throw error
-        }
+        await clearLocalCredential(
+            matching: token,
+            message: nil,
+            expectedOperationID: operationID
+        )
+        if let configurationError { throw APIClientError.transport(configurationError) }
     }
 
     func resumeUploads() {
+        guard !isConnecting, !restorationFailed else { return }
         if authenticationMethod == .login, isLoginExpired {
             intakeQueue.configure(client: nil)
             if let currentToken {
-                Task { await clearLocalCredential(matching: currentToken, message: nil) }
+                let operationID = authenticationOperationID
+                Task {
+                    await clearLocalCredential(
+                        matching: currentToken,
+                        message: L10n.text("ui_please_sign_in_again_9429828e"),
+                        expectedOperationID: operationID
+                    )
+                }
             }
             return
         }
@@ -541,46 +527,72 @@ final class AppState: ObservableObject {
         Task { await verifyStoredCredentialIfNeeded() }
     }
 
+    func retryRestoration() async {
+        guard !isConnecting else { return }
+        await restoreConfiguration()
+    }
+
     private func restoreConfiguration() async {
+        isRestoringSession = true
+        restorationFailed = false
+        defer { isRestoringSession = false }
         let operationID = beginAuthenticationOperation()
         intakeQueue.configure(client: nil)
         do {
-            guard let token = try await credentialStore.loadBearerToken(),
-                  !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                  let url = URL(string: serverAddress),
-                  !serverAddress.isEmpty else { return }
+            if let stored = try await accountStore.loadBearerToken() {
+                accountVault = try JSONDecoder().decode(SavedAccountVault.self, from: Data(stored.utf8))
+            } else if let token = try await credentialStore.loadBearerToken(),
+                      !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      let url = URL(string: serverAddress), !serverAddress.isEmpty {
+                // Migrate the existing installation before making any network request.
+                let canonicalURL = try makeClient(serverURL: url, token: nil).serverURL
+                let account = SavedAccount(
+                    id: UUID(), serverAddress: canonicalURL.absoluteString,
+                    principalIdentifier: "", label: canonicalURL.host ?? serverAddress,
+                    token: token, method: authenticationMethod ?? .apiToken,
+                    expiresAt: tokenExpiresAt, organizations: [],
+                    activeOrganizationID: storedOrganizationID(for: canonicalURL)
+                )
+                try await persistVault(SavedAccountVault(accounts: [account], activeAccountID: account.id))
+                _ = try await credentialStore.deleteBearerToken(matching: token)
+            }
             try ensureCurrent(operationID)
-            currentToken = token
+            publishAccounts()
+            guard let account = accountVault.activeAccount else { return }
+            serverAddress = account.serverAddress
+            authenticationMethod = account.method
+            tokenExpiresAt = account.expiresAt
+            currentToken = account.token
             hasStoredToken = true
             client = nil
             grantedScopes = []
             grantedPermissions = []
             hasGranularPermissions = false
-
-            if authenticationMethod == .login, isLoginExpired {
+            if account.requiresSignIn {
                 await clearLocalCredential(
-                    matching: token,
-                    message: nil,
+                    matching: account.token,
+                    message: L10n.text("ui_please_sign_in_again_9429828e"),
                     expectedOperationID: operationID
                 )
                 return
             }
             await verifyStoredCredential(
-                token: token,
-                serverURL: url,
+                token: account.token,
+                serverURL: try serverURL(from: account.serverAddress),
                 operationID: operationID
             )
         } catch is CancellationError {
             return
         } catch {
             if authenticationOperationID == operationID {
+                restorationFailed = true
                 configurationError = error.localizedDescription
             }
         }
     }
 
     private func verifyStoredCredentialIfNeeded() async {
-        guard !isVerifyingStoredCredential,
+        guard !isConnecting,
               let token = currentToken,
               let url = URL(string: serverAddress),
               hasStoredToken else { return }
@@ -612,7 +624,7 @@ final class AppState: ObservableObject {
             let permissions = Set(organizationContext.capabilities.permissions ?? [])
             let receivedGranularPermissions = organizationContext.capabilities.permissions != nil
             guard Self.supportsInventory(scopes: scopes) else {
-                throw APIClientError.invalidRequest("Dieses Konto darf Inventar nicht anzeigen.")
+                throw APIClientError.invalidRequest(L10n.text("ui_this_account_cannot_view_inventory_323e491b"))
             }
             let (restoredClient, restoredClientID) = try makeActiveClient(
                 serverURL: organizationContext.client.serverURL,
@@ -620,6 +632,12 @@ final class AppState: ObservableObject {
                 organizationID: organizationContext.activeOrganization?.id,
                 principalIdentifier: organizationContext.principalIdentifier
             )
+            try await saveAccount(
+                context: organizationContext, token: token,
+                method: authenticationMethod ?? .apiToken,
+                expiresAt: tokenExpiresAt, label: nil
+            )
+            try ensureCurrent(operationID)
             activeClientID = restoredClientID
             client = restoredClient
             hasStoredToken = true
@@ -628,10 +646,6 @@ final class AppState: ObservableObject {
             hasGranularPermissions = receivedGranularPermissions
             organizations = organizationContext.organizations
             activeOrganization = organizationContext.activeOrganization
-            rememberActiveOrganization(
-                organizationContext.activeOrganization,
-                for: restoredClient.serverURL
-            )
             defaults.set(Array(scopes).sorted(), forKey: scopesKey)
             configurationError = nil
             intakeQueue.configure(
@@ -653,7 +667,7 @@ final class AppState: ObservableObject {
             guard authenticationOperationID == operationID else { return }
             await clearLocalCredential(
                 matching: token,
-                message: "Bitte erneut anmelden.",
+                message: L10n.text("ui_please_sign_in_again_9429828e"),
                 expectedOperationID: operationID
             )
         } catch {
@@ -671,10 +685,11 @@ final class AppState: ObservableObject {
     }
 
     private func handleUnauthorized(clientID: UUID, token: String) async {
-        guard activeClientID == clientID, currentToken == token else { return }
+        guard !isConnecting,
+              activeClientID == clientID, currentToken == token else { return }
         await clearLocalCredential(
             matching: token,
-            message: "Bitte erneut anmelden.",
+            message: L10n.text("ui_please_sign_in_again_9429828e"),
             expectedClientID: clientID
         )
     }
@@ -688,26 +703,33 @@ final class AppState: ObservableObject {
         if let expectedOperationID,
            authenticationOperationID != expectedOperationID { return }
         if let expectedClientID, activeClientID != expectedClientID { return }
-        guard currentToken == token else { return }
+        guard !isClearingCredential, currentToken == token else { return }
+        isClearingCredential = true
+        defer { isClearingCredential = false }
 
-        authenticationOperationID = UUID()
-        activeClientID = UUID()
-        clearCredentialState(message: message)
-        let deletionGeneration = authenticationOperationID
+        let operationID = authenticationOperationID
+        let accountID = activeAccountID
         do {
-            try await credentialStore.deleteBearerToken(matching: token)
+            var nextVault = accountVault
+            nextVault.accounts.removeAll { $0.id == accountID && $0.token == token }
+            nextVault.activeAccountID = nil
+            try await persistVault(nextVault)
+            guard authenticationOperationID == operationID, currentToken == token else { return }
+            authenticationOperationID = UUID()
+            activeClientID = UUID()
+            clearCredentialState(message: message)
         } catch {
-            if authenticationOperationID == deletionGeneration, currentToken == nil {
+            // Do not keep displaying authenticated content after a known 401,
+            // even if Keychain is temporarily unavailable. Retain it for retry.
+            if authenticationOperationID == operationID {
+                client = nil
+                grantedScopes = []
+                grantedPermissions = []
+                hasGranularPermissions = false
+                intakeQueue.configure(client: nil)
                 configurationError = error.localizedDescription
             }
         }
-    }
-
-    private func clearRevokedCredentialIfCurrent(_ credential: CredentialSnapshot) async {
-        guard currentToken == credential.token else { return }
-        activeClientID = UUID()
-        clearCredentialState(message: nil)
-        _ = try? await credentialStore.deleteBearerToken(matching: credential.token)
     }
 
     private func clearCredentialState(message: String?) {
@@ -727,12 +749,18 @@ final class AppState: ObservableObject {
         tokenExpiresAt = nil
         currentToken = nil
         client = nil
+        selectedTab = .inventory
+        presentedTool = nil
+        pendingScanCode = nil
+        pendingCaptureCode = nil
+        pendingInventoryLink = nil
         configurationError = message
     }
 
     private func resolveOrganizationContext(
         using bootstrapClient: APIClient,
-        token: String
+        token: String,
+        preferredOrganizationID: UUID? = nil
     ) async throws -> ResolvedOrganizationContext {
         let organizationResponse: OrganizationListResponse
         do {
@@ -755,19 +783,34 @@ final class AppState: ObservableObject {
         let listedOrganizations = normalizedOrganizations(organizationResponse.organizations)
         guard !listedOrganizations.isEmpty else {
             throw APIClientError.invalidRequest(
-                "Diesem Konto ist noch keine Organisation zugeordnet."
+                L10n.text("ui_no_organization_has_been_assigned_to_this_5bad720b")
             )
         }
-        let preferredID = storedOrganizationID(for: bootstrapClient.serverURL)
+        let preferredID = preferredOrganizationID ?? savedAccounts.first {
+            $0.serverAddress == bootstrapClient.serverURL.absoluteString && $0.token == token
+        }?.activeOrganizationID
+        if let preferredOrganizationID,
+           !listedOrganizations.contains(where: { $0.id == preferredOrganizationID }) {
+            throw APIClientError.invalidRequest(L10n.text("ui_the_organization_is_unavailable_10c19dda"))
+        }
         let selectedOrganization = preferredID.flatMap { identifier in
             listedOrganizations.first(where: { $0.id == identifier })
         } ?? organizationResponse.activeOrganizationId.flatMap { identifier in
             listedOrganizations.first(where: { $0.id == identifier })
         } ?? listedOrganizations[0]
 
-        let selection = try await bootstrapClient.selectOrganization(
-            id: selectedOrganization.id
-        )
+        let selection: OrganizationSelectionResponse
+        if token == "inv_demo_public_openinventory" {
+            guard listedOrganizations.count == 1,
+                  selectedOrganization.id.uuidString.lowercased() == "d3e00000-0000-4000-8000-000000000001",
+                  selectedOrganization.isReadOnly == true,
+                  selectedOrganization.role == "viewer" else {
+                throw APIClientError.invalidRequest(L10n.text("ui_the_demo_is_not_configured_as_a_10faaf4a"))
+            }
+            selection = OrganizationSelectionResponse(organization: selectedOrganization)
+        } else {
+            selection = try await bootstrapClient.selectOrganization(id: selectedOrganization.id)
+        }
         guard selection.organization.id == selectedOrganization.id else {
             throw APIClientError.invalidResponse
         }
@@ -835,17 +878,6 @@ final class AppState: ObservableObject {
             serverURL.absoluteString
         ] as? String
         return stored.flatMap(UUID.init(uuidString:))
-    }
-
-    private func rememberActiveOrganization(
-        _ organization: InventoryOrganization?,
-        for serverURL: URL
-    ) {
-        guard let organization else { return }
-        var preferences = defaults.dictionary(forKey: organizationPreferencesKey)?
-            .compactMapValues { $0 as? String } ?? [:]
-        preferences[serverURL.absoluteString] = organization.id.uuidString.lowercased()
-        defaults.set(preferences, forKey: organizationPreferencesKey)
     }
 
     private func scheduleImageModelDiscovery(
@@ -986,23 +1018,49 @@ final class AppState: ObservableObject {
         try? await revokeClient.logout()
     }
 
-    private var credentialSnapshot: CredentialSnapshot? {
-        guard let currentToken,
-              let authenticationMethod,
-              let serverURL = URL(string: serverAddress) else { return nil }
-        return CredentialSnapshot(
-            token: currentToken,
-            method: authenticationMethod,
-            serverURL: serverURL
-        )
+    private func publishAccounts() {
+        savedAccounts = accountVault.accounts
+        activeAccountID = accountVault.activeAccountID
     }
 
-    private func isCredentialSwitch(
-        from previous: CredentialSnapshot,
-        toServerURL: URL,
-        token: String
-    ) -> Bool {
-        previous.token != token || !sameOrigin(previous.serverURL, toServerURL)
+    private func persistVault(_ vault: SavedAccountVault) async throws {
+        let encoded = try JSONEncoder().encode(vault)
+        try await accountStore.saveBearerToken(String(decoding: encoded, as: UTF8.self))
+        accountVault = vault
+        publishAccounts()
+    }
+
+    private func saveAccount(
+        context: ResolvedOrganizationContext,
+        token: String,
+        method: StoredAuthenticationMethod,
+        expiresAt: Date?,
+        label: String?,
+        userID: String? = nil
+    ) async throws {
+        let server = context.client.serverURL.absoluteString
+        let existing = accountVault.accounts.first {
+            $0.serverAddress == server &&
+                ($0.token == token || $0.principalIdentifier == context.principalIdentifier ||
+                 (userID != nil && $0.userID == userID))
+        }
+        let account = SavedAccount(
+            id: existing?.id ?? UUID(), serverAddress: server,
+            principalIdentifier: context.principalIdentifier,
+            label: label ?? existing?.label ?? L10n.text("ui_api_token_5efaaeee"),
+            token: token, method: method, expiresAt: expiresAt,
+            organizations: context.organizations,
+            activeOrganizationID: context.activeOrganization?.id,
+            userID: userID ?? existing?.userID
+        )
+        var next = accountVault
+        if let index = next.accounts.firstIndex(where: { $0.id == account.id }) {
+            next.accounts[index] = account
+        } else {
+            next.accounts.append(account)
+        }
+        next.activeAccountID = account.id
+        try await persistVault(next)
     }
 
     @discardableResult
@@ -1027,6 +1085,12 @@ final class AppState: ObservableObject {
             throw APIClientError.invalidServerURL
         }
         return url
+    }
+
+    private func sameDeployment(_ lhs: URL, _ rhs: URL) -> Bool {
+        sameOrigin(lhs, rhs) &&
+            lhs.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ==
+            rhs.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }
 
     private func sameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
@@ -1056,6 +1120,7 @@ final class AppState: ObservableObject {
             credentialStore: InMemoryCredentialStore(token: token),
             organizationID: organizationID,
             principalIdentifier: principalIdentifier,
+            session: session,
             onUnauthorized: onUnauthorized
         )
     }
@@ -1101,17 +1166,6 @@ private struct ResolvedOrganizationContext {
     let capabilities: CapabilitiesResponse
     let client: APIClient
     let principalIdentifier: String
-}
-
-private struct CredentialSnapshot {
-    let token: String
-    let method: StoredAuthenticationMethod
-    let serverURL: URL
-}
-
-private enum StoredAuthenticationMethod: String {
-    case login
-    case apiToken
 }
 
 enum RootTab: Hashable {

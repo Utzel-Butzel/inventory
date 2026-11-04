@@ -14,7 +14,7 @@ IOS_SHARED_SCHEME = File.join(
 )
 IOS_SCHEME = "Inventory"
 IOS_TARGET = "Inventory"
-IOS_APP_IDENTIFIER = "digital.congru.inventory.scan"
+IOS_APP_IDENTIFIER = "de.polyxo.openinventory"
 IOS_TEAM_ID = "6CXYQL7FXP"
 IOS_OUTPUT_DIRECTORY = File.join(REPOSITORY_ROOT, "build/ios")
 
@@ -126,6 +126,17 @@ platform :ios do
         )
       end
 
+      provisioning_profile = ENV.fetch("IOS_PROVISIONING_PROFILE", "").strip
+      export_signing = if provisioning_profile.empty?
+                         { signingStyle: "automatic" }
+                       else
+                         {
+                           signingStyle: "manual",
+                           signingCertificate: "Apple Distribution",
+                           provisioningProfiles: { IOS_APP_IDENTIFIER => provisioning_profile }
+                         }
+                       end
+
       build_app(
         project: IOS_PROJECT,
         scheme: IOS_SCHEME,
@@ -146,16 +157,72 @@ platform :ios do
           # as the backwards-compatible alias for `app-store-connect`.
           method: "app-store",
           destination: "export",
-          signingStyle: "automatic",
           manageAppVersionAndBuildNumber: false,
           teamID: IOS_TEAM_ID,
           stripSwiftSymbols: true,
           uploadSymbols: true
-        }
+        }.merge(export_signing)
       )
     ensure
       temporary_auth_key&.close!
     end
+  end
+
+  desc "Register the bundle ID and verify its App Store Connect record"
+  lane :setup do
+    app_store_api_key
+    bundle_id = Spaceship::ConnectAPI::BundleId.find(IOS_APP_IDENTIFIER)
+    unless bundle_id
+      Spaceship::ConnectAPI::BundleId.create(
+        name: "Open Inventory", platform: "IOS", identifier: IOS_APP_IDENTIFIER
+      )
+    end
+    app = Spaceship::ConnectAPI::App.find(IOS_APP_IDENTIFIER)
+    unless app
+      UI.user_error!(
+        "Bundle ID is registered. Create Open Inventory in https://appstoreconnect.apple.com " \
+        "with bundle ID/SKU #{IOS_APP_IDENTIFIER}, primary language German and platform iOS, " \
+        "then rerun ios setup. Apple does not support app-record creation with an API key."
+      )
+    end
+    UI.success("App Store Connect record ready for #{IOS_APP_IDENTIFIER}")
+  end
+
+  desc "Upload store text as a draft without submitting for review"
+  lane :metadata do
+    api_key = app_store_api_key
+    privacy_url = ENV.fetch("APP_PRIVACY_URL", "").strip
+    UI.user_error!("Set APP_PRIVACY_URL to the published app privacy policy") unless privacy_url.start_with?("https://")
+    upload_to_app_store(
+      api_key: api_key,
+      app_identifier: IOS_APP_IDENTIFIER,
+      app_version: get_version_number(xcodeproj: IOS_PROJECT, target: IOS_TARGET, configuration: "Release"),
+      metadata_path: File.join(REPOSITORY_ROOT, "fastlane/metadata/ios"),
+      privacy_url: { "default" => privacy_url },
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      submit_for_review: false,
+      automatic_release: false,
+      run_precheck_before_submit: false,
+      force: true
+    )
+  end
+
+  desc "Upload captured iOS screenshots without submitting for review"
+  lane :screenshots do
+    api_key = app_store_api_key
+    upload_to_app_store(
+      api_key: api_key,
+      app_identifier: IOS_APP_IDENTIFIER,
+      metadata_path: File.join(REPOSITORY_ROOT, "fastlane/metadata/ios"),
+      screenshots_path: File.join(REPOSITORY_ROOT, "fastlane/screenshots/ios"),
+      skip_binary_upload: true,
+      skip_metadata: true,
+      overwrite_screenshots: false,
+      submit_for_review: false,
+      run_precheck_before_submit: false,
+      force: true
+    )
   end
 
   desc "Validate the local Xcode project and shared deployment scheme"
@@ -167,7 +234,8 @@ platform :ios do
   lane :build do
     build_number = ENV.fetch("IOS_BUILD_NUMBER", "").strip
     build_number = get_build_number(xcodeproj: IOS_PROJECT) if build_number.empty?
-    build_ipa(build_number: build_number)
+    api_key = ENV.fetch("APP_STORE_CONNECT_API_KEY_KEY_ID", "").strip.empty? ? nil : app_store_api_key
+    build_ipa(build_number: build_number, api_key: api_key)
   end
 
   desc "Build and upload the next iOS build to TestFlight"
@@ -210,6 +278,40 @@ platform :ios do
       distribute_external: false,
       notify_external_testers: false,
       skip_waiting_for_build_processing: true
+    )
+  end
+end
+
+platform :android do
+  before_all do
+    ensure_bundle_exec
+  end
+
+  desc "Build the signed Android App Bundle locally"
+  lane :build do
+    sh("node", File.join(REPOSITORY_ROOT, "scripts/android.mjs"), "bundle")
+    sh("python3", File.join(REPOSITORY_ROOT, "scripts/verify-android-bundle.py"))
+  end
+
+  desc "Upload a signed bundle to the internal Play track as a draft"
+  lane :deploy do
+    key = ENV.fetch("GOOGLE_PLAY_JSON_KEY", "").strip
+    UI.user_error!("Set GOOGLE_PLAY_JSON_KEY to your Play service-account JSON file") if key.empty?
+    key = File.expand_path(key, REPOSITORY_ROOT)
+    UI.user_error!("GOOGLE_PLAY_JSON_KEY file is missing") unless File.file?(key)
+    version_code = ENV.fetch("ANDROID_VERSION_CODE", "").strip
+    UI.user_error!("Set a new ANDROID_VERSION_CODE before each upload") unless version_code.match?(/\A[1-9]\d*\z/)
+    build
+    upload_to_play_store(
+      package_name: "de.polyxo.openinventory",
+      json_key: key,
+      aab: File.join(REPOSITORY_ROOT, "android/app/build/outputs/bundle/release/app-release.aab"),
+      mapping: File.join(REPOSITORY_ROOT, "android/app/build/outputs/mapping/release/mapping.txt"),
+      metadata_path: File.join(REPOSITORY_ROOT, "fastlane/metadata/android"),
+      track: "internal",
+      release_status: "draft",
+      skip_upload_images: false,
+      skip_upload_screenshots: false
     )
   end
 end

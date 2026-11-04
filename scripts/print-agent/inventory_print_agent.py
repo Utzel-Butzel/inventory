@@ -47,6 +47,12 @@ def validate_config(config):
     paper = config.get("paper")
     if paper is not None and (not isinstance(paper, str) or not re.fullmatch(r"[\w .x-]{1,100}", paper)):
         raise ValueError("Invalid paper name")
+    address, helper = config.get("bluetoothAddress"), config.get("bluetoothHelper")
+    if address is not None or helper is not None:
+        if kind != "ptouch" or not isinstance(address, str) or not re.fullmatch(r"[0-9A-Fa-f]{2}(?:[:-][0-9A-Fa-f]{2}){5}", address):
+            raise ValueError("Bluetooth requires a P-touch printer and a device address")
+        if not isinstance(helper, str) or not Path(helper).is_absolute():
+            raise ValueError("bluetoothHelper must be an absolute local executable path")
     return {**config, "kind": kind}
 
 
@@ -117,6 +123,13 @@ def validate_job(config, job):
 
 def system_command(config, job, path, platform=None):
     windows = (platform or os.name) == "nt"
+    if config.get("bluetoothAddress"):
+        executable = config["bluetoothHelper"]
+        if windows or sys.platform != "darwin":
+            raise ValueError("Native Bluetooth printing requires macOS")
+        if not Path(executable).is_file() or not os.access(executable, os.X_OK):
+            raise ValueError("Build and install the macOS P-touch Bluetooth helper")
+        return [executable, config["bluetoothAddress"], "print", str(path)]
     if windows:
         executable = config.get("pdfPrinter") or shutil.which("SumatraPDF.exe")
         if not executable or not Path(executable).is_file():
@@ -183,7 +196,7 @@ def submit_job(config, job, data, directory):
         command = system_command(config, job, path)
         # A non-zero exit or timeout can occur after spooling: caller records uncertain.
         result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=120)
-        if os.name != "nt":
+        if os.name != "nt" and not config.get("bluetoothAddress"):
             match = re.search(r"-(\d+)\s", result.stdout)
             if match:
                 return int(match.group(1))

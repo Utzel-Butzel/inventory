@@ -1,0 +1,21 @@
+Know what you have. Open Inventory connects your phone to your own Open Inventory server.
+
+Capture tools, materials and equipment where you use them. Search your inventory, scan QR codes and barcodes, add photos and documents, and keep track of stock, locations and loans.
+
+• Search, create and edit inventory items
+• Scan QR codes and barcodes
+• Attach photos, videos and documents
+• Record incoming and outgoing stock
+• Manage loans, returns and reservations
+• View variants, relationships and bills of materials
+• View locations on a map and existing room data
+• Run configured scanning workflows
+• Use optional AI features provided by your server
+
+A reachable Open Inventory server and an existing user account or API token are required. Available features depend on your server configuration and access permissions. External hosting and optional services may have separate costs.
+
+Open Inventory is open source. Learn more and find documentation at openinventory.polyxo.de.
+
+Compatible Apple devices also support RoomPlan and Object Capture.
+
+Choose “Demo ausprobieren” on the sign-in screen to explore the public, read-only demo without a personal account.

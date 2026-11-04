@@ -1,11 +1,13 @@
+import { getT } from "@/lib/ui-i18n/server";
 import { Card, Skeleton } from "@/components/ui";
 
-export default function DashboardLoading() {
+export default async function DashboardLoading() {
+  const { t } = await getT("common");
   return (
     <div
       className="app-page mx-auto w-full max-w-[1240px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
       role="status"
-      aria-label="Loading"
+      aria-label={t("state.loading")}
     >
       <div className="mb-7 space-y-3">
         <Skeleton className="h-3 w-24" />
@@ -26,7 +28,7 @@ export default function DashboardLoading() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{t("state.loading")}</span>
     </div>
   );
 }

@@ -321,7 +321,8 @@
     "location": "Location",
     "value": "Value",
     "priority": "Priority",
-    "created": "Created"
+    "created": "Created",
+    "barcode": "Barcode"
   },
   "values": {
     "yes": "Yes",

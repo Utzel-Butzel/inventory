@@ -5,7 +5,7 @@ private enum StockBookingDirection: String, CaseIterable, Identifiable {
     case outgoing
 
     var id: Self { self }
-    var localizedName: String { self == .incoming ? "Zugang" : "Abgang" }
+    var localizedName: String { self == .incoming ? L10n.text("ui_stock_in_5184cdf3") : L10n.text("ui_stock_out_858e7736") }
 }
 
 private enum StockUnitCreationMode: String, CaseIterable, Identifiable {
@@ -13,7 +13,7 @@ private enum StockUnitCreationMode: String, CaseIterable, Identifiable {
     case custom
 
     var id: Self { self }
-    var localizedName: String { self == .generated ? "Automatisch" : "Eigene Codes" }
+    var localizedName: String { self == .generated ? L10n.text("ui_automatic_4c2a3993") : L10n.text("ui_custom_codes_0a25e1c9") }
 }
 
 private enum StockHistoryFilter: String, CaseIterable, Identifiable {
@@ -25,9 +25,9 @@ private enum StockHistoryFilter: String, CaseIterable, Identifiable {
 
     var localizedName: String {
         switch self {
-        case .all: "Alle"
-        case .incoming: "Zugänge"
-        case .outgoing: "Abgänge"
+        case .all: L10n.text("ui_all_3801a35c")
+        case .incoming: L10n.text("ui_stock_in_f4587117")
+        case .outgoing: L10n.text("ui_stock_out_085feccf")
         }
     }
 }
@@ -58,7 +58,7 @@ private final class StockManagementViewModel: ObservableObject {
     @Published var minimumStock = 0
     @Published var reorderQuantity = 0
     @Published var leadTimeDays = 0
-    @Published var unitName = "Einheit"
+    @Published var unitName = L10n.text("ui_unit_d5ba1549")
 
     @Published var unitCreationMode: StockUnitCreationMode = .generated
     @Published var unitCount = 1
@@ -113,21 +113,21 @@ private final class StockManagementViewModel: ObservableObject {
     func bookMovement(using client: APIClient, allowNegativeStock: Bool) async {
         guard let detail else { return }
         guard detail.config.trackingMode == .bulk else {
-            errorMessage = "Bei serialisiertem Bestand wird jede Einheit einzeln verwaltet."
+            errorMessage = L10n.text("ui_serialized_stock_tracks_each_unit_individually_dab2550e")
             return
         }
         guard movementQuantity > 0 else {
-            errorMessage = "Die Menge muss mindestens eins sein."
+            errorMessage = L10n.text("ui_the_quantity_must_be_at_least_one_243cb110")
             return
         }
         if direction == .outgoing,
            !allowNegativeStock,
            movementQuantity > detail.resource.quantity {
-            errorMessage = "Es sind nur \(detail.resource.quantity) Einheiten verfügbar."
+            errorMessage = L10n.text("ui_only_0_units_are_available_5565b6e2", detail.resource.quantity)
             return
         }
         guard availableMovementTypes.contains(movementType) else {
-            errorMessage = "Die Buchungsart passt nicht zur gewählten Richtung."
+            errorMessage = L10n.text("ui_the_transaction_type_does_not_match_the_17a76cc5")
             return
         }
 
@@ -150,23 +150,23 @@ private final class StockManagementViewModel: ObservableObject {
             movementNote = ""
             movementDate = Date()
             notice = delta > 0
-                ? "\(bookedQuantity) Einheiten wurden eingebucht."
-                : "\(bookedQuantity) Einheiten wurden ausgebucht."
+                ? L10n.text("ui_0_units_were_added_to_stock_441f3d67", bookedQuantity)
+                : L10n.text("ui_0_units_were_removed_from_stock_81cc89c3", bookedQuantity)
         }
     }
 
     func saveConfig(using client: APIClient) async {
         guard minimumStock >= 0, reorderQuantity >= 0 else {
-            errorMessage = "Mindestbestand und Nachbestellmenge dürfen nicht negativ sein."
+            errorMessage = L10n.text("ui_minimum_stock_and_reorder_quantity_must_not_793d41a8")
             return
         }
         guard (0 ... 36_500).contains(leadTimeDays) else {
-            errorMessage = "Die Lieferzeit muss zwischen 0 und 36.500 Tagen liegen."
+            errorMessage = L10n.text("ui_lead_time_must_be_between_0_and_845f28a6")
             return
         }
         let normalizedUnitName = unitName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedUnitName.isEmpty, normalizedUnitName.count <= 80 else {
-            errorMessage = "Die Einheit muss zwischen einem und 80 Zeichen enthalten."
+            errorMessage = L10n.text("ui_the_unit_must_contain_between_one_and_3b3a842a")
             return
         }
 
@@ -183,8 +183,8 @@ private final class StockManagementViewModel: ObservableObject {
             )
             try await refresh(using: client)
             notice = result.unitsCreated > 0
-                ? "Einstellungen gespeichert und \(result.unitsCreated) Einheiten angelegt."
-                : "Bestandseinstellungen gespeichert."
+                ? L10n.text("ui_settings_saved_and_0_units_created_d86eb28c", result.unitsCreated)
+                : L10n.text("ui_stock_settings_saved_8f92bcb9")
         }
     }
 
@@ -194,7 +194,7 @@ private final class StockManagementViewModel: ObservableObject {
         switch unitCreationMode {
         case .generated:
             guard (1 ... 100).contains(unitCount) else {
-                errorMessage = "Lege zwischen einer und 100 Einheiten auf einmal an."
+                errorMessage = L10n.text("ui_create_between_one_and_100_units_at_502955b3")
                 return
             }
             request = StockUnitCreateRequest(
@@ -209,15 +209,15 @@ private final class StockManagementViewModel: ObservableObject {
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
             guard (1 ... 100).contains(codes.count) else {
-                errorMessage = "Gib zwischen einem und 100 Codes ein."
+                errorMessage = L10n.text("ui_enter_between_one_and_100_codes_878efa5d")
                 return
             }
             guard Set(codes.map { $0.lowercased() }).count == codes.count else {
-                errorMessage = "Jeder Einheiten-Code muss eindeutig sein."
+                errorMessage = L10n.text("ui_each_unit_code_must_be_unique_0908b860")
                 return
             }
             guard codes.allSatisfy({ $0.count <= 180 }) else {
-                errorMessage = "Ein Einheiten-Code darf höchstens 180 Zeichen lang sein."
+                errorMessage = L10n.text("ui_a_unit_code_must_not_exceed_180_1c6de094")
                 return
             }
             request = StockUnitCreateRequest(
@@ -234,7 +234,7 @@ private final class StockManagementViewModel: ObservableObject {
             unitCount = 1
             unitCodes = ""
             acquiredAt = Date()
-            notice = "\(createdCount) serialisierte Einheiten wurden angelegt."
+            notice = L10n.text("ui_0_serialized_units_were_created_8783ee90", createdCount)
         }
     }
 
@@ -250,7 +250,7 @@ private final class StockManagementViewModel: ObservableObject {
                 request: request
             )
             try await refresh(using: client)
-            notice = "Einheit \(unit.code) wurde aktualisiert."
+            notice = L10n.text("ui_unit_0_was_updated_dd51260b", unit.code)
         }
     }
 
@@ -304,22 +304,22 @@ struct StockManagementView: View {
         NavigationStack {
             Group {
                 if model.loading, model.detail == nil {
-                    ProgressView("Bestand wird geladen …")
+                    ProgressView(L10n.text("ui_loading_stock_0e4716e0"))
                 } else if let detail = model.detail {
                     stockForm(detail)
                 } else {
                     ContentUnavailableView(
-                        "Bestand nicht verfügbar",
+                        L10n.text("ui_stock_unavailable_47bfec6d"),
                         systemImage: "exclamationmark.triangle",
-                        description: Text(model.errorMessage ?? "Die Bestandsdaten konnten nicht geladen werden.")
+                        description: Text(model.errorMessage ?? L10n.text("ui_could_not_load_stock_data_dd379012"))
                     )
                 }
             }
-            .navigationTitle("Bestand verwalten")
+            .navigationTitle(L10n.text("ui_manage_stock_0826c917"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Schließen") { dismiss() }
+                    Button(L10n.text("ui_close_b808f6e9")) { dismiss() }
                 }
                 if model.busy {
                     ToolbarItem(placement: .primaryAction) { ProgressView() }
@@ -331,26 +331,26 @@ struct StockManagementView: View {
             await model.load(using: client)
         }
         .confirmationDialog(
-            "Bestand wirklich ausbuchen?",
+            L10n.text("ui_really_remove_stock_0d1df08c"),
             isPresented: $confirmOutgoing,
             titleVisibility: .visible
         ) {
-            Button("\(model.movementQuantity) Einheiten ausbuchen", role: .destructive) {
+            Button(L10n.text("ui_remove_0_units_from_stock_f45b5849", model.movementQuantity), role: .destructive) {
                 submitMovement()
             }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         } message: {
             if let quantity = model.detail?.resource.quantity {
-                Text("Der Bestand sinkt von \(quantity) auf \(quantity - model.movementQuantity).")
+                Text(L10n.text("ui_stock_will_decrease_from_0_to_1_ca3494fd", quantity, quantity - model.movementQuantity))
             }
         }
         .confirmationDialog(
-            "Tracking-Modus ändern?",
+            L10n.text("ui_change_tracking_mode_ca388b20"),
             isPresented: $confirmTrackingChange,
             titleVisibility: .visible
         ) {
-            Button("Modus ändern") { saveConfig() }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_change_mode_64633fcf")) { saveConfig() }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         } message: {
             Text(trackingChangeMessage)
         }
@@ -361,7 +361,7 @@ struct StockManagementView: View {
             }
         }
         .alert(
-            "Aktion fehlgeschlagen",
+            L10n.text("ui_action_failed_3a20cc65"),
             isPresented: Binding(
                 get: { model.errorMessage != nil && model.detail != nil },
                 set: { if !$0 { model.errorMessage = nil } }
@@ -369,7 +369,7 @@ struct StockManagementView: View {
         ) {
             Button("OK", role: .cancel) { model.errorMessage = nil }
         } message: {
-            Text(model.errorMessage ?? "Unbekannter Fehler")
+            Text(model.errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
@@ -377,16 +377,16 @@ struct StockManagementView: View {
         Form {
             summarySection(detail)
             if let selectedUnitID {
-                Section("Gescanntes Exemplar") {
+                Section(L10n.text("ui_scanned_unit_725b4b80")) {
                     if let unit = detail.units.first(where: { $0.id == selectedUnitID }) {
-                        LabeledContent("Code", value: unit.code)
-                        LabeledContent("Status", value: unit.status.localizedName)
-                        LabeledContent("Ort", value: unit.location.nilIfBlank ?? "Kein Ort")
+                        LabeledContent(L10n.text("ui_code_340f4630"), value: unit.code)
+                        LabeledContent(L10n.text("ui_status_920e413c"), value: unit.status.localizedName)
+                        LabeledContent(L10n.text("ui_place_30fb2591"), value: unit.location.nilIfBlank ?? L10n.text("ui_no_location_1bb3351d"))
                         if state.canManageStock {
-                            Button("Exemplar bearbeiten") { editingUnit = unit }
+                            Button(L10n.text("ui_edit_unit_71cdf815")) { editingUnit = unit }
                         }
                     } else {
-                        Text("Dieses Exemplar ist nicht verfügbar oder gehört nicht zu diesem Eintrag.")
+                        Text(L10n.text("ui_this_unit_is_unavailable_or_does_not_b9e09865"))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -430,11 +430,11 @@ struct StockManagementView: View {
             }
 
             if detail.procurement.onOrder > 0 {
-                LabeledContent("Im Zulauf", value: "+\(detail.procurement.onOrder)")
-                LabeledContent("Prognostiziert", value: "\(detail.procurement.projectedQuantity)")
+                LabeledContent(L10n.text("ui_incoming_45fd2616"), value: "+\(detail.procurement.onOrder)")
+                LabeledContent(L10n.text("ui_forecast_f7ab1afd"), value: "\(detail.procurement.projectedQuantity)")
             }
             if detail.forecast.isBelowMinimum {
-                Label("Mindestbestand unterschritten", systemImage: "exclamationmark.triangle.fill")
+                Label(L10n.text("ui_below_minimum_stock_be4ad13b"), systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(InventoryTheme.warning)
             }
             if let notice = model.notice {
@@ -446,27 +446,27 @@ struct StockManagementView: View {
     }
 
     private func bookingSection(_ detail: StockDetailResponse) -> some View {
-        Section("Bestand buchen") {
-            Picker("Richtung", selection: $model.direction) {
+        Section(L10n.text("ui_book_stock_e4df72bd")) {
+            Picker(L10n.text("ui_direction_73ea47c9"), selection: $model.direction) {
                 ForEach(StockBookingDirection.allCases) { direction in
                     Text(direction.localizedName).tag(direction)
                 }
             }
             .pickerStyle(.segmented)
 
-            TextField("Menge", value: $model.movementQuantity, format: .number)
+            TextField(L10n.text("ui_quantity_1bece813"), value: $model.movementQuantity, format: .number)
                 .keyboardType(.numberPad)
 
-            Picker("Buchungsart", selection: $model.movementType) {
+            Picker(L10n.text("ui_transaction_type_27dd1187"), selection: $model.movementType) {
                 ForEach(model.availableMovementTypes, id: \.self) { type in
                     Text(type.localizedName).tag(type)
                 }
             }
-            TextField("Grund (optional)", text: $model.movementReason)
-            TextField("Notiz (optional)", text: $model.movementNote, axis: .vertical)
+            TextField(L10n.text("ui_reason_optional_a96aed7d"), text: $model.movementReason)
+            TextField(L10n.text("ui_note_optional_337da4d8"), text: $model.movementNote, axis: .vertical)
                 .lineLimit(2 ... 5)
-            TextField("Ort (optional)", text: $model.movementLocation)
-            DatePicker("Buchungszeitpunkt", selection: $model.movementDate)
+            TextField(L10n.text("ui_location_optional_9b569818"), text: $model.movementLocation)
+            DatePicker(L10n.text("ui_transaction_time_f4432207"), selection: $model.movementDate)
 
             Button {
                 if model.direction == .outgoing {
@@ -476,7 +476,7 @@ struct StockManagementView: View {
                 }
             } label: {
                 Label(
-                    model.direction == .incoming ? "Zugang buchen" : "Abgang buchen",
+                    model.direction == .incoming ? L10n.text("ui_book_receipt_27e830e4") : L10n.text("ui_book_removal_5a2c91e4"),
                     systemImage: model.direction == .incoming ? "plus.circle.fill" : "minus.circle.fill"
                 )
                 .frame(maxWidth: .infinity)
@@ -493,9 +493,9 @@ struct StockManagementView: View {
     }
 
     private var serializedHintSection: some View {
-        Section("Bestand buchen") {
+        Section(L10n.text("ui_book_stock_e4df72bd")) {
             Label(
-                "Dieser Bestand wird über einzelne Einheiten und deren Status verändert.",
+                L10n.text("ui_this_stock_is_changed_through_individual_units_eae3c00e"),
                 systemImage: "barcode.viewfinder"
             )
             .font(.subheadline)
@@ -504,41 +504,41 @@ struct StockManagementView: View {
     }
 
     private func planningSection(_ detail: StockDetailResponse) -> some View {
-        Section("Planung & Einstellungen") {
-            Picker("Tracking", selection: $model.trackingMode) {
+        Section(L10n.text("ui_planning_settings_c1763aa3")) {
+            Picker(L10n.text("ui_tracking_36b6ca18"), selection: $model.trackingMode) {
                 ForEach(StockTrackingMode.allCases, id: \.self) { mode in
                     Text(mode.localizedName).tag(mode)
                 }
             }
 
-            TextField("Einheitenname", text: $model.unitName)
-            TextField("Mindestbestand", value: $model.minimumStock, format: .number)
+            TextField(L10n.text("ui_unit_name_f38f75ae"), text: $model.unitName)
+            TextField(L10n.text("ui_minimum_stock_0c96df5c"), value: $model.minimumStock, format: .number)
                 .keyboardType(.numberPad)
-            TextField("Nachbestellmenge", value: $model.reorderQuantity, format: .number)
+            TextField(L10n.text("ui_reorder_quantity_aff18853"), value: $model.reorderQuantity, format: .number)
                 .keyboardType(.numberPad)
-            TextField("Lieferzeit in Tagen", value: $model.leadTimeDays, format: .number)
+            TextField(L10n.text("ui_lead_time_in_days_6a859361"), value: $model.leadTimeDays, format: .number)
                 .keyboardType(.numberPad)
 
             if detail.forecast.averageDailyUsage > 0 {
                 LabeledContent(
-                    "Ø Verbrauch pro Tag",
+                    L10n.text("ui_average_daily_usage_2747607b"),
                     value: detail.forecast.averageDailyUsage.formatted(.number.precision(.fractionLength(1 ... 2)))
                 )
             }
             if let days = detail.forecast.daysUntilStockout {
                 LabeledContent(
-                    "Reichweite",
-                    value: "\(days.formatted(.number.precision(.fractionLength(0 ... 1)))) Tage"
+                    L10n.text("ui_days_of_stock_3dfd5f37"),
+                    value: L10n.text("ui_0_days_6f628107", days.formatted(.number.precision(.fractionLength(0 ... 1))))
                 )
             }
             if detail.forecast.suggestedReorderQuantity > 0 {
                 LabeledContent(
-                    "Bestellvorschlag",
+                    L10n.text("ui_order_suggestion_2a79473b"),
                     value: "\(detail.forecast.suggestedReorderQuantity)"
                 )
             }
 
-            Button("Einstellungen speichern") {
+            Button(L10n.text("ui_save_settings_337972dc")) {
                 if model.trackingModeChanged {
                     confirmTrackingChange = true
                 } else {
@@ -550,8 +550,8 @@ struct StockManagementView: View {
     }
 
     private var unitCreationSection: some View {
-        Section("Einheiten anlegen") {
-            Picker("Codes", selection: $model.unitCreationMode) {
+        Section(L10n.text("ui_create_units_53d8f150")) {
+            Picker(L10n.text("ui_codes_e0d1d308"), selection: $model.unitCreationMode) {
                 ForEach(StockUnitCreationMode.allCases) { mode in
                     Text(mode.localizedName).tag(mode)
                 }
@@ -560,13 +560,13 @@ struct StockManagementView: View {
 
             if model.unitCreationMode == .generated {
                 Stepper(
-                    "Anzahl: \(model.unitCount)",
+                    L10n.text("ui_count_0_3bf60cd3", model.unitCount),
                     value: $model.unitCount,
                     in: 1 ... 100
                 )
             } else {
                 TextField(
-                    "Codes, getrennt durch Komma oder Zeilenumbruch",
+                    L10n.text("ui_codes_separated_by_commas_or_line_breaks_aac9e803"),
                     text: $model.unitCodes,
                     axis: .vertical
                 )
@@ -574,9 +574,9 @@ struct StockManagementView: View {
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
             }
-            TextField("Ort (optional)", text: $model.unitLocation)
-            DatePicker("Anschaffungsdatum", selection: $model.acquiredAt)
-            Button("Einheiten anlegen") {
+            TextField(L10n.text("ui_location_optional_9b569818"), text: $model.unitLocation)
+            DatePicker(L10n.text("ui_acquisition_date_ed829fba"), selection: $model.acquiredAt)
+            Button(L10n.text("ui_create_units_53d8f150")) {
                 guard let client = state.client else { return }
                 Task { await model.createUnits(using: client) }
             }
@@ -585,9 +585,9 @@ struct StockManagementView: View {
     }
 
     private func unitsSection(_ detail: StockDetailResponse) -> some View {
-        Section("Einzelne Einheiten") {
+        Section(L10n.text("ui_individual_units_b2614fdf")) {
             if detail.units.isEmpty {
-                Text("Noch keine Einheiten vorhanden.")
+                Text(L10n.text("ui_no_units_yet_3fe93860"))
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(detail.units.prefix(200)) { unit in
@@ -599,7 +599,7 @@ struct StockManagementView: View {
                                 Text(unit.code)
                                     .font(.subheadline.monospaced().weight(.semibold))
                                     .foregroundStyle(.primary)
-                                Text(unit.location.nilIfBlank ?? "Kein Ort")
+                                Text(unit.location.nilIfBlank ?? L10n.text("ui_no_location_1bb3351d"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -615,7 +615,7 @@ struct StockManagementView: View {
                     .buttonStyle(.plain)
                 }
                 if detail.units.count > 200 {
-                    Text("Es werden die ersten 200 von \(detail.units.count) Einheiten angezeigt.")
+                    Text(L10n.text("ui_showing_the_first_200_of_0_units_7a487de9", detail.units.count))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -624,8 +624,8 @@ struct StockManagementView: View {
     }
 
     private var historySection: some View {
-        Section("Buchungsverlauf") {
-            Picker("Filter", selection: $model.historyFilter) {
+        Section(L10n.text("ui_transaction_history_2b52bd02")) {
+            Picker(L10n.text("ui_filter_638e249f"), selection: $model.historyFilter) {
                 ForEach(StockHistoryFilter.allCases) { filter in
                     Text(filter.localizedName).tag(filter)
                 }
@@ -633,7 +633,7 @@ struct StockManagementView: View {
             .pickerStyle(.segmented)
 
             if model.filteredMovements.isEmpty {
-                Text("Keine passenden Buchungen vorhanden.")
+                Text(L10n.text("ui_no_matching_transactions_10e93238"))
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(model.filteredMovements.prefix(50)) { movement in
@@ -658,7 +658,7 @@ struct StockManagementView: View {
                         VStack(alignment: .trailing, spacing: 3) {
                             Text(movement.delta > 0 ? "+\(movement.delta)" : "\(movement.delta)")
                                 .font(.headline.monospacedDigit())
-                            Text("Bestand \(movement.balanceAfter)")
+                            Text(L10n.text("ui_stock_0_7d245045", movement.balanceAfter))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -670,9 +670,9 @@ struct StockManagementView: View {
 
     private var trackingChangeMessage: String {
         if model.trackingMode == .serialized {
-            return "Der vorhandene Bestand wird in einzelne Einheiten mit automatisch erzeugten Codes umgewandelt."
+            return L10n.text("ui_existing_stock_will_be_converted_to_individual_06c9706c")
         }
-        return "Der Wechsel zurück zu Mengenbestand ist nur möglich, wenn keine serialisierten Einheiten existieren."
+        return L10n.text("ui_switching_back_to_quantity_stock_is_only_7749fc5d")
     }
 
     private func submitMovement() {
@@ -713,30 +713,30 @@ private struct StockUnitEditView: View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("Code", value: unit.code)
-                    Picker("Status", selection: $status) {
+                    LabeledContent(L10n.text("ui_code_340f4630"), value: unit.code)
+                    Picker(L10n.text("ui_status_920e413c"), selection: $status) {
                         ForEach(StockUnitStatus.allCases, id: \.self) { status in
                             Text(status.localizedName).tag(status)
                         }
                     }
-                    TextField("Ort", text: $location)
-                    DatePicker("Zeitpunkt", selection: $occurredAt)
+                    TextField(L10n.text("ui_place_30fb2591"), text: $location)
+                    DatePicker(L10n.text("ui_time_9d91e4d4"), selection: $occurredAt)
                 }
 
-                Section("Buchungsdetails") {
-                    TextField("Grund (optional)", text: $reason)
-                    TextField("Notiz (optional)", text: $note, axis: .vertical)
+                Section(L10n.text("ui_transaction_details_e8243ed9")) {
+                    TextField(L10n.text("ui_reason_optional_a96aed7d"), text: $reason)
+                    TextField(L10n.text("ui_note_optional_337da4d8"), text: $note, axis: .vertical)
                         .lineLimit(2 ... 5)
                 }
             }
-            .navigationTitle("Einheit bearbeiten")
+            .navigationTitle(L10n.text("ui_edit_unit_b23063d3"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
+                    Button(L10n.text("ui_cancel_f7ff1178")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") {
+                    Button(L10n.text("ui_save_f6b2ff39")) {
                         onSave(
                             StockUnitPatchRequest(
                                 status: status,
@@ -756,19 +756,19 @@ private struct StockUnitEditView: View {
 
 private extension StockTrackingMode {
     var localizedName: String {
-        self == .bulk ? "Mengenbestand" : "Serialisierte Einheiten"
+        self == .bulk ? L10n.text("ui_bulk_8dff8f29") : L10n.text("ui_serialized_units_aad5fbc1")
     }
 }
 
 private extension StockMovementType {
     var localizedName: String {
         switch self {
-        case .receipt: "Wareneingang"
-        case .issue: "Entnahme"
-        case .adjustment: "Korrektur"
-        case .return: "Rückgabe"
-        case .waste: "Verlust / Ausschuss"
-        case .transfer: "Umlagerung"
+        case .receipt: L10n.text("ui_goods_receipt_d84ec7ae")
+        case .issue: L10n.text("ui_removal_95114093")
+        case .adjustment: L10n.text("ui_adjustment_62bc7c7f")
+        case .return: L10n.text("ui_return_6223760a")
+        case .waste: L10n.text("ui_loss_scrap_2d529613")
+        case .transfer: L10n.text("ui_transfer_a9372d22")
         }
     }
 }
@@ -776,13 +776,13 @@ private extension StockMovementType {
 private extension StockUnitStatus {
     var localizedName: String {
         switch self {
-        case .available: "Verfügbar"
-        case .reserved: "Reserviert"
-        case .inUse: "In Benutzung"
-        case .maintenance: "Wartung"
-        case .consumed: "Verbraucht"
-        case .lost: "Verloren"
-        case .retired: "Ausgemustert"
+        case .available: L10n.text("ui_available_3aa55273")
+        case .reserved: L10n.text("ui_reserved_10814cd6")
+        case .inUse: L10n.text("ui_in_use_d4800d74")
+        case .maintenance: L10n.text("ui_maintenance_854f69bd")
+        case .consumed: L10n.text("ui_consumed_417c49fe")
+        case .lost: L10n.text("ui_lost_4b067d9b")
+        case .retired: L10n.text("ui_retired_ff85d35e")
         }
     }
 
@@ -800,16 +800,16 @@ private extension StockUnitStatus {
 private extension String {
     var stockMovementLocalizedName: String {
         switch self {
-        case "receipt": "Wareneingang"
-        case "issue": "Entnahme"
-        case "adjustment": "Korrektur"
-        case "return": "Rückgabe"
-        case "waste": "Verlust / Ausschuss"
-        case "transfer": "Umlagerung"
-        case "unit-created": "Einheit angelegt"
-        case "unit-status": "Einheitenstatus"
-        case "unit-update": "Einheit aktualisiert"
-        case "serialization-opening": "Serialisierung"
+        case "receipt": L10n.text("ui_goods_receipt_d84ec7ae")
+        case "issue": L10n.text("ui_removal_95114093")
+        case "adjustment": L10n.text("ui_adjustment_62bc7c7f")
+        case "return": L10n.text("ui_return_6223760a")
+        case "waste": L10n.text("ui_loss_scrap_2d529613")
+        case "transfer": L10n.text("ui_transfer_a9372d22")
+        case "unit-created": L10n.text("ui_unit_created_8760b6d5")
+        case "unit-status": L10n.text("ui_unit_status_463fb2bb")
+        case "unit-update": L10n.text("ui_unit_updated_5bb0b6bf")
+        case "serialization-opening": L10n.text("ui_serialization_ea16a109")
         default: replacingOccurrences(of: "-", with: " ").capitalized
         }
     }

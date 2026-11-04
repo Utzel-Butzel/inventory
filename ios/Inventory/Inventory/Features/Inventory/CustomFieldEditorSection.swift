@@ -7,7 +7,7 @@ struct CustomFieldEditorSection: View {
     @Binding var numberDrafts: [String: String]
 
     var body: some View {
-        Section("Benutzerdefinierte Felder") {
+        Section(L10n.text("ui_custom_fields_30214611")) {
             ForEach(definitions) { definition in
                 field(definition)
             }
@@ -48,13 +48,13 @@ struct CustomFieldEditorSection: View {
             Toggle(label(for: definition), isOn: booleanBinding(for: definition.key))
 
         case .date:
-            TextField("JJJJ-MM-TT", text: stringBinding(for: definition.key))
+            TextField(L10n.text("ui_yyyy_mm_dd_9e27a330"), text: stringBinding(for: definition.key))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .labeled(definition)
 
         case .datetime:
-            TextField("JJJJ-MM-TTThh:mm:ssZ", text: stringBinding(for: definition.key))
+            TextField(L10n.text("ui_iso_datetime_placeholder"), text: stringBinding(for: definition.key))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .labeled(definition)
@@ -62,7 +62,7 @@ struct CustomFieldEditorSection: View {
         case .select:
             Picker(label(for: definition), selection: stringBinding(for: definition.key)) {
                 if !definition.required {
-                    Text("Keine Auswahl").tag("")
+                    Text(L10n.text("ui_no_selection_146bfc6e")).tag("")
                 }
                 ForEach(definition.options) { option in
                     Text(option.label).tag(option.value)
@@ -84,7 +84,7 @@ struct CustomFieldEditorSection: View {
                 }
                 if !selectedStrings(for: definition.key).isEmpty {
                     Divider()
-                    Button("Auswahl löschen", role: .destructive) {
+                    Button(L10n.text("ui_clear_selection_61f1caee"), role: .destructive) {
                         values.removeValue(forKey: definition.key)
                     }
                 }
@@ -206,7 +206,7 @@ struct CustomFieldEditorSection: View {
     private func selectedOptionLabels(for definition: CustomFieldDefinition) -> String {
         let selected = Set(selectedStrings(for: definition.key))
         let labels = definition.options.filter { selected.contains($0.value) }.map(\.label)
-        return labels.isEmpty ? "Keine Auswahl" : labels.joined(separator: ", ")
+        return labels.isEmpty ? L10n.text("ui_no_selection_146bfc6e") : labels.joined(separator: ", ")
     }
 }
 
@@ -255,7 +255,7 @@ private struct CustomFieldReferenceField: View {
     }
 
     private var selectionLabel: String {
-        guard !selectedIDs.isEmpty else { return "Keine Auswahl" }
+        guard !selectedIDs.isEmpty else { return L10n.text("ui_no_selection_146bfc6e") }
         let labelsByID = Dictionary(uniqueKeysWithValues: resolvedOptions.map { ($0.id, $0.label) })
         return selectedIDs.map { labelsByID[$0] ?? $0 }.joined(separator: ", ")
     }
@@ -273,7 +273,7 @@ private struct CustomFieldReferenceSelectionView: View {
     var body: some View {
         List {
             if !definition.required && !selectedIDs.isEmpty {
-                Button("Auswahl löschen", role: .destructive) { value = nil }
+                Button(L10n.text("ui_clear_selection_61f1caee"), role: .destructive) { value = nil }
             }
             ForEach(options) { option in
                 Button {
@@ -301,7 +301,7 @@ private struct CustomFieldReferenceSelectionView: View {
             }
         }
         .navigationTitle(definition.label)
-        .searchable(text: $query, prompt: "Suchen")
+        .searchable(text: $query, prompt: L10n.text("ui_search_dd097e77"))
         .task(id: query) {
             if !query.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
             guard !Task.isCancelled, let client else { return }

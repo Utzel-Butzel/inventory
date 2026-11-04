@@ -15,6 +15,13 @@ import { type ChangeEvent, useMemo, useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { useT } from "next-i18next/client";
 
+import {
+  INVENTORY_SYSTEMS,
+  migrateInventoryRows,
+  parseMigrationCsv,
+  type InventorySystem,
+  type MigrationMapping,
+} from "@/lib/inventory-migration";
 import { Button, Card } from "@/components/ui";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -320,8 +327,9 @@ function previewCsv(
   text: string,
   validResourceTypes: ReadonlySet<string>,
   t: TFunction<"settings">,
+  parsedRows?: CsvRow[],
 ): CsvPreview {
-  const parsed = parseCsv(text, t);
+  const parsed = parsedRows ?? parseCsv(text, t);
   const headerRow = parsed[0];
   if (!headerRow || headerRow.cells.every((cell) => !cell.trim())) {
     return { headers: [], rows: [], totalRows: 0, errors: [t("csv.validation.headerRequired")] };
@@ -391,6 +399,12 @@ export function CsvImportExport({
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const exportMenuRef = useRef<HTMLDetailsElement>(null);
+  const fileReadVersion = useRef(0);
+  const [sourceSystem, setSourceSystem] = useState<InventorySystem>("open-inventory");
+  const [targetSystem, setTargetSystem] = useState<InventorySystem>("open-inventory");
+  const [currency, setCurrency] = useState("EUR");
+  const [mappings, setMappings] = useState<MigrationMapping[]>([]);
+  const [reading, setReading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState("");
   const [importKey, setImportKey] = useState("");
@@ -418,10 +432,13 @@ export function CsvImportExport({
       preview &&
       !preview.errors.length &&
       !rowErrors.length &&
-      !importing,
+      !importing && !reading,
   );
 
   const resetFile = () => {
+    fileReadVersion.current++;
+    setReading(false);
+    setMappings([]);
     setSelectedFile(null);
     setCsvText("");
     setImportKey("");
@@ -432,7 +449,10 @@ export function CsvImportExport({
   };
 
   const chooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const readVersion = ++fileReadVersion.current;
     const file = event.target.files?.[0] ?? null;
+    setReading(false);
+    setMappings([]);
     setResult(null);
     setError(null);
     setPreview(null);
@@ -445,20 +465,29 @@ export function CsvImportExport({
       return;
     }
 
+    setReading(true);
     try {
       const text = new TextDecoder("utf-8", { fatal: true }).decode(
         await file.arrayBuffer(),
       );
+      if (readVersion !== fileReadVersion.current) return;
       if (text.includes("\u0000")) throw new Error(t("csv.errors.nullCharacters"));
-      const parsedPreview = previewCsv(text, validResourceTypes, t);
+      const migration = sourceSystem === "open-inventory"
+        ? undefined
+        : migrateInventoryRows(parseMigrationCsv(text), sourceSystem, currency);
+      const parsedPreview = previewCsv(text, validResourceTypes, t, migration?.rows);
+      setMappings(migration?.mappings ?? []);
       setCsvText(text);
       setPreview(parsedPreview);
     } catch (readError) {
+      if (readVersion !== fileReadVersion.current) return;
       setError(
         readError instanceof Error
           ? readError.message
           : t("csv.errors.invalidUtf8"),
       );
+    } finally {
+      if (readVersion === fileReadVersion.current) setReading(false);
     }
   };
 
@@ -476,7 +505,7 @@ export function CsvImportExport({
         pdf: "application/pdf",
       }[format];
       const response = await fetch(
-        `/api/v1/resources/export?format=${format}&lang=${exportLocale}`,
+        `/api/v1/resources/export?format=${format}&lang=${exportLocale}&system=${targetSystem}`,
         {
           headers: { Accept: accept },
         },
@@ -515,7 +544,7 @@ export function CsvImportExport({
     setError(null);
     setResult(null);
     try {
-      const response = await fetch("/api/v1/resources/import", {
+      const response = await fetch(`/api/v1/resources/import?system=${sourceSystem}&currency=${encodeURIComponent(currency)}`, {
         method: "POST",
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
@@ -575,7 +604,7 @@ export function CsvImportExport({
               ["csv", FileSpreadsheet],
               ["xlsx", FileSpreadsheet],
               ["pdf", FileText],
-            ] as const).map(([format, Icon]) => (
+            ] as const).filter(([format]) => targetSystem === "open-inventory" || format === "csv").map(([format, Icon]) => (
               <button
                 key={format}
                 type="button"
@@ -587,16 +616,26 @@ export function CsvImportExport({
                 <Icon className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
                 <span>
                   <span className="block text-sm font-semibold text-foreground">
-                    {t(`csv.formats.${format}.label`)}
+                    {targetSystem === "open-inventory" ? t(`csv.formats.${format}.label`) : t("csv.migration.exportCsv", { system: t(`csv.migration.systems.${targetSystem}`) })}
                   </span>
                   <span className="mt-0.5 block text-xs leading-4 text-muted">
-                    {t(`csv.formats.${format}.description`)}
+                    {targetSystem === "open-inventory" ? t(`csv.formats.${format}.description`) : t("csv.migration.exportCsvDescription")}
                   </span>
                 </span>
               </button>
             ))}
           </div>
         </details>
+      </div>
+
+      <div className="space-y-3 border-b border-border px-5 py-4">
+        <label className="block text-sm font-medium text-foreground">
+          {t("csv.migration.target")}
+          <select className="mt-2 block w-full rounded-lg border border-border bg-surface p-2 text-sm" value={targetSystem} disabled={Boolean(exporting)} onChange={(event) => setTargetSystem(event.target.value as InventorySystem)}>
+            {INVENTORY_SYSTEMS.map((system) => <option key={system} value={system}>{t(`csv.migration.systems.${system}`)}</option>)}
+          </select>
+        </label>
+        {targetSystem !== "open-inventory" ? <p className="text-xs leading-5 text-muted">{t(`csv.migration.exportHints.${targetSystem}`)}</p> : null}
       </div>
 
       {error ? (
@@ -610,6 +649,24 @@ export function CsvImportExport({
       ) : null}
 
       {allowImport ? <div className="space-y-4 p-5">
+        <label className="block text-sm font-medium text-foreground">
+          {t("csv.migration.source")}
+          <select className="mt-2 block w-full rounded-lg border border-border bg-surface p-2 text-sm" value={sourceSystem} disabled={importing || reading} onChange={(event) => { resetFile(); setSourceSystem(event.target.value as InventorySystem); }}>
+            {INVENTORY_SYSTEMS.map((system) => <option key={system} value={system}>{t(`csv.migration.systems.${system}`)}</option>)}
+          </select>
+        </label>
+        {sourceSystem !== "open-inventory" ? <div className="space-y-3 rounded-xl border border-border bg-surface-subtle p-4">
+          <p className="text-xs leading-5 text-muted">{t(`csv.migration.importHints.${sourceSystem}`)}</p>
+          <p className="text-xs leading-5 text-muted">{t("csv.migration.limitations")}</p>
+          <label className="block text-xs font-medium text-foreground">
+            {t("csv.migration.currency")}
+            <input value={currency} maxLength={3} disabled={importing || reading} onChange={(event) => { resetFile(); setCurrency(event.target.value.toUpperCase()); }} className="ml-3 w-20 rounded-lg border border-border bg-surface p-2" />
+          </label>
+        </div> : null}
+        {mappings.length ? <details className="rounded-xl border border-border p-3 text-xs">
+          <summary className="cursor-pointer font-semibold text-foreground">{t("csv.migration.mapping")}</summary>
+          <ul className="mt-2 space-y-1 text-muted">{mappings.map((mapping) => <li key={mapping.source}>{mapping.source} → {mapping.target ?? t("csv.migration.notes")}</li>)}</ul>
+        </details> : null}
         <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border-strong bg-surface-subtle/70 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-muted-strong">
@@ -618,12 +675,12 @@ export function CsvImportExport({
             <p className="mt-1 text-xs text-muted">
               {selectedFile
                 ? `${(selectedFile.size / 1024).toLocaleString(locale, { maximumFractionDigits: 1 })} KB`
-                : t("csv.fileHint")}
+                : t(sourceSystem === "open-inventory" ? "csv.fileHint" : "csv.migration.fileHint")}
             </p>
           </div>
           <div className="flex shrink-0 gap-2">
             {selectedFile ? (
-              <Button variant="ghost" size="sm" onClick={resetFile}>
+              <Button variant="ghost" size="sm" onClick={resetFile} disabled={importing || reading}>
                 <RotateCcw className="size-3.5" aria-hidden="true" /> {t("csv.reset")}
               </Button>
             ) : null}
@@ -633,7 +690,8 @@ export function CsvImportExport({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept={sourceSystem === "open-inventory" ? ".csv,text/csv" : ".csv,.tsv,text/csv,text/tab-separated-values"}
+                disabled={importing || reading}
                 onChange={(event) => void chooseFile(event)}
                 className="sr-only"
               />
@@ -676,6 +734,7 @@ export function CsvImportExport({
                     <th className="px-3 py-2 font-semibold">{t("csv.table.sku")}</th>
                     <th className="px-3 py-2 font-semibold">{t("csv.table.quantity")}</th>
                     <th className="px-3 py-2 font-semibold">{t("csv.table.location")}</th>
+                    {sourceSystem !== "open-inventory" ? <th className="px-3 py-2 font-semibold">{t("csv.migration.value")}</th> : null}
                     <th className="px-3 py-2 font-semibold">{t("csv.table.validation")}</th>
                   </tr>
                 </thead>
@@ -690,6 +749,9 @@ export function CsvImportExport({
                       <td className="whitespace-nowrap px-3 py-2">{row.values.sku || "—"}</td>
                       <td className="whitespace-nowrap px-3 py-2">{row.values.quantity || "1"}</td>
                       <td className="max-w-44 truncate px-3 py-2">{row.values.location || "—"}</td>
+                      {sourceSystem !== "open-inventory" ? <td className="whitespace-nowrap px-3 py-2">
+                        {row.values.value_cents ? `${(Number(row.values.value_cents) / 100).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${row.values.currency}` : "—"}
+                      </td> : null}
                       <td className={row.errors.length ? "px-3 py-2 text-danger" : "px-3 py-2 text-success"}>
                         {row.errors.length ? row.errors.join(" ") : t("csv.table.valid")}
                       </td>

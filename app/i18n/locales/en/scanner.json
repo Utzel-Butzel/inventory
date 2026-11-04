@@ -258,7 +258,10 @@
       "unit": "Unit",
       "resource": "Resource",
       "metadata": "Saved metadata",
-      "next": "Scan next item"
+      "next": "Scan next item",
+      "stockBooked": "Stock change {{delta}} booked successfully.",
+      "assemblyCompleted": "Assembly completed and components removed from stock.",
+      "newStock": "New stock"
     },
     "resolving": "Resolving EPD number and workflow…",
     "resolveErrorTitle": "Code could not be resolved",
@@ -319,7 +322,13 @@
       "scanAgain": "Scan again",
       "updating": "Updating stock…",
       "cannotUpdate": "Unit cannot be updated",
-      "confirm": "Confirm and update stock"
+      "confirm": "Confirm and update stock",
+      "stockBooking": "Stock transaction",
+      "completeAssembly": "Complete assembly",
+      "action": "Action",
+      "buildQuantity": "Complete {{quantity}} × assembly",
+      "bookDelta": "Book {{delta}}",
+      "updateUnit": "Update unit"
     }
   },
   "publicAction": {
@@ -547,21 +556,24 @@
           "full": "Full value",
           "url-query": "URL parameter",
           "prefix": "Remove prefix",
-          "regex": "Regex"
+          "regex": "Regular expression"
         },
-      "queryParameter": "Query parameter",
-      "queryParameterPlaceholder": "d",
-      "sourceOrigin": "Allowed source origin",
-      "sourceOriginPlaceholder": "https://paperlesspaper.de",
-      "sourcePath": "Allowed path",
-      "sourcePathPlaceholder": "/b",
-      "identifierKey": "Identifier property key",
-      "identifierKeyPlaceholder": "epdNumber",
-      "prefix": "Prefix to remove",
-      "prefixPlaceholder": "EPD-",
-      "regexPattern": "Regular expression",
-      "regexFlags": "Flags",
-      "regexGroup": "Capture group"
+        "queryParameter": "Query parameter",
+        "queryParameterPlaceholder": "d",
+        "sourceOrigin": "Allowed source origin",
+        "sourceOriginPlaceholder": "https://paperlesspaper.de",
+        "sourcePath": "Allowed path",
+        "sourcePathPlaceholder": "/b",
+        "identifierKey": "Identifier property key",
+        "identifierKeyPlaceholder": "epdNumber",
+        "prefix": "Prefix to remove",
+        "prefixPlaceholder": "EPD-",
+        "regexPattern": "Regular expression",
+        "regexFlags": "Flags",
+        "regexGroup": "Capture group",
+        "fieldLabel": "Label",
+        "extraction": "Extraction",
+        "removeField": "Remove QR field"
       },
       "target": {
         "openStockSettings": "Open stock settings for {{name}} (new tab)",
@@ -616,8 +628,8 @@
         "selectField": "Select field",
         "removeField": "Remove {{field}}",
         "scanInput": "scan input",
-      "propertyKey": "Property key",
-      "propertyKeyPlaceholder": "color",
+        "propertyKey": "Property key",
+        "propertyKeyPlaceholder": "color",
         "visibleLabel": "Visible label",
         "required": "Required before the scan can be applied",
         "options": "Options",
@@ -630,7 +642,19 @@
         "removeOption": "Remove {{label}}",
         "none": "This workflow has no scan-time questions.",
         "addField": "Add select field",
-        "newProperty": "Property {{value}}"
+        "newProperty": "Property {{value}}",
+        "inputType": "Input type",
+        "placeholder": "Placeholder",
+        "types": {
+          "text": "Text",
+          "textarea": "Multiline text",
+          "number": "Number",
+          "checkbox": "Checkbox",
+          "select": "Select list",
+          "radio": "Radio buttons",
+          "media": "Photo / video",
+          "file": "File / PDF"
+        }
       },
       "actions": {
         "title": "Configure actions",
@@ -643,11 +667,11 @@
         "fixedTitle": "Fixed properties",
         "fixedDescription": "Actions apply these values when shared property assignments are enabled.",
         "addProperty": "Add property",
-      "key": "Key",
-      "keyPlaceholder": "assemblyStatus",
+        "key": "Key",
+        "keyPlaceholder": "assemblyStatus",
         "visibleLabel": "Visible label",
-      "storedValue": "Stored value",
-      "storedValuePlaceholder": "finished-assembled",
+        "storedValue": "Stored value",
+        "storedValuePlaceholder": "finished-assembled",
         "visibleAs": "Visible as {{value}}",
         "remove": "Remove",
         "none": "No fixed properties.",

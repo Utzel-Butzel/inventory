@@ -14,34 +14,34 @@ enum CameraMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .capture: "Foto"
-        case .video: "Video"
-        case .document: "Dokument"
-        case .scan: "Scannen"
-        case .recognize: "Erkennen"
-        case .count: "Zählen"
+        case .capture: L10n.text("ui_photo_494e0843")
+        case .video: L10n.text("ui_video_d534be82")
+        case .document: L10n.text("ui_document_836ae935")
+        case .scan: L10n.text("ui_scan_2a53b078")
+        case .recognize: L10n.text("ui_recognize_6f20ddeb")
+        case .count: L10n.text("ui_count_eb491fc2")
         }
     }
 
     var navigationTitle: String {
         switch self {
-        case .capture: "Inventar erfassen"
-        case .video: "Inventarvideo"
-        case .document: "Dokument scannen"
-        case .scan: "QR & Barcode"
-        case .recognize: "Objekt erkennen"
-        case .count: "Teile per Foto zählen"
+        case .capture: L10n.text("ui_capture_inventory_030deaa6")
+        case .video: L10n.text("ui_inventory_video_c85a72cd")
+        case .document: L10n.text("ui_scan_document_6d091d0c")
+        case .scan: L10n.text("ui_qr_barcode_29cf3034")
+        case .recognize: L10n.text("ui_recognize_an_object_1963bf8c")
+        case .count: L10n.text("ui_count_parts_from_a_photo_4f287f55")
         }
     }
 
     var accessibilityLabel: String {
         switch self {
-        case .capture: "Inventar mit Fotos erfassen"
-        case .video: "Inventarvideo aufnehmen"
-        case .document: "Mehrseitiges Dokument mit OCR scannen"
-        case .scan: "QR- oder Barcode scannen"
-        case .recognize: "Inventarartikel per Foto erkennen"
-        case .count: "Teile per Foto zählen"
+        case .capture: L10n.text("ui_capture_inventory_with_photos_2575693a")
+        case .video: L10n.text("ui_record_inventory_video_e83be04c")
+        case .document: L10n.text("ui_scan_a_multi_page_document_with_ocr_c1eb05b2")
+        case .scan: L10n.text("ui_scan_qr_code_or_barcode_165c231f")
+        case .recognize: L10n.text("ui_identify_an_inventory_item_from_a_photo_68299fad")
+        case .count: L10n.text("ui_count_parts_from_a_photo_4f287f55")
         }
     }
 }
@@ -151,14 +151,14 @@ struct UnifiedCameraView: View {
 
                     if mode == .scan, state.canReadWorkflows {
                         Menu {
-                            Picker("Ablauf wählen", selection: $selectedScanActionWorkflowID) {
-                                Text("Inventarartikel suchen").tag(nil as UUID?)
+                            Picker(L10n.text("ui_select_workflow_7f738359"), selection: $selectedScanActionWorkflowID) {
+                                Text(L10n.text("ui_search_inventory_items_b05c45e7")).tag(nil as UUID?)
                                 ForEach(scanActionWorkflows) { workflow in
                                     Text(workflow.name).tag(Optional(workflow.id))
                                 }
                             }
                             if actionFlowsLoadFailed || scanActionWorkflows.isEmpty {
-                                Button("Abläufe erneut laden", systemImage: "arrow.clockwise") {
+                                Button(L10n.text("ui_reload_workflows_e1c38ab9"), systemImage: "arrow.clockwise") {
                                     Task { await loadActionFlows() }
                                 }
                             }
@@ -166,8 +166,8 @@ struct UnifiedCameraView: View {
                             HStack(spacing: 10) {
                                 Image(systemName: selectedScanActionWorkflow == nil ? "magnifyingglass" : "bolt.fill")
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(selectedScanActionWorkflow?.name ?? "Inventarartikel suchen").font(.subheadline.weight(.semibold))
-                                    Text(actionFlowsLoading ? "Abläufe werden geladen …" : actionFlowsLoadFailed ? "Abläufe konnten nicht geladen werden" : scanActionWorkflows.isEmpty ? "Keine aktiven Abläufe vorhanden" : "Ablauf wählen").font(.caption)
+                                    Text(selectedScanActionWorkflow?.name ?? L10n.text("ui_search_inventory_items_b05c45e7")).font(.subheadline.weight(.semibold))
+                                    Text(actionFlowsLoading ? L10n.text("ui_loading_workflows_29603682") : actionFlowsLoadFailed ? L10n.text("ui_could_not_load_workflows_83a306dc") : scanActionWorkflows.isEmpty ? L10n.text("ui_no_active_workflows_available_deaa414d") : L10n.text("ui_select_workflow_7f738359")).font(.caption)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.down")
@@ -335,27 +335,27 @@ struct UnifiedCameraView: View {
             .ignoresSafeArea()
         }
         .confirmationDialog(
-            "Gezählte Teile entnehmen?",
+            L10n.text("ui_remove_counted_parts_1fb9eb63"),
             isPresented: $confirmIssue,
             titleVisibility: .visible
         ) {
             Button(
-                "\(countModel.adjustedCount) Teile entnehmen",
+                L10n.text("ui_remove_0_parts_4e433904", countModel.adjustedCount),
                 role: .destructive
             ) {
                 applyCount(.issue)
             }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         } message: {
             if let resource = countResource {
                 Text(
-                    "Der Bestand wird von \(resource.quantity) auf "
-                        + "\(resource.quantity - countModel.adjustedCount) reduziert."
+                    L10n.text("ui_stock_will_change_from_0_to_c5628db8", resource.quantity)
+                        + L10n.text("ui_0_e4e92c7f", resource.quantity - countModel.adjustedCount)
                 )
             }
         }
         .alert(
-            "Medium konnte nicht verarbeitet werden",
+            L10n.text("ui_could_not_process_media_90163ca5"),
             isPresented: Binding(
                 get: { captureModel.errorMessage != nil },
                 set: { if !$0 { captureModel.errorMessage = nil } }
@@ -363,10 +363,10 @@ struct UnifiedCameraView: View {
         ) {
             Button("OK", role: .cancel) { captureModel.errorMessage = nil }
         } message: {
-            Text(captureModel.errorMessage ?? "Unbekannter Fehler")
+            Text(captureModel.errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
         .alert(
-            "Code konnte nicht verarbeitet werden",
+            L10n.text("ui_could_not_process_code_9a640900"),
             isPresented: Binding(
                 get: { scannerErrorMessage != nil },
                 set: {
@@ -377,15 +377,15 @@ struct UnifiedCameraView: View {
                 }
             )
         ) {
-            Button("Noch einmal", role: .cancel) {
+            Button(L10n.text("ui_try_again_130ba1e2"), role: .cancel) {
                 scannerErrorMessage = nil
                 resumeScanningIfNeeded()
             }
         } message: {
-            Text(scannerErrorMessage ?? "Unbekannter Fehler")
+            Text(scannerErrorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
         .alert(
-            "Objekt konnte nicht erkannt werden",
+            L10n.text("ui_could_not_identify_the_object_d038bc12"),
             isPresented: Binding(
                 get: { recognitionModel.errorMessage != nil },
                 set: { if !$0 { recognitionModel.errorMessage = nil } }
@@ -393,10 +393,10 @@ struct UnifiedCameraView: View {
         ) {
             Button("OK", role: .cancel) { recognitionModel.errorMessage = nil }
         } message: {
-            Text(recognitionModel.errorMessage ?? "Unbekannter Fehler")
+            Text(recognitionModel.errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
         .alert(
-            "Aktion fehlgeschlagen",
+            L10n.text("ui_action_failed_3a20cc65"),
             isPresented: Binding(
                 get: { countModel.errorMessage != nil },
                 set: { if !$0 { countModel.errorMessage = nil } }
@@ -404,7 +404,7 @@ struct UnifiedCameraView: View {
         ) {
             Button("OK", role: .cancel) { countModel.errorMessage = nil }
         } message: {
-            Text(countModel.errorMessage ?? "Unbekannter Fehler")
+            Text(countModel.errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
@@ -457,7 +457,7 @@ struct UnifiedCameraView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "doc.viewfinder")
                         .font(.system(size: 54, weight: .light))
-                    Text("Kanten, Perspektive und Zuschnitt werden automatisch erkannt.")
+                    Text(L10n.text("ui_edges_perspective_and_cropping_are_detected_automatically_bff7311d"))
                         .font(.subheadline.weight(.semibold))
                         .multilineTextAlignment(.center)
                 }
@@ -492,10 +492,10 @@ struct UnifiedCameraView: View {
             if documentRecognitionRunning {
                 VStack(spacing: 12) {
                     ProgressView().tint(.white).controlSize(.large)
-                    Text("OCR-Texterkennung und PDF-Erstellung laufen …")
+                    Text(L10n.text("ui_recognizing_text_and_creating_pdf_75559b6c"))
                         .font(.headline)
                         .multilineTextAlignment(.center)
-                    Text("Die Verarbeitung findet direkt auf diesem Gerät statt.")
+                    Text(L10n.text("ui_processing_takes_place_directly_on_this_device_a1108c58"))
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.7))
                 }
@@ -510,8 +510,8 @@ struct UnifiedCameraView: View {
                     ProgressView().tint(.white).controlSize(.large)
                     Text(
                         countModel.phase == .preparingPhoto
-                            ? "Foto wird vorbereitet …"
-                            : "Teile werden gezählt …"
+                            ? L10n.text("ui_preparing_photo_a53297b0")
+                            : L10n.text("ui_counting_parts_83ed0f1d")
                     )
                     .font(.headline)
                 }
@@ -523,8 +523,8 @@ struct UnifiedCameraView: View {
                     ProgressView().tint(.white).controlSize(.large)
                     Text(
                         recognitionModel.phase == .preparingPhoto
-                            ? "Foto wird vorbereitet …"
-                            : "Inventar wird durchsucht …"
+                            ? L10n.text("ui_preparing_photo_a53297b0")
+                            : L10n.text("ui_searching_inventory_7cfa3dbc")
                     )
                     .font(.headline)
                 }
@@ -562,7 +562,7 @@ struct UnifiedCameraView: View {
                     || camera.isRecordingVideo
                     || documentRecognitionRunning
             )
-            .accessibilityLabel("Kamera schließen")
+            .accessibilityLabel(L10n.text("ui_close_camera_302e993f"))
 
             Spacer()
 
@@ -571,7 +571,7 @@ struct UnifiedCameraView: View {
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "chevron.up")
-                    Text("Details")
+                    Text(L10n.text("ui_details_45989de4"))
                     if let detailsBadgeText {
                         Text(detailsBadgeText)
                             .font(.caption2.monospacedDigit().bold())
@@ -587,7 +587,7 @@ struct UnifiedCameraView: View {
             }
             .foregroundStyle(.white)
             .disabled(camera.isRecordingVideo || documentRecognitionRunning)
-            .accessibilityLabel("Details öffnen")
+            .accessibilityLabel(L10n.text("ui_open_details_3f7dcd09"))
 
             if !showingCapturedPhoto {
                 Button { camera.toggleTorch() } label: {
@@ -622,7 +622,7 @@ struct UnifiedCameraView: View {
                                 }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Aufgenommenes Foto anzeigen")
+                        .accessibilityLabel(L10n.text("ui_show_captured_photo_bc0ef5bb"))
                     }
                     ForEach(captureModel.attachments) { attachment in
                         Button(action: openCaptureDetails) {
@@ -644,8 +644,8 @@ struct UnifiedCameraView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(
                             attachment.kind == .video
-                                ? "Aufgenommenes Video anzeigen"
-                                : "Gescanntes Dokument anzeigen"
+                                ? L10n.text("ui_show_recorded_video_12acdfff")
+                                : L10n.text("ui_show_scanned_document_55c8f4fe")
                         )
                     }
                 }
@@ -665,9 +665,9 @@ struct UnifiedCameraView: View {
             .buttonStyle(.plain)
             .disabled(!captureModel.canSubmit || captureModel.processingCount > 0 || (state.canUseAI && !captureModel.aiDefaultsLoaded))
             .opacity(captureModel.processingCount == 0 ? 1 : 0.55)
-            .accessibilityLabel("Inventar hochladen")
+            .accessibilityLabel(L10n.text("ui_upload_inventory_3e6deeaf"))
             .accessibilityHint(
-                "Lädt \(captureModel.mediaCount) aufgenommene Mediendateien hoch"
+                L10n.text("ui_uploads_0_captured_media_files_783a689b", captureModel.mediaCount)
             )
         }
         .frame(height: 48)
@@ -728,7 +728,7 @@ struct UnifiedCameraView: View {
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Zoom \(preset.label)")
+                .accessibilityLabel(L10n.text("ui_zoom_0_66843955", preset.label))
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
@@ -755,7 +755,7 @@ struct UnifiedCameraView: View {
                 .disabled(captureModel.mediaCount >= CaptureViewModel.maximumPhotos)
 
                 Spacer()
-                shutterButton(accessibilityLabel: "Inventarfoto aufnehmen") {
+                shutterButton(accessibilityLabel: L10n.text("ui_take_inventory_photo_ed04b67c")) {
                     requestPhoto(
                         for: .capture(
                             UUID(),
@@ -803,8 +803,8 @@ struct UnifiedCameraView: View {
                 )
                 .accessibilityLabel(
                     camera.isRecordingVideo
-                        ? "Videoaufnahme stoppen"
-                        : "Videoaufnahme starten"
+                        ? L10n.text("ui_stop_video_recording_1068425e")
+                        : L10n.text("ui_start_video_recording_ea14ab6d")
                 )
                 Spacer()
                 cameraSwitchButton
@@ -838,7 +838,7 @@ struct UnifiedCameraView: View {
                     documentRecognitionRunning
                         || captureModel.mediaCount >= CaptureViewModel.maximumPhotos
                 )
-                .accessibilityLabel("Mehrseitiges Dokument scannen")
+                .accessibilityLabel(L10n.text("ui_scan_multi_page_document_4b4fda9c"))
                 Spacer()
                 Color.clear.frame(width: 52, height: 52)
             }
@@ -852,7 +852,7 @@ struct UnifiedCameraView: View {
                     .foregroundStyle(InventoryTheme.lime)
                     .frame(width: 82, height: 82)
                     .background(.black.opacity(0.4), in: Circle())
-                    .accessibilityLabel("Code wird automatisch gescannt")
+                    .accessibilityLabel(L10n.text("ui_code_is_scanned_automatically_413095e8"))
                 Spacer()
                 cameraSwitchButton
             }
@@ -862,7 +862,7 @@ struct UnifiedCameraView: View {
                 Color.clear.frame(width: 52, height: 52)
                 Spacer()
                 if !state.canUseAI {
-                    Label("KI fehlt", systemImage: "lock.fill")
+                    Label(L10n.text("ui_ai_unavailable_40eb9ab6"), systemImage: "lock.fill")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
@@ -870,7 +870,7 @@ struct UnifiedCameraView: View {
                         .background(.black.opacity(0.56), in: Capsule())
                 } else if recognitionModel.photoURL == nil, !recognitionModel.isBusy {
                     shutterButton(
-                        accessibilityLabel: "Foto aufnehmen und Inventarartikel suchen"
+                        accessibilityLabel: L10n.text("ui_take_a_photo_and_search_inventory_items_2af3ea93")
                     ) {
                         requestPhoto(
                             for: .recognize(
@@ -886,7 +886,7 @@ struct UnifiedCameraView: View {
                         showCaptureDetails = false
                         configureMode()
                     } label: {
-                        Label("Neues Foto", systemImage: "camera.rotate")
+                        Label(L10n.text("ui_new_photo_f2620ec5"), systemImage: "camera.rotate")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
@@ -897,12 +897,12 @@ struct UnifiedCameraView: View {
                     Button {
                         guard let client = state.client else {
                             recognitionModel.errorMessage =
-                                "Keine Verbindung zum Inventarserver."
+                                L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
                             return
                         }
                         recognitionModel.retry(using: client)
                     } label: {
-                        Label("Erneut suchen", systemImage: "arrow.clockwise")
+                        Label(L10n.text("ui_search_again_b99af6ff"), systemImage: "arrow.clockwise")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
@@ -921,7 +921,7 @@ struct UnifiedCameraView: View {
                 Color.clear.frame(width: 52, height: 52)
                 Spacer()
                 if !state.canUseAI {
-                    Label("KI fehlt", systemImage: "lock.fill")
+                    Label(L10n.text("ui_ai_unavailable_40eb9ab6"), systemImage: "lock.fill")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
@@ -933,9 +933,9 @@ struct UnifiedCameraView: View {
                         .foregroundStyle(InventoryTheme.lime)
                         .frame(width: 82, height: 82)
                         .background(.black.opacity(0.4), in: Circle())
-                        .accessibilityLabel("Artikelcode scannen")
+                        .accessibilityLabel(L10n.text("ui_scan_item_code_8fc2dbe3"))
                 } else if countModel.photoURL == nil, !countModel.isAnalyzing {
-                    shutterButton(accessibilityLabel: "Foto aufnehmen und Teile zählen") {
+                    shutterButton(accessibilityLabel: L10n.text("ui_take_a_photo_and_count_parts_6d0c9b39")) {
                         requestPhoto(
                             for: .count(
                                 UUID(),
@@ -949,7 +949,7 @@ struct UnifiedCameraView: View {
                         countModel.retake()
                         configureMode()
                     } label: {
-                        Label("Neues Foto", systemImage: "camera.rotate")
+                        Label(L10n.text("ui_new_photo_f2620ec5"), systemImage: "camera.rotate")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
@@ -959,12 +959,12 @@ struct UnifiedCameraView: View {
                 } else if countModel.photoURL != nil, !countModel.isAnalyzing {
                     Button {
                         guard let client = state.client else {
-                            countModel.errorMessage = "Keine Verbindung zum Inventarserver."
+                            countModel.errorMessage = L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
                             return
                         }
                         countModel.retryAnalysis(using: client)
                     } label: {
-                        Label("Erneut zählen", systemImage: "arrow.clockwise")
+                        Label(L10n.text("ui_count_again_45f6a1bc"), systemImage: "arrow.clockwise")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
@@ -996,7 +996,7 @@ struct UnifiedCameraView: View {
         .foregroundStyle(.white)
         .disabled(!camera.canSwitchCamera || camera.isSwitchingCamera)
         .opacity(camera.canSwitchCamera ? 1 : 0.45)
-        .accessibilityLabel("Kamera wechseln")
+        .accessibilityLabel(L10n.text("ui_switch_camera_698db125"))
     }
 
     private func shutterButton(
@@ -1018,10 +1018,10 @@ struct UnifiedCameraView: View {
         VStack(spacing: 16) {
             if !scanActionWorkflows.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Scan-Aktion", systemImage: "bolt.fill")
+                    Label(L10n.text("ui_scan_action_30a03dad"), systemImage: "bolt.fill")
                         .font(.headline)
-                    Picker("Verhalten beim nächsten Scan", selection: $selectedScanActionWorkflowID) {
-                        Text("Inventarartikel suchen").tag(nil as UUID?)
+                    Picker(L10n.text("ui_action_for_the_next_scan_af031ea1"), selection: $selectedScanActionWorkflowID) {
+                        Text(L10n.text("ui_search_inventory_items_b05c45e7")).tag(nil as UUID?)
                         ForEach(scanActionWorkflows) { workflow in
                             Text(workflow.name).tag(Optional(workflow.id))
                         }
@@ -1039,7 +1039,7 @@ struct UnifiedCameraView: View {
 
             if let code = unmatchedCode {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("Noch nicht im Inventar", systemImage: "questionmark.app.dashed")
+                    Label(L10n.text("ui_not_in_inventory_yet_003eb9c5"), systemImage: "questionmark.app.dashed")
                         .font(.headline)
                     Text(code)
                         .font(.caption.monospaced())
@@ -1052,7 +1052,7 @@ struct UnifiedCameraView: View {
                             unmatchedCode = nil
                             mode = .capture
                         } label: {
-                            Label("Mit Fotos erfassen", systemImage: "camera.fill")
+                            Label(L10n.text("ui_capture_with_photos_2c95bc6a"), systemImage: "camera.fill")
                                 .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
@@ -1063,17 +1063,17 @@ struct UnifiedCameraView: View {
                             camera.stop()
                             showCreateForm = true
                         } label: {
-                            Label("Nur Stammdaten anlegen", systemImage: "doc.badge.plus")
+                            Label(L10n.text("ui_create_basic_details_only_dc33a725"), systemImage: "doc.badge.plus")
                                 .frame(maxWidth: .infinity, minHeight: 42)
                         }
                         .buttonStyle(.bordered)
                     } else {
-                        Label("Nur Lesezugriff", systemImage: "lock.fill")
+                        Label(L10n.text("ui_read_only_access_014dace5"), systemImage: "lock.fill")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
-                    Button("Anderen Code scannen") {
+                    Button(L10n.text("ui_scan_a_different_code_408f68c5")) {
                         unmatchedCode = nil
                         resumeScanningIfNeeded()
                     }
@@ -1084,11 +1084,11 @@ struct UnifiedCameraView: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Code manuell eingeben")
+                Text(L10n.text("ui_enter_code_manually_0162322b"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 HStack {
-                    TextField("UUID, SKU oder Seriennummer", text: $manualCode)
+                    TextField(L10n.text("ui_uuid_sku_or_serial_number_0145c2ae"), text: $manualCode)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.search)
@@ -1111,11 +1111,11 @@ struct UnifiedCameraView: View {
     private var recognitionDetails: some View {
         if !state.canUseAI {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Objekterkennung nicht verfügbar", systemImage: "lock.fill")
+                Label(L10n.text("ui_object_recognition_unavailable_b5ad237f"), systemImage: "lock.fill")
                     .font(.headline)
                 Text(
-                    "Die Fotoerkennung benötigt die KI-Berechtigung für dieses Konto. "
-                        + "Erfassen und Codes scannen stehen weiterhin zur Verfügung."
+                    L10n.text("ui_photo_recognition_requires_ai_permission_for_this_47141b61")
+                        + L10n.text("ui_capturing_and_scanning_codes_are_still_available_5905f28a")
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -1127,14 +1127,14 @@ struct UnifiedCameraView: View {
                 ProgressView()
                 Text(
                     recognitionModel.phase == .preparingPhoto
-                        ? "Foto wird vorbereitet …"
-                        : "Passender Inventarartikel wird gesucht …"
+                        ? L10n.text("ui_preparing_photo_a53297b0")
+                        : L10n.text("ui_searching_for_a_matching_inventory_item_64fe28d3")
                 )
                 .font(.subheadline.weight(.semibold))
                 Text(
-                    "Das Foto sowie eine begrenzte Auswahl passender Inventardaten "
-                        + "und Referenzbilder werden temporär an den KI-Dienst "
-                        + "übertragen, aber nicht als Inventarmedium gespeichert."
+                    L10n.text("ui_the_photo_and_a_limited_selection_of_226f2174")
+                        + L10n.text("ui_and_reference_images_are_temporarily_sent_to_95ed6377")
+                        + L10n.text("ui_but_are_not_saved_as_inventory_media_e14bf1f3")
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -1147,7 +1147,7 @@ struct UnifiedCameraView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Erkanntes Objekt")
+                            Text(L10n.text("ui_detected_object_fcd6767c"))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             Text(detected.label).font(.headline)
@@ -1175,15 +1175,15 @@ struct UnifiedCameraView: View {
             if result.matches.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Label(
-                        "Kein sicherer Inventartreffer",
+                        L10n.text("ui_no_confident_inventory_match_aa53addd"),
                         systemImage: "questionmark.app.dashed"
                     )
                     .font(.headline)
                     Text(
                         result.catalog.considered == 0
-                            ? "Es sind keine sichtbaren Inventareinträge vorhanden."
-                            : "Zu diesem Foto wurde kein passender Eintrag gefunden. "
-                                + "Fotografiere das Objekt näher, schärfer oder von einer anderen Seite."
+                            ? L10n.text("ui_there_are_no_visible_inventory_items_a51520fd")
+                            : L10n.text("ui_no_matching_item_was_found_for_this_053ed101")
+                                + L10n.text("ui_photograph_the_object_closer_more_clearly_or_d34cac90")
                     )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -1192,7 +1192,7 @@ struct UnifiedCameraView: View {
                         showCaptureDetails = false
                         configureMode()
                     } label: {
-                        Label("Neues Foto aufnehmen", systemImage: "camera.fill")
+                        Label(L10n.text("ui_take_a_new_photo_a6f60139"), systemImage: "camera.fill")
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
@@ -1203,7 +1203,7 @@ struct UnifiedCameraView: View {
             } else {
                 VStack(alignment: .leading, spacing: 6) {
                     Label(
-                        result.isConfident ? "Sehr wahrscheinlicher Treffer" : "Treffer prüfen",
+                        result.isConfident ? L10n.text("ui_very_likely_match_50fadfc3") : L10n.text("ui_review_matches_477f0557"),
                         systemImage: result.isConfident
                             ? "checkmark.seal.fill"
                             : "list.bullet.clipboard"
@@ -1214,8 +1214,8 @@ struct UnifiedCameraView: View {
                     )
                     Text(
                         result.isConfident
-                            ? "Öffne den Artikel, um den Treffer zu bestätigen."
-                            : "Mehrere Einträge können ähnlich aussehen. Wähle den passenden Artikel."
+                            ? L10n.text("ui_open_the_item_to_confirm_the_match_972953c7")
+                            : L10n.text("ui_several_items_may_look_similar_select_the_ef94079c")
                     )
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -1282,7 +1282,7 @@ struct UnifiedCameraView: View {
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.leading)
-                            Label("Inventarartikel öffnen", systemImage: "arrow.up.right")
+                            Label(L10n.text("ui_open_inventory_item_c488fb37"), systemImage: "arrow.up.right")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(InventoryTheme.accent)
                         }
@@ -1290,14 +1290,14 @@ struct UnifiedCameraView: View {
                         .inventoryCard()
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint("Öffnet den erkannten Inventarartikel")
+                    .accessibilityHint(L10n.text("ui_opens_the_identified_inventory_item_599bed75"))
                 }
             }
 
             if result.catalog.truncated {
                 Label(
-                    "Die visuelle Vergleichsauswahl war begrenzt; ältere oder ähnlich "
-                        + "benannte Einträge können fehlen.",
+                    L10n.text("ui_the_visual_comparison_set_was_limited_older_8ef074db")
+                        + L10n.text("ui_names_may_be_missing_24a4cacd"),
                     systemImage: "info.circle"
                 )
                 .font(.caption)
@@ -1308,28 +1308,28 @@ struct UnifiedCameraView: View {
         } else if recognitionModel.photoURL != nil {
             VStack(alignment: .leading, spacing: 12) {
                 Label(
-                    "Suche nicht abgeschlossen",
+                    L10n.text("ui_search_incomplete_f245658e"),
                     systemImage: "exclamationmark.arrow.triangle.2.circlepath"
                 )
                     .font(.headline)
                 Text(
-                    "Das Foto ist noch vorhanden. Du kannst dieselbe geschützte Anfrage "
-                        + "fortsetzen oder ein neues Foto aufnehmen."
+                    L10n.text("ui_the_photo_is_still_available_you_can_cd6fe223")
+                        + L10n.text("ui_or_take_a_new_photo_61d61307")
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 HStack {
-                    Button("Neues Foto") {
+                    Button(L10n.text("ui_new_photo_f2620ec5")) {
                         recognitionModel.retake()
                         showCaptureDetails = false
                         configureMode()
                     }
                     .buttonStyle(.bordered)
                     Spacer()
-                    Button("Erneut suchen") {
+                    Button(L10n.text("ui_search_again_b99af6ff")) {
                         guard let client = state.client else {
                             recognitionModel.errorMessage =
-                                "Keine Verbindung zum Inventarserver."
+                                L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
                             return
                         }
                         recognitionModel.retry(using: client)
@@ -1339,7 +1339,7 @@ struct UnifiedCameraView: View {
                 }
                 if let estimate = state.aiCostEstimate(for: "inventoryRecognition") {
                     Label(
-                        "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                        L10n.text("ui_estimated_api_cost_0_f15c8c17", estimate.formattedUSD),
                         systemImage: "dollarsign.circle"
                     )
                     .font(.caption2)
@@ -1350,24 +1350,24 @@ struct UnifiedCameraView: View {
             .inventoryCard()
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                Label("Inventarartikel per Foto finden", systemImage: "camera.metering.center.weighted")
+                Label(L10n.text("ui_find_an_inventory_item_from_a_photo_f1b74474"), systemImage: "camera.metering.center.weighted")
                     .font(.headline)
                 Text(
-                    "Fotografiere einen einzelnen Gegenstand gut sichtbar. Die Suche vergleicht "
-                        + "Form, Farbe, Marke, Modell und lesbare Beschriftungen mit deinem Inventar."
+                    L10n.text("ui_photograph_a_single_clearly_visible_object_the_cca5dbfe")
+                        + L10n.text("ui_shape_color_brand_model_and_readable_labels_a83309fd")
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 Label(
-                    "Das Suchfoto wird temporär verarbeitet und nicht an einen "
-                        + "Inventarartikel angehängt.",
+                    L10n.text("ui_the_search_photo_is_processed_temporarily_and_38da0a32")
+                        + L10n.text("ui_to_an_inventory_item_d469cb6f"),
                     systemImage: "hand.raised.fill"
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 if let estimate = state.aiCostEstimate(for: "inventoryRecognition") {
                     Label(
-                        "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                        L10n.text("ui_estimated_api_cost_0_f15c8c17", estimate.formattedUSD),
                         systemImage: "dollarsign.circle"
                     )
                     .font(.caption2)
@@ -1383,9 +1383,9 @@ struct UnifiedCameraView: View {
     private var countDetails: some View {
         if !state.canUseAI {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Fotozählung nicht verfügbar", systemImage: "lock.fill")
+                Label(L10n.text("ui_photo_counting_unavailable_23b243d3"), systemImage: "lock.fill")
                     .font(.headline)
-                Text("Die Fotozählung benötigt die KI-Berechtigung für dieses Konto. Erfassen und Scannen stehen weiterhin zur Verfügung.")
+                Text(L10n.text("ui_photo_counting_requires_ai_permission_for_this_49dc9f1e"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -1396,7 +1396,7 @@ struct UnifiedCameraView: View {
                 VStack(alignment: .leading, spacing: 7) {
                     Label(resource.name, systemImage: "shippingbox.fill")
                         .font(.headline)
-                    Text("Lege alle Teile gut sichtbar und möglichst ohne Überlappungen aus. Die erkannte Anzahl kann vor der Buchung korrigiert werden.")
+                    Text(L10n.text("ui_lay_out_all_parts_clearly_with_as_82c3b049"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -1415,13 +1415,13 @@ struct UnifiedCameraView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                Label("Artikel zum Zählen wählen", systemImage: "shippingbox.fill")
+                Label(L10n.text("ui_select_an_item_to_count_fed4be13"), systemImage: "shippingbox.fill")
                     .font(.headline)
-                Text("Scanne den QR- oder Barcode des Inventarartikels oder gib den Code ein.")
+                Text(L10n.text("ui_scan_the_inventory_item_s_qr_code_c99570b6"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 HStack {
-                    TextField("UUID, SKU oder Seriennummer", text: $manualCode)
+                    TextField(L10n.text("ui_uuid_sku_or_serial_number_0145c2ae"), text: $manualCode)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.search)
@@ -1443,7 +1443,7 @@ struct UnifiedCameraView: View {
     private var countHintField: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("Was soll gezählt werden?")
+                Text(L10n.text("ui_what_should_be_counted_66191450"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -1454,7 +1454,7 @@ struct UnifiedCameraView: View {
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.tertiary)
             }
-            TextField("z. B. rote 3D-Druckteile", text: $countModel.itemHint)
+            TextField(L10n.text("ui_e_g_red_3d_printed_parts_8fa10e86"), text: $countModel.itemHint)
                 .textInputAutocapitalization(.sentences)
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
@@ -1465,10 +1465,10 @@ struct UnifiedCameraView: View {
 
     private var countModelPicker: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Zählmodell")
+            Text(L10n.text("ui_counting_model_53a0a0cb"))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Picker("Zählmodell", selection: $countModel.selectedCountModelID) {
+            Picker(L10n.text("ui_counting_model_53a0a0cb"), selection: $countModel.selectedCountModelID) {
                 ForEach(countModel.countModels) { option in
                     Text(option.label).tag(option.id)
                 }
@@ -1490,7 +1490,7 @@ struct UnifiedCameraView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Erkannte Anzahl").font(.headline)
+                    Text(L10n.text("ui_detected_count_7ba711b4")).font(.headline)
                     if !result.detectedItem.isEmpty {
                         Text(result.detectedItem)
                             .font(.subheadline)
@@ -1499,7 +1499,7 @@ struct UnifiedCameraView: View {
                 }
                 Spacer()
                 Label(
-                    result.isExact ? "Eindeutig" : "Bitte prüfen",
+                    result.isExact ? L10n.text("ui_confident_a8bee868") : L10n.text("ui_please_review_428b8ca7"),
                     systemImage: result.isExact
                         ? "checkmark.seal.fill"
                         : "exclamationmark.triangle.fill"
@@ -1509,7 +1509,7 @@ struct UnifiedCameraView: View {
             }
 
             HStack(spacing: 16) {
-                TextField("Anzahl", value: $countModel.adjustedCount, format: .number)
+                TextField(L10n.text("ui_quantity_7174de22"), value: $countModel.adjustedCount, format: .number)
                     .keyboardType(.numberPad)
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .monospacedDigit()
@@ -1520,7 +1520,7 @@ struct UnifiedCameraView: View {
                         in: RoundedRectangle(cornerRadius: 16)
                     )
                 Stepper(
-                    "Anzahl korrigieren",
+                    L10n.text("ui_correct_count_7bd9ca40"),
                     value: $countModel.adjustedCount,
                     in: 0 ... StockCountViewModel.maximumCount
                 )
@@ -1528,7 +1528,7 @@ struct UnifiedCameraView: View {
             }
 
             HStack {
-                Text("Konfidenz")
+                Text(L10n.text("ui_confidence_88e463de"))
                 Spacer()
                 Text(result.confidence.formatted(.percent.precision(.fractionLength(0))))
                     .monospacedDigit()
@@ -1554,16 +1554,16 @@ struct UnifiedCameraView: View {
     private func countActionCard(resource: InventoryResource) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Bestand ändern", systemImage: "arrow.left.arrow.right")
+                Label(L10n.text("ui_change_stock_cc7d00cf"), systemImage: "arrow.left.arrow.right")
                     .font(.headline)
                 Spacer()
-                Text("Aktuell: \(resource.quantity)")
+                Text(L10n.text("ui_current_0_8a3c72e5", resource.quantity))
                     .font(.subheadline.monospacedDigit().weight(.semibold))
             }
 
             if countModel.adjustedCount > resource.quantity && !state.allowsNegativeStock {
                 Label(
-                    "Für eine Entnahme sind nur \(resource.quantity) Einheiten verfügbar.",
+                    L10n.text("ui_only_0_units_are_available_for_removal_96bffac4", resource.quantity),
                     systemImage: "exclamationmark.circle"
                 )
                 .font(.caption)
@@ -1575,8 +1575,8 @@ struct UnifiedCameraView: View {
                     confirmIssue = true
                 } label: {
                     VStack(spacing: 4) {
-                        Label("Entnehmen", systemImage: "minus.circle.fill")
-                        Text("danach \(resource.quantity - countModel.adjustedCount)")
+                        Label(L10n.text("ui_take_out_bf32d5ff"), systemImage: "minus.circle.fill")
+                        Text(L10n.text("ui_afterwards_0_67c3dcab", resource.quantity - countModel.adjustedCount))
                             .font(.caption.monospacedDigit())
                     }
                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -1593,8 +1593,8 @@ struct UnifiedCameraView: View {
                     applyCount(.receipt)
                 } label: {
                     VStack(spacing: 4) {
-                        Label("Hinzufügen", systemImage: "plus.circle.fill")
-                        Text("danach \(resource.quantity + countModel.adjustedCount)")
+                        Label(L10n.text("ui_add_cbb95cf0"), systemImage: "plus.circle.fill")
+                        Text(L10n.text("ui_afterwards_0_67c3dcab", resource.quantity + countModel.adjustedCount))
                             .font(.caption.monospacedDigit())
                     }
                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -1605,7 +1605,7 @@ struct UnifiedCameraView: View {
             }
 
             if countModel.phase == .booking {
-                ProgressView("Bestand wird gebucht …")
+                ProgressView(L10n.text("ui_booking_stock_87283245"))
                     .frame(maxWidth: .infinity)
             }
         }
@@ -1614,19 +1614,19 @@ struct UnifiedCameraView: View {
 
     private var countRetryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Das Foto ist bereit, konnte aber noch nicht ausgewertet werden.")
+            Text(L10n.text("ui_the_photo_is_ready_but_could_not_8b91b26b"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack {
-                Button("Neues Foto") {
+                Button(L10n.text("ui_new_photo_f2620ec5")) {
                     countModel.retake()
                     configureMode()
                 }
                 .buttonStyle(.bordered)
                 Spacer()
-                Button("Erneut zählen") {
+                Button(L10n.text("ui_count_again_45f6a1bc")) {
                     guard let client = state.client else {
-                        countModel.errorMessage = "Keine Verbindung zum Inventarserver."
+                        countModel.errorMessage = L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
                         return
                     }
                     countModel.retryAnalysis(using: client)
@@ -1665,7 +1665,7 @@ struct UnifiedCameraView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Fertig") { showCaptureDetails = false }
+                    Button(L10n.text("ui_done_25d52d7e")) { showCaptureDetails = false }
                 }
             }
         }
@@ -1680,7 +1680,7 @@ struct UnifiedCameraView: View {
                     } else {
                         Image(systemName: "arrow.up.circle.fill")
                     }
-                    Text("Inventar hochladen")
+                    Text(L10n.text("ui_upload_inventory_3e6deeaf"))
                 }
                 .frame(maxWidth: .infinity, minHeight: 48)
             }
@@ -1690,8 +1690,8 @@ struct UnifiedCameraView: View {
 
             Text(
                 captureModel.mediaCount == 0
-                    ? "Nimm ein Foto oder Video auf oder scanne ein Dokument."
-                    : "\(captureModel.mediaCount) von \(CaptureViewModel.maximumPhotos) Medien bereit"
+                    ? L10n.text("ui_take_a_photo_record_a_video_or_fcfa88d1")
+                    : L10n.text("ui_0_of_1_media_files_ready_3abc115e", captureModel.mediaCount, CaptureViewModel.maximumPhotos)
             )
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
@@ -1730,7 +1730,7 @@ struct UnifiedCameraView: View {
                                         : "doc.text.fill"
                                 )
                                 .font(.title2)
-                                Text(attachment.kind == .video ? "Video" : "PDF + OCR")
+                                Text(attachment.kind == .video ? L10n.text("ui_video_d534be82") : "PDF + OCR")
                                     .font(.caption2.weight(.semibold))
                             }
                             .foregroundStyle(InventoryTheme.ink)
@@ -1761,17 +1761,17 @@ struct UnifiedCameraView: View {
     private var captureOptions: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 7) {
-                Text("Name (optional)")
+                Text(L10n.text("ui_name_optional_e09b37bc"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                TextField("Wird sonst aus Fotos erkannt", text: $captureModel.name)
+                TextField(L10n.text("ui_otherwise_detected_from_photos_c4cfd713"), text: $captureModel.name)
                     .textInputAutocapitalization(.sentences)
                     .padding(13)
                     .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
             }
 
             HStack(spacing: 12) {
-                Picker("Typ", selection: $captureModel.resourceType) {
+                Picker(L10n.text("ui_type_1b024183"), selection: $captureModel.resourceType) {
                     ForEach(captureTypes, id: \.self) { type in
                         Text(captureTypeLabel(type)).tag(type)
                     }
@@ -1785,7 +1785,7 @@ struct UnifiedCameraView: View {
                     captureModel.locationService.requestCurrentLocation()
                 } label: {
                     Label(
-                        captureModel.locationService.coordinates == nil ? "GPS" : "GPS gesetzt",
+                        captureModel.locationService.coordinates == nil ? "GPS" : L10n.text("ui_gps_set_8af94f20"),
                         systemImage: captureModel.locationService.coordinates == nil
                             ? "location"
                             : "location.fill"
@@ -1796,7 +1796,7 @@ struct UnifiedCameraView: View {
                 .tint(InventoryTheme.ink)
             }
 
-            TextField("Ort, Regal oder Raum", text: $captureModel.locationName)
+            TextField(L10n.text("ui_location_shelf_or_room_5161bf8f"), text: $captureModel.locationName)
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
             TextField("SKU", text: $captureModel.sku)
@@ -1804,12 +1804,12 @@ struct UnifiedCameraView: View {
                 .autocorrectionDisabled()
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-            TextField("Barcode", text: $captureModel.barcode)
+            TextField(L10n.text("ui_barcode_a401f372"), text: $captureModel.barcode)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-            TextField("Seriennummer", text: $captureModel.serialNumber)
+            TextField(L10n.text("ui_serial_number_760abc3d"), text: $captureModel.serialNumber)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .padding(13)
@@ -1823,7 +1823,7 @@ struct UnifiedCameraView: View {
                     showSpatialCapture = true
                 } label: {
                     Label(
-                        captureModel.spatialPlacement?.roomName ?? "Im Raum positionieren",
+                        captureModel.spatialPlacement?.roomName ?? L10n.text("ui_position_in_room_75b74d87"),
                         systemImage: captureModel.spatialPlacement == nil
                             ? "cube.transparent"
                             : "mappin.and.ellipse"
@@ -1838,7 +1838,7 @@ struct UnifiedCameraView: View {
                     Image(systemName: "mappin.and.ellipse")
                         .foregroundStyle(InventoryTheme.accent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("3D-Position in \(placement.roomName)")
+                        Text(L10n.text("ui_3d_position_in_0_cf6a0309", placement.roomName))
                             .font(.caption.weight(.semibold))
                         Text(
                             placement.position
@@ -1849,7 +1849,7 @@ struct UnifiedCameraView: View {
                         .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Entfernen") { captureModel.clearSpatialPlacement() }
+                    Button(L10n.text("ui_remove_3828375a")) { captureModel.clearSpatialPlacement() }
                         .font(.caption.weight(.semibold))
                 }
                 .padding(12)
@@ -1862,20 +1862,20 @@ struct UnifiedCameraView: View {
             if state.canUseAI {
                 VStack(alignment: .leading, spacing: 3) {
                     if !captureModel.aiDefaultsLoaded {
-                        Button("KI-Vorgaben erneut laden") { Task { await captureModel.loadAIDefaults(from: state) } }
+                        Button(L10n.text("ui_reload_ai_defaults_647b46ea")) { Task { await captureModel.loadAIDefaults(from: state) } }
                     }
-                    Toggle("Fotos analysieren", isOn: $captureModel.autoAnalyze)
+                    Toggle(L10n.text("ui_analyze_photos_957b01f7"), isOn: $captureModel.autoAnalyze)
                     if captureModel.autoAnalyze {
-                        Toggle("Vorhandene Texte überschreiben", isOn: $captureModel.analysisOverwrite)
+                        Toggle(L10n.text("ui_overwrite_existing_text_e3d8f4dd"), isOn: $captureModel.analysisOverwrite)
                     }
                     if state.canResearchInventory {
-                        Toggle("Nach dem Anlegen recherchieren", isOn: $captureModel.autoResearch)
-                        Text("Recherche ergänzt fehlende Angaben aus dem Web und verursacht zusätzliche KI-Kosten.")
+                        Toggle(L10n.text("ui_research_after_creating_3b405147"), isOn: $captureModel.autoResearch)
+                        Text(L10n.text("ui_research_adds_missing_details_from_the_web_4e5d6382"))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if let estimate = state.aiCostEstimate(for: "inventoryAnalysis") {
                         Label(
-                            "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                            L10n.text("ui_estimated_api_cost_0_f15c8c17", estimate.formattedUSD),
                             systemImage: "dollarsign.circle"
                         )
                         .font(.caption2)
@@ -1883,11 +1883,11 @@ struct UnifiedCameraView: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Toggle("Cover erzeugen", isOn: $captureModel.autoCover)
+                    Toggle(L10n.text("ui_generate_cover_a4f5e57d"), isOn: $captureModel.autoCover)
                         .disabled(!captureModel.autoAnalyze)
                     if let estimate = state.imageGenerationCostEstimate() {
                         Label(
-                            "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                            L10n.text("ui_estimated_api_cost_0_f15c8c17", estimate.formattedUSD),
                             systemImage: "dollarsign.circle"
                         )
                         .font(.caption2)
@@ -1901,11 +1901,11 @@ struct UnifiedCameraView: View {
     private var permissionOverlay: some View {
         VStack(spacing: 12) {
             Image(systemName: "camera.fill").font(.largeTitle)
-            Text("Kamerazugriff fehlt").font(.headline)
-            Text("Aktiviere die Kamera in den iOS-Einstellungen.")
+            Text(L10n.text("ui_camera_access_missing_f7ed6654")).font(.headline)
+            Text(L10n.text("ui_enable_the_camera_in_ios_settings_3f9e91ac"))
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
-            Button("Einstellungen öffnen") {
+            Button(L10n.text("ui_open_settings_b05424fb")) {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                 UIApplication.shared.open(url)
             }
@@ -2102,12 +2102,12 @@ struct UnifiedCameraView: View {
     private func requestPhoto(for request: CameraPhotoRequest) {
         guard pendingPhotoRequest == nil else { return }
         if case .count = request, !state.canUseAI {
-            countModel.errorMessage = "Die Fotozählung benötigt die KI-Berechtigung für dieses Konto."
+            countModel.errorMessage = L10n.text("ui_photo_counting_requires_ai_permission_for_this_b8f545ed")
             return
         }
         if case .recognize = request, !state.canUseAI {
             recognitionModel.errorMessage =
-                "Die Objekterkennung benötigt die KI-Berechtigung für dieses Konto."
+                L10n.text("ui_object_recognition_requires_ai_permission_for_this_73fa0309")
             return
         }
         pendingPhotoRequestInvalidated = false
@@ -2151,7 +2151,7 @@ struct UnifiedCameraView: View {
         case .recognize:
             if camera.torchEnabled { camera.toggleTorch() }
             guard let client = state.client else {
-                recognitionModel.errorMessage = "Keine Verbindung zum Inventarserver."
+                recognitionModel.errorMessage = L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
                 return
             }
             recognitionModel.recognizeCapturedData(
@@ -2162,7 +2162,7 @@ struct UnifiedCameraView: View {
         case .count:
             if camera.torchEnabled { camera.toggleTorch() }
             guard let client = state.client else {
-                countModel.errorMessage = "Keine Verbindung zum Inventarserver."
+                countModel.errorMessage = L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
                 return
             }
             countModel.analyzeCapturedData(
@@ -2181,11 +2181,11 @@ struct UnifiedCameraView: View {
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty, !isResolvingCode, code != lastCode else { return }
         if purpose == .countTarget, !state.canUseAI {
-            scannerErrorMessage = "Die Fotozählung benötigt die KI-Berechtigung für dieses Konto."
+            scannerErrorMessage = L10n.text("ui_photo_counting_requires_ai_permission_for_this_b8f545ed")
             return
         }
         guard let client = state.client else {
-            scannerErrorMessage = "Keine Serververbindung eingerichtet."
+            scannerErrorMessage = L10n.text("ui_no_server_connection_configured_4a1c3f55")
             return
         }
 
@@ -2240,7 +2240,7 @@ struct UnifiedCameraView: View {
                     detailsDetent = .medium
                     showCaptureDetails = true
                 } else {
-                    scannerErrorMessage = "Zu diesem Code wurde kein Inventarartikel gefunden."
+                    scannerErrorMessage = L10n.text("ui_no_inventory_item_was_found_for_this_b2ba39fc")
                 }
             } catch {
                 guard lookupRequestID == requestID else { return }
@@ -2329,7 +2329,7 @@ struct UnifiedCameraView: View {
         guard state.canManageStock,
               let client = state.client,
               let resource = countResource else {
-            countModel.errorMessage = "Keine Verbindung zum Inventarserver."
+            countModel.errorMessage = L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
             return
         }
         countModel.apply(

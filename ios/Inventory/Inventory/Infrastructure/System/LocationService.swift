@@ -41,9 +41,9 @@ final class LocationService: NSObject, ObservableObject {
             isRequesting = true
             manager.requestLocation()
         case .denied, .restricted:
-            errorMessage = "Standortzugriff ist deaktiviert."
+            errorMessage = L10n.text("ui_location_access_is_disabled_2659bec3")
         @unknown default:
-            errorMessage = "Der Standort ist derzeit nicht verfügbar."
+            errorMessage = L10n.text("ui_location_is_currently_unavailable_88dc7699")
         }
     }
 
@@ -54,7 +54,7 @@ final class LocationService: NSObject, ObservableObject {
         heading = nil
         guard CLLocationManager.headingAvailable() else {
             isRequestingHeading = false
-            errorMessage = "Die Kompassrichtung ist auf diesem Gerät nicht verfügbar."
+            errorMessage = L10n.text("ui_compass_heading_is_not_available_on_this_cef16ea7")
             return
         }
         isRequestingHeading = true
@@ -81,13 +81,13 @@ extension LocationService: CLLocationManagerDelegate {
             case .denied, .restricted:
                 self.isRequesting = false
                 self.stopGeoreferenceCapture()
-                self.errorMessage = "Standortzugriff ist deaktiviert."
+                self.errorMessage = L10n.text("ui_location_access_is_disabled_2659bec3")
             case .notDetermined:
                 break
             @unknown default:
                 self.isRequesting = false
                 self.stopGeoreferenceCapture()
-                self.errorMessage = "Der Standort ist derzeit nicht verfügbar."
+                self.errorMessage = L10n.text("ui_location_is_currently_unavailable_88dc7699")
             }
         }
     }
@@ -136,7 +136,7 @@ extension LocationService: CLLocationManagerDelegate {
             guard let self else { return }
             self.isRequesting = false
             self.stopGeoreferenceCapture()
-            self.errorMessage = "Der Standort konnte nicht ermittelt werden."
+            self.errorMessage = L10n.text("ui_could_not_determine_location_5d80bebf")
         }
     }
 }

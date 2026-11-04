@@ -42,11 +42,11 @@ struct StockCountView: View {
                 .padding(.bottom, 24)
             }
             .background(InventoryTheme.canvas)
-            .navigationTitle("Teile per Foto zählen")
+            .navigationTitle(L10n.text("ui_count_parts_from_a_photo_4f287f55"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Schließen") { dismiss() }
+                    Button(L10n.text("ui_close_b808f6e9")) { dismiss() }
                         .disabled(model.phase == .booking)
                 }
             }
@@ -58,21 +58,21 @@ struct StockCountView: View {
             }
         }
         .confirmationDialog(
-            "Gezählte Teile entnehmen?",
+            L10n.text("ui_remove_counted_parts_1fb9eb63"),
             isPresented: $confirmIssue,
             titleVisibility: .visible
         ) {
             Button(
-                "\(model.adjustedCount) Teile entnehmen",
+                L10n.text("ui_remove_0_parts_4e433904", model.adjustedCount),
                 role: .destructive
             ) {
                 apply(.issue)
             }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         } message: {
             Text(
-                "Der Bestand wird von \(resource.quantity) auf "
-                    + "\(resource.quantity - model.adjustedCount) reduziert."
+                L10n.text("ui_stock_will_change_from_0_to_c5628db8", resource.quantity)
+                    + L10n.text("ui_0_e4e92c7f", resource.quantity - model.adjustedCount)
             )
         }
         .onAppear {
@@ -88,7 +88,7 @@ struct StockCountView: View {
                 if camera.torchEnabled { camera.toggleTorch() }
                 camera.stop()
                 guard let client = state.client else {
-                    model.errorMessage = "Keine Verbindung zum Inventarserver."
+                    model.errorMessage = L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
                     camera.start()
                     return
                 }
@@ -109,7 +109,7 @@ struct StockCountView: View {
             }
         }
         .alert(
-            "Aktion fehlgeschlagen",
+            L10n.text("ui_action_failed_3a20cc65"),
             isPresented: Binding(
                 get: { model.errorMessage != nil },
                 set: { if !$0 { model.errorMessage = nil } }
@@ -117,7 +117,7 @@ struct StockCountView: View {
         ) {
             Button("OK", role: .cancel) { model.errorMessage = nil }
         } message: {
-            Text(model.errorMessage ?? "Unbekannter Fehler")
+            Text(model.errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
@@ -125,7 +125,7 @@ struct StockCountView: View {
         VStack(alignment: .leading, spacing: 7) {
             Label(resource.name, systemImage: "shippingbox.fill")
                 .font(.headline)
-            Text("Lege alle Teile gut sichtbar und möglichst ohne Überlappungen aus. Die erkannte Anzahl kann vor der Buchung korrigiert werden.")
+            Text(L10n.text("ui_lay_out_all_parts_clearly_with_as_82c3b049"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -136,7 +136,7 @@ struct StockCountView: View {
     private var itemHintField: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("Was soll gezählt werden?")
+                Text(L10n.text("ui_what_should_be_counted_66191450"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -147,7 +147,7 @@ struct StockCountView: View {
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
-            TextField("z. B. rote 3D-Druckteile", text: $model.itemHint)
+            TextField(L10n.text("ui_e_g_red_3d_printed_parts_8fa10e86"), text: $model.itemHint)
                 .textInputAutocapitalization(.sentences)
                 .padding(13)
                 .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
@@ -158,10 +158,10 @@ struct StockCountView: View {
 
     private var countModelPicker: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Zählmodell")
+            Text(L10n.text("ui_counting_model_53a0a0cb"))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            Picker("Zählmodell", selection: $model.selectedCountModelID) {
+            Picker(L10n.text("ui_counting_model_53a0a0cb"), selection: $model.selectedCountModelID) {
                 ForEach(model.countModels) { option in
                     Text(option.label).tag(option.id)
                 }
@@ -234,14 +234,14 @@ struct StockCountView: View {
                         }
                     }
                     .disabled(camera.state != .ready || captureRequested)
-                    .accessibilityLabel("Foto aufnehmen und Teile zählen")
+                    .accessibilityLabel(L10n.text("ui_take_a_photo_and_count_parts_6d0c9b39"))
                 } else if model.result != nil {
                     Button {
                         model.retake()
                         captureRequested = false
                         camera.start()
                     } label: {
-                        Label("Neues Foto", systemImage: "camera.rotate")
+                        Label(L10n.text("ui_new_photo_f2620ec5"), systemImage: "camera.rotate")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 11)
@@ -257,8 +257,8 @@ struct StockCountView: View {
                     ProgressView().tint(.white).controlSize(.large)
                     Text(
                         model.phase == .preparingPhoto
-                            ? "Foto wird vorbereitet …"
-                            : "Teile werden gezählt …"
+                            ? L10n.text("ui_preparing_photo_a53297b0")
+                            : L10n.text("ui_counting_parts_83ed0f1d")
                     )
                     .font(.headline)
                 }
@@ -284,7 +284,7 @@ struct StockCountView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Erkannte Anzahl")
+                    Text(L10n.text("ui_detected_count_7ba711b4"))
                         .font(.headline)
                     if !result.detectedItem.isEmpty {
                         Text(result.detectedItem)
@@ -294,7 +294,7 @@ struct StockCountView: View {
                 }
                 Spacer()
                 Label(
-                    result.isExact ? "Eindeutig" : "Bitte prüfen",
+                    result.isExact ? L10n.text("ui_confident_a8bee868") : L10n.text("ui_please_review_428b8ca7"),
                     systemImage: result.isExact ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
                 )
                 .font(.caption.weight(.semibold))
@@ -302,7 +302,7 @@ struct StockCountView: View {
             }
 
             HStack(spacing: 16) {
-                TextField("Anzahl", value: $model.adjustedCount, format: .number)
+                TextField(L10n.text("ui_quantity_7174de22"), value: $model.adjustedCount, format: .number)
                     .keyboardType(.numberPad)
                     .font(.system(size: 42, weight: .bold, design: .rounded))
                     .monospacedDigit()
@@ -313,7 +313,7 @@ struct StockCountView: View {
                         in: RoundedRectangle(cornerRadius: 16)
                     )
                 Stepper(
-                    "Anzahl korrigieren",
+                    L10n.text("ui_correct_count_7bd9ca40"),
                     value: $model.adjustedCount,
                     in: 0 ... StockCountViewModel.maximumCount
                 )
@@ -322,7 +322,7 @@ struct StockCountView: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
-                    Text("Konfidenz")
+                    Text(L10n.text("ui_confidence_88e463de"))
                     Spacer()
                     Text(result.confidence.formatted(.percent.precision(.fractionLength(0))))
                         .monospacedDigit()
@@ -342,7 +342,7 @@ struct StockCountView: View {
                     .font(.footnote)
                     .foregroundStyle(InventoryTheme.warning)
             }
-            Text("Prüfe und korrigiere die Zahl, bevor du den Bestand änderst.")
+            Text(L10n.text("ui_review_and_correct_the_count_before_changing_413569ef"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -352,16 +352,16 @@ struct StockCountView: View {
     private var stockActionCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Bestand ändern", systemImage: "arrow.left.arrow.right")
+                Label(L10n.text("ui_change_stock_cc7d00cf"), systemImage: "arrow.left.arrow.right")
                     .font(.headline)
                 Spacer()
-                Text("Aktuell: \(resource.quantity)")
+                Text(L10n.text("ui_current_0_8a3c72e5", resource.quantity))
                     .font(.subheadline.monospacedDigit().weight(.semibold))
             }
 
             if model.adjustedCount > resource.quantity && !state.allowsNegativeStock {
                 Label(
-                    "Für eine Entnahme sind nur \(resource.quantity) Einheiten verfügbar.",
+                    L10n.text("ui_only_0_units_are_available_for_removal_96bffac4", resource.quantity),
                     systemImage: "exclamationmark.circle"
                 )
                 .font(.caption)
@@ -373,8 +373,8 @@ struct StockCountView: View {
                     confirmIssue = true
                 } label: {
                     VStack(spacing: 4) {
-                        Label("Entnehmen", systemImage: "minus.circle.fill")
-                        Text("danach \(resource.quantity - model.adjustedCount)")
+                        Label(L10n.text("ui_take_out_bf32d5ff"), systemImage: "minus.circle.fill")
+                        Text(L10n.text("ui_afterwards_0_67c3dcab", resource.quantity - model.adjustedCount))
                             .font(.caption.monospacedDigit())
                     }
                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -391,8 +391,8 @@ struct StockCountView: View {
                     apply(.receipt)
                 } label: {
                     VStack(spacing: 4) {
-                        Label("Hinzufügen", systemImage: "plus.circle.fill")
-                        Text("danach \(resource.quantity + model.adjustedCount)")
+                        Label(L10n.text("ui_add_cbb95cf0"), systemImage: "plus.circle.fill")
+                        Text(L10n.text("ui_afterwards_0_67c3dcab", resource.quantity + model.adjustedCount))
                             .font(.caption.monospacedDigit())
                     }
                     .frame(maxWidth: .infinity, minHeight: 50)
@@ -403,7 +403,7 @@ struct StockCountView: View {
             }
 
             if model.phase == .booking {
-                ProgressView("Bestand wird gebucht …")
+                ProgressView(L10n.text("ui_booking_stock_87283245"))
                     .frame(maxWidth: .infinity)
             }
         }
@@ -412,20 +412,20 @@ struct StockCountView: View {
 
     private var retryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Das Foto ist bereit, konnte aber noch nicht ausgewertet werden.")
+            Text(L10n.text("ui_the_photo_is_ready_but_could_not_8b91b26b"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack {
-                Button("Neues Foto") {
+                Button(L10n.text("ui_new_photo_f2620ec5")) {
                     model.retake()
                     captureRequested = false
                     camera.start()
                 }
                 .buttonStyle(.bordered)
                 Spacer()
-                Button("Erneut zählen") {
+                Button(L10n.text("ui_count_again_45f6a1bc")) {
                     guard let client = state.client else {
-                        model.errorMessage = "Keine Verbindung zum Inventarserver."
+                        model.errorMessage = L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
                         return
                     }
                     model.retryAnalysis(using: client)
@@ -440,11 +440,11 @@ struct StockCountView: View {
     private var permissionOverlay: some View {
         VStack(spacing: 12) {
             Image(systemName: "camera.fill").font(.largeTitle)
-            Text("Kamerazugriff fehlt").font(.headline)
-            Text("Aktiviere die Kamera in den iOS-Einstellungen.")
+            Text(L10n.text("ui_camera_access_missing_f7ed6654")).font(.headline)
+            Text(L10n.text("ui_enable_the_camera_in_ios_settings_3f9e91ac"))
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
-            Button("Einstellungen öffnen") {
+            Button(L10n.text("ui_open_settings_b05424fb")) {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                 UIApplication.shared.open(url)
             }
@@ -469,21 +469,21 @@ struct StockCountView: View {
     }
 
     private var cameraLabel: String {
-        if model.phase == .preparingPhoto { return "Foto wird vorbereitet" }
-        if model.phase == .analyzing { return "KI zählt" }
-        if model.photoURL != nil { return "Zählfoto" }
+        if model.phase == .preparingPhoto { return L10n.text("ui_preparing_photo_ebc1362d") }
+        if model.phase == .analyzing { return L10n.text("ui_ai_is_counting_787117e7") }
+        if model.photoURL != nil { return L10n.text("ui_counting_photo_21d5e02d") }
         return switch camera.state {
-        case .idle: "Kamera aus"
-        case .requestingPermission: "Berechtigung …"
-        case .ready: "Bereit zum Zählen"
-        case .denied: "Gesperrt"
-        case .unavailable: "Nicht verfügbar"
+        case .idle: L10n.text("ui_camera_off_545e073a")
+        case .requestingPermission: L10n.text("ui_permission_15974432")
+        case .ready: L10n.text("ui_ready_to_count_880960d0")
+        case .denied: L10n.text("ui_locked_45f96e91")
+        case .unavailable: L10n.text("ui_unavailable_5db96a2a")
         }
     }
 
     private func apply(_ operation: StockCountOperation) {
         guard let client = state.client else {
-            model.errorMessage = "Keine Verbindung zum Inventarserver."
+            model.errorMessage = L10n.text("ui_no_connection_to_the_inventory_server_7d8d860e")
             return
         }
         model.apply(

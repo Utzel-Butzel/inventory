@@ -72,6 +72,28 @@ class RecoveryTest {
         assertEquals("paused", store.job(id)!!.s("status"))
         store.removeJob(id); store.close(); app.credentials.clear()
     }
+    @Test fun accountVaultAndPendingBrowserSurviveReopenWithoutLeakingSecrets() {
+        val app = ApplicationProvider.getApplicationContext<InventoryApplication>()
+        app.credentials.clear()
+        try {
+            val first = app.credentials.write(Session("https://a.example/", "token-one", "org-one", "user-one", obj()))
+            val second = app.credentials.write(Session("https://b.example/", "token-two", "org-two", "user-two", obj()))
+            val pending = BrowserSignIn("https://c.example/", requestId = "r".repeat(43), expiresAt = System.currentTimeMillis() + 60_000)
+            app.credentials.savePending(pending)
+            val disk = File(app.noBackupFilesDir, "session.aes").readText()
+            for (secret in listOf(first.token, second.token, pending.verifier, pending.state, first.server)) assertFalse(disk.contains(secret))
+            val reopened = Credentials(app)
+            assertEquals(2, reopened.readVault().accounts.size)
+            assertEquals(pending, reopened.readVault().pending)
+            reopened.write(first)
+            assertEquals(first.accountId, Credentials(app).read()!!.accountId)
+            reopened.removeAccount(first.accountId)
+            assertNull(reopened.read())
+            assertEquals(second.token, reopened.readVault().accounts.single().token)
+            reopened.savePending(null)
+            assertNull(Credentials(app).readVault().pending)
+        } finally { app.credentials.clear() }
+    }
     @Test fun credentialsAreEncryptedAndCanBeRecovered() {
         val app = ApplicationProvider.getApplicationContext<InventoryApplication>()
         val token = "sensitive-test-${uuid()}"

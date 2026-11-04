@@ -1,0 +1,1 @@
+Erste Veröffentlichung von Open Inventory unter de.polyxo.openinventory. Inventar, Codes, Medien, Bestände und Ausleihen am eigenen Server verwalten.

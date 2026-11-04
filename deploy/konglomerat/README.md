@@ -218,3 +218,14 @@ existing Digital session, displayed the consent screen and returned to Inventory
 with the intended personal administrator and all 596 items. The technical password
 login, database/storage health, anonymous API/media denial and video byte-range
 responses passed after deployment. The temporary build swap was removed.
+
+## Native iOS and Android SSO support (prepared, not deployed)
+
+The iOS and Android apps can use the existing Konglomerat Supabase sign-in
+through the system authentication browser or Custom Tabs. Each app discovers
+providers from the entered server’s `/api/v1/auth/options`; Konglomerat is never
+a global provider shown on unrelated installations. Deploy the native browser handoff server changes and
+`0080_native_browser_auth.sql` before distributing that app build. Provider client
+credentials and the existing web callback URI remain unchanged. Use the canonical
+`https://inventar.konglomerat.org` address in the app. See
+[native SSO](../../docs/native-sso.md) for the release acceptance checks.

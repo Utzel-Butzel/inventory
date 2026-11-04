@@ -1,5 +1,8 @@
 package de.internetderdinge.inventory.data
 
+import de.internetderdinge.inventory.L10n
+import de.internetderdinge.inventory.R
+
 import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
@@ -27,22 +30,32 @@ class Credentials(context: Context) {
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
         }.generateKey()
     }
-    @Synchronized fun read(): Session? {
-        if (!file.baseFile.exists()) return null
-        val j = JSONObject(String(file.readFully()))
+    fun read(): Session? = synchronized(lock) { readVault().active?.takeUnless { it.expired } }
+    fun readVault(): AccountVault = synchronized(lock) {
+        if (!file.baseFile.exists()) return AccountVault()
+        val j = JSONObject(String(file.readFully(), Charsets.UTF_8))
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(j.getString("iv"), Base64.NO_WRAP)))
-        return Session.from(JSONObject(String(cipher.doFinal(Base64.decode(j.getString("data"), Base64.NO_WRAP)))))
+        val plaintext = JSONObject(String(cipher.doFinal(Base64.decode(j.getString("data"), Base64.NO_WRAP)), Charsets.UTF_8))
+        AccountVault.from(plaintext).also { if (!plaintext.has("version")) writeVault(it) }
     }
-    @Synchronized fun write(session: Session) {
+    fun write(session: Session): Session = synchronized(lock) {
+        val vault = readVault().withSession(session)
+        writeVault(vault)
+        vault.active!!
+    }
+    fun removeAccount(id: String) = synchronized(lock) { writeVault(readVault().without(id)) }
+    fun savePending(pending: BrowserSignIn?) = synchronized(lock) { writeVault(readVault().copy(pending = pending)) }
+    private fun writeVault(vault: AccountVault) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
-        val encrypted = cipher.doFinal(session.json().toString().toByteArray())
+        val encrypted = cipher.doFinal(vault.json().toString().toByteArray(Charsets.UTF_8))
         val j = obj("iv" to Base64.encodeToString(cipher.iv, Base64.NO_WRAP), "data" to Base64.encodeToString(encrypted, Base64.NO_WRAP))
         val stream = file.startWrite()
-        try { stream.write(j.toString().toByteArray()); file.finishWrite(stream) }
+        try { stream.write(j.toString().toByteArray(Charsets.UTF_8)); file.finishWrite(stream) }
         catch (e: Exception) { file.failWrite(stream); throw e }
     }
-    @Synchronized fun clear() = file.delete()
+    fun clear() = synchronized(lock) { file.delete() }
+    companion object { private val lock = Any() }
 }
 
 class LocalStore(context: Context) : SQLiteOpenHelper(context, "inventory-jobs.db", null, 1) {
@@ -62,7 +75,7 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "inventory-jobs.d
     }
     fun job(id: String): JSONObject? = readableDatabase.query("jobs", arrayOf("payload"), "id=?", arrayOf(id), null, null, null).use { if (it.moveToFirst()) JSONObject(it.getString(0)) else null }
     @Synchronized fun removeJob(id: String) {
-        require(job(id)?.s("status") in listOf("done", "error", "paused")) { "Laufenden Upload zuerst abschließen lassen." }
+        require(job(id)?.s("status") in listOf("done", "error", "paused")) { L10n.text(R.string.ui_wait_for_the_running_upload_to_finish_ca3258dd) }
         writableDatabase.delete("jobs", "id=?", arrayOf(id)); File(files, id).deleteRecursively()
     }
     @Synchronized fun operation(context: String, path: String, method: String, body: JSONObject): JSONObject {
@@ -73,7 +86,7 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "inventory-jobs.d
             if (it.moveToFirst()) return JSONObject(it.getString(0))
         }
         require(operations(context).none { it.s("path") == path && it.s("method") == method }) {
-            "Für diese Aktion fehlt noch eine Serverantwort. Bitte den offenen Vorgang unter Mehr → Uploads & offene Vorgänge zuerst abschließen."
+            L10n.text(R.string.ui_a_server_response_is_still_missing_for_95a8661e)
         }
         val operation = obj("fingerprint" to fingerprint, "context" to context, "path" to path, "method" to method, "body" to body, "key" to uuid())
         writableDatabase.insertOrThrow("operations", null, ContentValues().apply { put("fingerprint", fingerprint); put("context", context); put("payload", operation.toString()) })

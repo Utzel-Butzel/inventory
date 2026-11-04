@@ -128,7 +128,7 @@ enum ObjectCaptureArticleImageError: Error, LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .noUsableCaptureImage:
-            "Aus dem Objektscan konnte kein verwendbares Artikelbild erzeugt werden."
+            L10n.text("ui_could_not_generate_a_usable_item_image_02514e9b")
         }
     }
 }
@@ -218,7 +218,7 @@ enum ObjectCaptureAvailability {
     }
 
     static let requirement =
-        "Objektscans benötigen ein LiDAR-fähiges iPhone Pro mit Unterstützung für Apple Object Capture."
+        L10n.text("ui_object_scans_require_a_lidar_equipped_iphone_3fa75682")
 }
 
 private enum ObjectCaptureFlowPhase: Equatable {
@@ -281,7 +281,7 @@ private final class ObjectCaptureFlowModel: ObservableObject {
         guard phase == .ready else { return }
         guard session.startDetecting() else {
             fail(
-                "Das Objekt konnte noch nicht ausgewählt werden. Richte die Kamera erneut auf den Gegenstand.",
+                L10n.text("ui_the_object_could_not_be_selected_yet_01f931b6"),
                 reconstructionCanRetry: false
             )
             return
@@ -291,7 +291,7 @@ private final class ObjectCaptureFlowModel: ObservableObject {
     func resetDetection() {
         guard phase == .detecting else { return }
         if !session.resetDetection() {
-            fail("Die Objektauswahl konnte nicht zurückgesetzt werden.", reconstructionCanRetry: false)
+            fail(L10n.text("ui_could_not_reset_the_object_selection_3673cf24"), reconstructionCanRetry: false)
         }
     }
 
@@ -374,7 +374,7 @@ private final class ObjectCaptureFlowModel: ObservableObject {
             )
         } catch {
             fail(
-                "Der lokale Speicher für den Objektscan konnte nicht vorbereitet werden: \(error.localizedDescription)",
+                L10n.text("ui_could_not_prepare_local_storage_for_the_8d126860", error.localizedDescription),
                 reconstructionCanRetry: false
             )
         }
@@ -433,13 +433,13 @@ private final class ObjectCaptureFlowModel: ObservableObject {
         case .failed(let error):
             fail(error.localizedDescription, reconstructionCanRetry: false)
         @unknown default:
-            warningMessage = "Die aktuelle iOS-Version meldet einen unbekannten Scanstatus."
+            warningMessage = L10n.text("ui_the_current_ios_version_reports_an_unknown_67fc072e")
         }
     }
 
     private func beginReconstruction(retry: Bool) {
         guard let workspace else {
-            fail("Die Aufnahmedaten des Objekts fehlen.", reconstructionCanRetry: false)
+            fail(L10n.text("ui_the_object_s_capture_data_is_missing_6e2aa263"), reconstructionCanRetry: false)
             return
         }
         guard retry || !reconstructionStarted else { return }
@@ -450,7 +450,7 @@ private final class ObjectCaptureFlowModel: ObservableObject {
         reconstructionStarted = true
         phase = .reconstructing
         reconstructionProgress = 0
-        reconstructionStage = "Aufnahmen werden vorbereitet"
+        reconstructionStage = L10n.text("ui_preparing_captures_ba546656")
         estimatedRemainingTime = nil
         warningMessage = nil
         errorMessage = nil
@@ -516,16 +516,16 @@ private final class ObjectCaptureFlowModel: ObservableObject {
             }
         case .stitchingIncomplete:
             warningMessage =
-                "Einige Aufnahmen konnten nicht vollständig verbunden werden. Prüfe das Modell nach dem Upload."
+                L10n.text("ui_some_captures_could_not_be_fully_aligned_e7113ed7")
         case .automaticDownsampling:
             warningMessage =
-                "Die Aufnahmen wurden für die Verarbeitung auf diesem iPhone automatisch verkleinert."
+                L10n.text("ui_the_captures_were_automatically_downsized_for_processing_6b47a1cd")
         case .invalidSample(_, let reason):
-            warningMessage = "Mindestens eine Aufnahme wurde übersprungen: \(reason)"
+            warningMessage = L10n.text("ui_at_least_one_capture_was_skipped_0_3b6ee857", reason)
         case .skippedSample:
-            warningMessage = "Mindestens eine Aufnahme konnte nicht für das Modell verwendet werden."
+            warningMessage = L10n.text("ui_at_least_one_capture_could_not_be_22baf723")
         case .processingCancelled:
-            fail("Die Erstellung des 3D-Modells wurde unerwartet abgebrochen.", reconstructionCanRetry: true)
+            fail(L10n.text("ui_3d_model_creation_was_cancelled_unexpectedly_e67b0092"), reconstructionCanRetry: true)
         case .inputComplete, .requestProgress,
              .requestProgressInfo, .requestComplete, .requestError:
             break
@@ -538,14 +538,14 @@ private final class ObjectCaptureFlowModel: ObservableObject {
         guard phase == .reconstructing else { return }
         let values = try? modelURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
         guard values?.isRegularFile == true, let size = values?.fileSize, size > 0 else {
-            fail("Das rekonstruierte USDZ-Modell fehlt oder ist leer.", reconstructionCanRetry: true)
+            fail(L10n.text("ui_the_reconstructed_usdz_model_is_missing_or_f9aee403"), reconstructionCanRetry: true)
             return
         }
 
         guard !resultPreparationStarted else { return }
         resultPreparationStarted = true
         reconstructionProgress = 1
-        reconstructionStage = "Artikelbild wird vorbereitet"
+        reconstructionStage = L10n.text("ui_preparing_item_image_853e7bcd")
         estimatedRemainingTime = nil
         reconstructionTask = Task { [weak self] in
             guard let self else { return }
@@ -579,7 +579,7 @@ private final class ObjectCaptureFlowModel: ObservableObject {
     }
 
     private func fail(_ message: String, reconstructionCanRetry: Bool) {
-        errorMessage = message.isEmpty ? "Der Objektscan ist fehlgeschlagen." : message
+        errorMessage = message.isEmpty ? L10n.text("ui_the_object_scan_failed_1a7b4fa0") : message
         phase = .failed
         if !reconstructionCanRetry {
             reconstructionStarted = false
@@ -606,13 +606,13 @@ private final class ObjectCaptureFlowModel: ObservableObject {
         for stage: PhotogrammetrySession.Output.ProcessingStage
     ) -> String {
         switch stage {
-        case .preProcessing: "Aufnahmen werden vorbereitet"
-        case .imageAlignment: "Aufnahmen werden ausgerichtet"
-        case .pointCloudGeneration: "Punktwolke wird berechnet"
-        case .meshGeneration: "3D-Geometrie wird erstellt"
-        case .textureMapping: "Texturen werden erzeugt"
-        case .optimization: "Modell wird optimiert"
-        @unknown default: "3D-Modell wird erstellt"
+        case .preProcessing: L10n.text("ui_preparing_captures_ba546656")
+        case .imageAlignment: L10n.text("ui_aligning_captures_f612ca9a")
+        case .pointCloudGeneration: L10n.text("ui_calculating_point_cloud_da75bd13")
+        case .meshGeneration: L10n.text("ui_creating_3d_geometry_5a016c92")
+        case .textureMapping: L10n.text("ui_generating_textures_27fd010d")
+        case .optimization: L10n.text("ui_optimizing_model_a6d7c5b6")
+        @unknown default: L10n.text("ui_creating_3d_model_b6871a36")
         }
     }
 
@@ -620,31 +620,31 @@ private final class ObjectCaptureFlowModel: ObservableObject {
         for feedback: Set<ObjectCaptureSession.Feedback>
     ) -> String? {
         if feedback.contains(.environmentTooDark) {
-            return "Es ist zu dunkel. Sorge für helles, diffuses Licht."
+            return L10n.text("ui_it_is_too_dark_provide_bright_diffuse_3c78ddee")
         }
         if feedback.contains(.environmentLowLight) {
-            return "Mehr Licht verbessert Farbe und Modellqualität."
+            return L10n.text("ui_more_light_improves_color_and_model_quality_c6577eba")
         }
         if feedback.contains(.movingTooFast) {
-            return "Bewege das iPhone langsamer und gleichmäßiger."
+            return L10n.text("ui_move_the_iphone_more_slowly_and_steadily_c49678aa")
         }
         if feedback.contains(.objectTooClose) {
-            return "Gehe etwas weiter vom Objekt weg."
+            return L10n.text("ui_move_a_little_further_from_the_object_54172e90")
         }
         if feedback.contains(.objectTooFar) {
-            return "Gehe etwas näher an das Objekt heran."
+            return L10n.text("ui_move_a_little_closer_to_the_object_42e3ff45")
         }
         if feedback.contains(.outOfFieldOfView) {
-            return "Halte das gesamte Objekt im Bild."
+            return L10n.text("ui_keep_the_entire_object_in_view_830a8127")
         }
         if #available(iOS 17.4, *), feedback.contains(.objectNotDetected) {
-            return "Das Objekt wird nicht erkannt. Richte die Kamera erneut darauf."
+            return L10n.text("ui_the_object_is_not_detected_point_the_6130b73f")
         }
         if feedback.contains(.overCapturing) {
-            return "Dieser Bereich ist bereits ausreichend aufgenommen."
+            return L10n.text("ui_this_area_has_already_been_captured_sufficiently_8fbbd1a4")
         }
         if feedback.contains(.objectNotFlippable) {
-            return "Dieses Objekt sollte nicht gewendet werden. Nimm weitere Höhen auf."
+            return L10n.text("ui_this_object_should_not_be_flipped_capture_d5a58d74")
         }
         return nil
     }
@@ -674,20 +674,20 @@ struct ObjectCaptureFlowView: View {
     private var unsupportedView: some View {
         NavigationStack {
             ContentUnavailableView {
-                Label("3D-Objektscan nicht verfügbar", systemImage: "cube.transparent")
+                Label(L10n.text("ui_3d_object_scanning_unavailable_abcc0687"), systemImage: "cube.transparent")
             } description: {
                 Text(ObjectCaptureAvailability.requirement)
             } actions: {
-                Button("Eintrag ohne 3D-Modell anlegen") {
+                Button(L10n.text("ui_create_item_without_3d_model_8b94f6ba")) {
                     onFallback()
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)
 
-                Button("Schließen", role: .cancel) { dismiss() }
+                Button(L10n.text("ui_close_b808f6e9"), role: .cancel) { dismiss() }
                     .buttonStyle(.bordered)
             }
-            .navigationTitle("3D-Objektscan")
+            .navigationTitle(L10n.text("ui_object_scan_3d"))
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -742,17 +742,17 @@ private struct SupportedObjectCaptureFlowView: View {
             }
         }
         .confirmationDialog(
-            "Objektscan abbrechen?",
+            L10n.text("ui_cancel_object_scan_a39ae7b1"),
             isPresented: $confirmCancellation,
             titleVisibility: .visible
         ) {
-            Button("Scan verwerfen", role: .destructive) {
+            Button(L10n.text("ui_discard_scan_88cca0cc"), role: .destructive) {
                 model.cancelAndCleanup()
                 dismiss()
             }
-            Button("Weiter scannen", role: .cancel) { }
+            Button(L10n.text("ui_continue_scanning_3402ece8"), role: .cancel) { }
         } message: {
-            Text("Die lokalen Aufnahmen und das noch nicht gespeicherte 3D-Modell werden gelöscht.")
+            Text(L10n.text("ui_the_local_captures_and_unsaved_3d_model_dcc1b500"))
         }
     }
 
@@ -804,11 +804,11 @@ private struct SupportedObjectCaptureFlowView: View {
                     .background(.black.opacity(0.5), in: Circle())
             }
             .foregroundStyle(.white)
-            .accessibilityLabel("Objektscan abbrechen")
+            .accessibilityLabel(L10n.text("ui_cancel_object_scan_9dc6f4e1"))
 
             Spacer()
 
-            Label("3D-Objektscan", systemImage: "cube.transparent")
+            Label(L10n.text("ui_object_scan_3d"), systemImage: "cube.transparent")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)
@@ -832,7 +832,7 @@ private struct SupportedObjectCaptureFlowView: View {
                 .foregroundStyle(.white.opacity(0.82))
 
             if model.phase == .capturing {
-                Text("\(model.shotCount) Aufnahmen")
+                Text(L10n.text("ui_captures_0_87cd1f1d", model.shotCount))
                     .font(.caption.monospacedDigit().weight(.semibold))
                     .foregroundStyle(InventoryTheme.lime)
             }
@@ -841,7 +841,7 @@ private struct SupportedObjectCaptureFlowView: View {
                 ProgressView(value: model.reconstructionProgress)
                     .tint(InventoryTheme.lime)
                 HStack {
-                    Text(model.reconstructionStage ?? "3D-Modell wird erstellt")
+                    Text(model.reconstructionStage ?? L10n.text("ui_creating_3d_model_b6871a36"))
                     Spacer()
                     Text(model.reconstructionProgress, format: .percent.precision(.fractionLength(0)))
                         .monospacedDigit()
@@ -849,7 +849,7 @@ private struct SupportedObjectCaptureFlowView: View {
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.78))
                 if let remaining = model.estimatedRemainingTime, remaining.isFinite, remaining > 1 {
-                    Text("Noch ungefähr \(remainingTimeDescription(remaining))")
+                    Text(L10n.text("ui_about_0_remaining_e64f02e4", remainingTimeDescription(remaining)))
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.7))
                 }
@@ -874,56 +874,56 @@ private struct SupportedObjectCaptureFlowView: View {
         case .preparing:
             ProgressView().tint(.white).controlSize(.large)
         case .ready:
-            primaryButton("Objekt auswählen", systemImage: "viewfinder") {
+            primaryButton(L10n.text("ui_select_object_e9645b81"), systemImage: "viewfinder") {
                 model.startDetecting()
             }
         case .detecting:
             HStack(spacing: 10) {
-                Button("Neu ausrichten") { model.resetDetection() }
+                Button(L10n.text("ui_realign_39c73e26")) { model.resetDetection() }
                     .buttonStyle(.bordered)
                     .tint(.white)
-                primaryButton("Scan starten", systemImage: "camera.fill") {
+                primaryButton(L10n.text("ui_start_scan_329ac519"), systemImage: "camera.fill") {
                     model.startCapturing()
                 }
             }
         case .capturing where model.completedScanPass:
             VStack(spacing: 10) {
-                primaryButton("3D-Modell erstellen", systemImage: "cube.fill") {
+                primaryButton(L10n.text("ui_create_3d_model_ba850f71"), systemImage: "cube.fill") {
                     model.finishCapture()
                 }
                 HStack(spacing: 10) {
-                    Button("Weitere Höhe") { model.beginAnotherPass() }
+                    Button(L10n.text("ui_another_height_da002898")) { model.beginAnotherPass() }
                         .buttonStyle(.bordered)
-                    Button("Objekt wenden") { model.beginPassAfterFlip() }
+                    Button(L10n.text("ui_flip_object_a6e27ea6")) { model.beginPassAfterFlip() }
                         .buttonStyle(.bordered)
                 }
                 .tint(.white)
             }
         case .capturing:
             VStack(spacing: 10) {
-                Text("Fülle den Kreis, indem du das Objekt langsam umrundest.")
+                Text(L10n.text("ui_fill_the_circle_by_slowly_walking_around_fb11db9e"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .frame(minHeight: 44)
                     .background(.black.opacity(0.5), in: Capsule())
                 if model.canFinishCapture {
-                    Button("Aufnahme beenden") { model.finishCapture() }
+                    Button(L10n.text("ui_finish_capture_aae1061b")) { model.finishCapture() }
                         .buttonStyle(.bordered)
                         .tint(.white)
                         .accessibilityHint(
-                            "Beendet den Scan vor einem vollständig gefüllten Aufnahmekreis"
+                            L10n.text("ui_ends_the_scan_before_the_capture_circle_49d86599")
                         )
                 }
             }
         case .finishing:
-            ProgressView("Aufnahmen werden gesichert …")
+            ProgressView(L10n.text("ui_saving_captures_e3591e4e"))
                 .tint(.white)
                 .foregroundStyle(.white)
         case .reconstructing:
             EmptyView()
         case .complete:
-            primaryButton("Weiter zu den Details", systemImage: "arrow.right") {
+            primaryButton(L10n.text("ui_continue_to_details_2f321b84"), systemImage: "arrow.right") {
                 guard let result = model.transferResult() else { return }
                 deliveredResult = true
                 onComplete(result)
@@ -932,12 +932,12 @@ private struct SupportedObjectCaptureFlowView: View {
         case .failed:
             VStack(spacing: 10) {
                 primaryButton(
-                    model.canRetryReconstruction ? "Modell erneut erstellen" : "Scan neu starten",
+                    model.canRetryReconstruction ? L10n.text("ui_rebuild_model_57f231d9") : L10n.text("ui_restart_scan_7aa3a49f"),
                     systemImage: "arrow.clockwise"
                 ) {
                     model.retry()
                 }
-                Button("Schließen", role: .cancel) {
+                Button(L10n.text("ui_close_b808f6e9"), role: .cancel) {
                     model.cancelAndCleanup()
                     dismiss()
                 }
@@ -967,49 +967,49 @@ private struct SupportedObjectCaptureFlowView: View {
         let minutes = seconds / 60
         let remainder = seconds % 60
         if minutes == 0 {
-            return "\(remainder) Sek."
+            return L10n.text("ui_0_sec_44d798ce", remainder)
         }
         if remainder == 0 {
-            return "\(minutes) Min."
+            return L10n.text("ui_0_min_f7744b09", minutes)
         }
-        return "\(minutes) Min. \(remainder) Sek."
+        return L10n.text("ui_0_min_1_sec_2b68fd4c", minutes, remainder)
     }
 
     private var statusTitle: String {
         switch model.phase {
-        case .preparing: "Objektscan wird vorbereitet"
-        case .ready: "Objekt mittig ausrichten"
-        case .detecting: "Auswahl prüfen"
-        case .capturing where model.completedScanPass: "Scanrunde abgeschlossen"
-        case .capturing: "Langsam um das Objekt gehen"
-        case .finishing: "Aufnahmen werden abgeschlossen"
-        case .reconstructing: "3D-Modell wird erstellt"
-        case .complete: "3D-Modell ist bereit"
-        case .failed: "Objektscan fehlgeschlagen"
+        case .preparing: L10n.text("ui_preparing_object_scan_a77f6e12")
+        case .ready: L10n.text("ui_center_the_object_d427c999")
+        case .detecting: L10n.text("ui_review_selection_f4773ba0")
+        case .capturing where model.completedScanPass: L10n.text("ui_scan_pass_completed_00624e96")
+        case .capturing: L10n.text("ui_walk_slowly_around_the_object_c68a6f52")
+        case .finishing: L10n.text("ui_finishing_captures_c06d22c7")
+        case .reconstructing: L10n.text("ui_creating_3d_model_b6871a36")
+        case .complete: L10n.text("ui_3d_model_is_ready_2521322a")
+        case .failed: L10n.text("ui_object_scan_failed_38e1067e")
         }
     }
 
     private var statusMessage: String {
         switch model.phase {
         case .preparing:
-            "Kamera und lokaler Speicher werden vorbereitet."
+            L10n.text("ui_preparing_camera_and_local_storage_9398d1b9")
         case .ready:
-            "Der Gegenstand sollte vollständig sichtbar sein und gleichmäßig beleuchtet werden."
+            L10n.text("ui_the_item_should_be_fully_visible_and_fb60e6d6")
         case .detecting:
-            "Passe den eingeblendeten Rahmen an, bis nur der Gegenstand erfasst wird."
+            L10n.text("ui_adjust_the_displayed_frame_until_only_the_8048688f")
         case .capturing where model.completedScanPass:
-            "Erstelle jetzt das Modell oder erfasse weitere Ansichten für ein vollständigeres Ergebnis."
+            L10n.text("ui_create_the_model_now_or_capture_additional_b6a08656")
         case .capturing:
             ObjectCaptureFlowModel.feedbackMessage(for: model.feedback)
-                ?? "Halte das Objekt vollständig im Bild und bewege dich gleichmäßig."
+                ?? L10n.text("ui_keep_the_entire_object_in_view_and_0004816f")
         case .finishing:
-            "Bitte die App geöffnet lassen, bis alle Sensordaten gespeichert sind."
+            L10n.text("ui_please_keep_the_app_open_until_all_1a56040e")
         case .reconstructing:
-            "Die Verarbeitung läuft vollständig auf diesem iPhone und kann einige Minuten dauern."
+            L10n.text("ui_processing_runs_entirely_on_this_iphone_and_869fb199")
         case .complete:
-            "Ergänze im nächsten Schritt Namen und Inventardaten; das USDZ-Modell wird anschließend hochgeladen."
+            L10n.text("ui_add_the_name_and_inventory_details_in_3ade76f2")
         case .failed:
-            model.errorMessage ?? "Der Scan konnte nicht abgeschlossen werden."
+            model.errorMessage ?? L10n.text("ui_could_not_complete_the_scan_f0138b67")
         }
     }
 }

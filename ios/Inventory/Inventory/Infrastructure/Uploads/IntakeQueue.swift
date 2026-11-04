@@ -4,7 +4,7 @@ private enum IntakeQueuePersistenceError: Error, LocalizedError {
     case unableToPersist
 
     var errorDescription: String? {
-        "Der Upload-Status konnte nicht dauerhaft auf dem Gerät gesichert werden."
+        L10n.text("ui_could_not_persist_upload_status_on_the_a491be88")
     }
 }
 
@@ -95,7 +95,7 @@ final class IntakeQueue: ObservableObject {
                 withIntermediateDirectories: true
             )
         } catch {
-            storageError = "Upload-Speicher konnte nicht geöffnet werden: \(error.localizedDescription)"
+            storageError = L10n.text("ui_could_not_open_upload_storage_0_5d168a93", error.localizedDescription)
         }
         let loaded = Self.loadManifest(from: manifestURL, backupURL: manifestBackupURL)
         jobs = loaded.jobs
@@ -174,7 +174,7 @@ final class IntakeQueue: ObservableObject {
             placementWarning: nil,
             attemptCount: 0,
             nextAttemptAt: nil,
-            message: "Medien werden für den Upload gesichert."
+            message: L10n.text("ui_saving_media_for_upload_9d87d83b")
         )
         jobs.insert(job, at: 0)
         persist()
@@ -191,7 +191,7 @@ final class IntakeQueue: ObservableObject {
                 if job.serverOrigin == nil || job.principalIdentifier == nil {
                     job.stage = .failed
                     job.progress = 1
-                    job.message = "Kein sicherer Konto- und Serverkontext ist diesem Auftrag zugeordnet."
+                    job.message = L10n.text("ui_no_secure_account_and_server_context_is_4c52ef85")
                 } else {
                     job.stage = .queued
                     job.progress = 0.08
@@ -201,8 +201,8 @@ final class IntakeQueue: ObservableObject {
                         organizationID: client?.organizationID,
                         principalIdentifier: client?.principalIdentifier
                     )
-                        ? "Bereit zum Hochladen."
-                        : "Medien sind gesichert. Wechsle zum zugehörigen Konto, um den Upload fortzusetzen."
+                        ? L10n.text("ui_ready_to_upload_618f4a78")
+                        : L10n.text("ui_media_saved_switch_to_the_associated_account_be6d11f9")
                 }
                 let persisted = replace(job)
                 if persisted {
@@ -211,13 +211,13 @@ final class IntakeQueue: ObservableObject {
                 } else {
                     job.stage = .failed
                     job.progress = 1
-                    job.message = "Medien sind gesichert, aber der Queue-Status konnte nicht gespeichert werden."
+                    job.message = L10n.text("ui_media_saved_but_queue_status_could_not_2f4eb800")
                     replace(job)
                 }
             } catch {
                 job.stage = .failed
                 job.progress = 1
-                job.message = "Medien konnten nicht gesichert werden: \(error.localizedDescription)"
+                job.message = L10n.text("ui_could_not_save_media_0_b0e83b48", error.localizedDescription)
                 replace(job)
             }
         }
@@ -227,7 +227,7 @@ final class IntakeQueue: ObservableObject {
         guard var job = visibleJobs.first(where: { $0.id == id }) else { return }
         guard let client, canProcessJobs else {
             job.stage = .failed
-            job.message = "Für den erneuten Versuch ist Schreibzugriff auf dieses Inventar erforderlich."
+            job.message = L10n.text("ui_write_access_to_this_inventory_is_required_648f30c6")
             replace(job)
             return
         }
@@ -240,7 +240,7 @@ final class IntakeQueue: ObservableObject {
         ) else {
             job.stage = .failed
             job.message =
-                "Dieser Auftrag gehört zu einem anderen Server oder einer anderen Organisation. Wechsle dorthin zurück, um ihn fortzusetzen."
+                L10n.text("ui_this_job_belongs_to_another_server_or_04d984ea")
             replace(job)
             return
         }
@@ -249,7 +249,7 @@ final class IntakeQueue: ObservableObject {
            Self.sourceFilesExist(for: job) {
             job.stage = .preparing
             job.progress = 0.03
-            job.message = "Lokale Medien werden erneut sicher übernommen."
+            job.message = L10n.text("ui_safely_importing_local_media_again_7e7e7afe")
             replace(job)
             Task { await resumePreparingJob(id) }
             return
@@ -257,7 +257,7 @@ final class IntakeQueue: ObservableObject {
         guard job.mediaUploaded || Self.filesExist(for: job, rootURL: rootURL) else {
             job.stage = .failed
             job.progress = 1
-            job.message = "Die lokalen Medien sind nicht mehr vollständig. Bitte den Auftrag entfernen und neu aufnehmen."
+            job.message = L10n.text("ui_local_media_is_no_longer_complete_please_db97eabb")
             replace(job)
             return
         }
@@ -272,7 +272,7 @@ final class IntakeQueue: ObservableObject {
         }
         job.attemptCount = 0
         job.nextAttemptAt = nil
-        job.message = "Erneuter Versuch …"
+        job.message = L10n.text("ui_retrying_a11bae74")
         replace(job)
         startWorkerIfNeeded()
     }
@@ -376,7 +376,7 @@ final class IntakeQueue: ObservableObject {
             if job.resourceID == nil {
                 job.stage = .creating
                 job.progress = 0.14
-                job.message = "Wird angelegt."
+                job.message = L10n.text("ui_creating_bc4a3064")
                 replace(job)
 
                 let resource = try await client.createResource(
@@ -399,7 +399,7 @@ final class IntakeQueue: ObservableObject {
                job.placementCompleted != true {
                 job.stage = .placing
                 job.progress = 0.34
-                job.message = "3D-Position wird im Raum gespeichert."
+                job.message = L10n.text("ui_saving_3d_position_in_room_b4375fd1")
                 replace(job)
 
                 do {
@@ -416,7 +416,7 @@ final class IntakeQueue: ObservableObject {
                     // now-invalid coordinate frame forever.
                     job.placementCompleted = true
                     job.placementWarning =
-                        "Der Raum wurde zwischenzeitlich neu gescannt; die 3D-Position muss erneut erfasst werden."
+                        L10n.text("ui_the_room_has_been_rescanned_in_the_6ffc315d")
                     job.progress = 0.4
                 }
                 guard replace(job) else { throw IntakeQueuePersistenceError.unableToPersist }
@@ -427,7 +427,7 @@ final class IntakeQueue: ObservableObject {
             if !job.mediaUploaded {
                 job.stage = .uploading
                 job.progress = 0.44
-                job.message = "\(job.filenames.count) Mediendatei(en) werden hochgeladen."
+                job.message = L10n.text("ui_uploading_0_media_files_023ac035", job.filenames.count)
                 replace(job)
 
                 let files = job.filenames.enumerated().map { index, filename in
@@ -452,7 +452,7 @@ final class IntakeQueue: ObservableObject {
             if job.shouldAnalyze && !job.analysisCompleted {
                 job.stage = .analyzing
                 job.progress = 0.7
-                job.message = "Analyse läuft."
+                job.message = L10n.text("ui_analyzing_42d37d21")
                 replace(job)
 
                 do {
@@ -475,7 +475,7 @@ final class IntakeQueue: ObservableObject {
                     if Self.isRetryable(error) { throw error }
                     job.stage = .warning
                     job.progress = 1
-                    job.message = "Gegenstand und Medien sind gespeichert, die Analyse schlug jedoch fehl: \(error.localizedDescription)"
+                    job.message = L10n.text("ui_item_and_media_saved_but_analysis_failed_7c342de1", error.localizedDescription)
                     replace(job)
                     return
                 }
@@ -484,7 +484,7 @@ final class IntakeQueue: ObservableObject {
             if job.shouldResearch == true && job.researchCompleted != true {
                 job.stage = .researching
                 job.progress = 0.82
-                job.message = "Webrecherche läuft."
+                job.message = L10n.text("ui_researching_the_web_8766f7e8")
                 guard replace(job) else { throw IntakeQueuePersistenceError.unableToPersist }
                 do {
                     let resource = try await client.researchResource(id: resourceID, idempotencyKey: job.researchOperationID ?? job.id)
@@ -499,7 +499,7 @@ final class IntakeQueue: ObservableObject {
                     if Self.requiresAuthentication(error) || Self.isRetryable(error) { throw error }
                     job.stage = .warning
                     job.progress = 1
-                    job.message = "Gegenstand und Medien sind gespeichert, die Recherche schlug jedoch fehl: \(error.localizedDescription)"
+                    job.message = L10n.text("ui_item_and_media_saved_but_research_failed_ec57ff2e", error.localizedDescription)
                     replace(job)
                     return
                 }
@@ -508,7 +508,7 @@ final class IntakeQueue: ObservableObject {
             if job.shouldGenerateCover && !job.coverCompleted {
                 job.stage = .generatingCover
                 job.progress = 0.88
-                job.message = "Cover wird erstellt."
+                job.message = L10n.text("ui_creating_cover_eee10bf8")
                 replace(job)
 
                 do {
@@ -531,7 +531,7 @@ final class IntakeQueue: ObservableObject {
                     if Self.isRetryable(error) { throw error }
                     job.stage = .warning
                     job.progress = 1
-                    job.message = "Gegenstand ist gespeichert, das Cover schlug jedoch fehl: \(error.localizedDescription)"
+                    job.message = L10n.text("ui_item_saved_but_cover_creation_failed_0_b73cce59", error.localizedDescription)
                     replace(job)
                     return
                 }
@@ -542,15 +542,15 @@ final class IntakeQueue: ObservableObject {
             job.attemptCount = 0
             job.nextAttemptAt = nil
             job.message = job.placementWarning.map {
-                "Gegenstand und Medien sind gespeichert. \($0)"
-            } ?? "Fertig."
+                L10n.text("ui_item_and_media_saved_0_a76f4362", $0)
+            } ?? L10n.text("ui_done_2d921abe")
             if replace(job) {
                 cleanupPhotoFiles(for: job.id)
             }
         } catch is CancellationError {
             job.stage = .queued
             job.nextAttemptAt = nil
-            job.message = "Upload pausiert."
+            job.message = L10n.text("ui_upload_paused_60b41ccb")
             replace(job)
         } catch {
             let attempt = (job.attemptCount ?? 0) + 1
@@ -558,7 +558,7 @@ final class IntakeQueue: ObservableObject {
             if Self.requiresAuthentication(error) {
                 job.stage = .queued
                 job.nextAttemptAt = nil
-                job.message = "Anmeldung erforderlich."
+                job.message = L10n.text("ui_sign_in_required_0ef83864")
                 replace(job)
                 return
             }
@@ -576,8 +576,8 @@ final class IntakeQueue: ObservableObject {
                 job.attemptCount = attempt
                 job.nextAttemptAt = Date().addingTimeInterval(delay)
                 job.message = statusCode == 202
-                    ? "KI-Vorgang läuft noch. Nächste Statusprüfung in \(Int(ceil(delay))) s."
-                    : "Verbindung unterbrochen. Automatischer Versuch \(attempt)/\(maximumAttempts) in \(Int(ceil(delay))) s."
+                    ? L10n.text("ui_ai_operation_still_running_next_status_check_2060bad3", Int(ceil(delay)))
+                    : L10n.text("ui_connection_lost_automatic_attempt_0_1_in_a1652b2c", attempt, maximumAttempts, Int(ceil(delay)))
             } else {
                 job.stage = .failed
                 job.progress = 1
@@ -621,7 +621,7 @@ final class IntakeQueue: ObservableObject {
             storageError = nil
             return true
         } catch {
-            storageError = "Upload-Queue konnte nicht dauerhaft gesichert werden: \(error.localizedDescription)"
+            storageError = L10n.text("ui_could_not_persist_upload_queue_0_b97b415c", error.localizedDescription)
             return false
         }
     }
@@ -643,12 +643,12 @@ final class IntakeQueue: ObservableObject {
                 )
                 return (
                     jobs,
-                    "Die Haupt-Queue war beschädigt; die Sicherung wurde geladen."
+                    L10n.text("ui_the_main_queue_was_damaged_the_backup_646d0f77")
                 )
             } catch {
                 return (
                     [],
-                    "Die Upload-Queue ist beschädigt und wurde nicht überschrieben."
+                    L10n.text("ui_the_upload_queue_is_damaged_and_was_ec3dc288")
                 )
             }
         }
@@ -712,7 +712,7 @@ final class IntakeQueue: ObservableObject {
         guard job.serverOrigin != nil, job.principalIdentifier != nil else {
             job.stage = .failed
             job.progress = 1
-            job.message = "Der unterbrochene Auftrag hat keine sichere Konto- und Serverzuordnung."
+            job.message = L10n.text("ui_the_interrupted_job_has_no_secure_account_92c2155d")
             return job
         }
 
@@ -736,20 +736,20 @@ final class IntakeQueue: ObservableObject {
             if !completeOutbox, sourceFilesExist(for: job) {
                 job.stage = .preparing
                 job.progress = 0.03
-                job.message = "Die sichere Medienübernahme wird nach dem Neustart fortgesetzt."
+                job.message = L10n.text("ui_secure_media_import_will_resume_after_restarting_7fc6c57f")
                 return job
             }
             guard completeOutbox else {
                 job.stage = .failed
                 job.progress = 1
-                job.message = "Die Medienübernahme wurde unterbrochen. Es wird nichts unvollständig hochgeladen."
+                job.message = L10n.text("ui_media_import_was_interrupted_no_incomplete_files_6093b85c")
                 return job
             }
             job.filenames = names
         }
 
         job.stage = .queued
-        job.message = "Nach App-Neustart sicher fortgesetzt."
+        job.message = L10n.text("ui_safely_resumed_after_app_restart_a1e2d2be")
         return job
     }
 
@@ -843,21 +843,21 @@ final class IntakeQueue: ObservableObject {
                 organizationID: client?.organizationID,
                 principalIdentifier: client?.principalIdentifier
             )
-                ? "Medien vollständig wiederhergestellt und bereit."
-                : "Medien sind wiederhergestellt. Wechsle zum zugehörigen Konto, um den Upload fortzusetzen."
+                ? L10n.text("ui_media_fully_restored_and_ready_b6285b7e")
+                : L10n.text("ui_media_restored_switch_to_the_associated_account_59f3b5b0")
             if replace(job) {
                 Self.cleanupImportedSources(photos)
                 startWorkerIfNeeded()
             } else {
                 job.stage = .failed
                 job.progress = 1
-                job.message = "Medien sind wiederhergestellt, aber der Queue-Status konnte nicht gespeichert werden."
+                job.message = L10n.text("ui_media_restored_but_queue_status_could_not_571da8b8")
                 replace(job)
             }
         } catch {
             job.stage = .failed
             job.progress = 1
-            job.message = "Medien konnten nicht wiederhergestellt werden: \(error.localizedDescription)"
+            job.message = L10n.text("ui_could_not_restore_media_0_9181cd41", error.localizedDescription)
             replace(job)
         }
     }

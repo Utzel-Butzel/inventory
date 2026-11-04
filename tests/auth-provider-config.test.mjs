@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   getAuthProviderConfiguration,
+  getPublicAuthOptions,
   validateAuthProviderEnvironment,
 } from "../lib/auth-provider-config.ts";
 
@@ -98,4 +99,19 @@ test("the login page delegates configured providers to Auth.js", async () => {
   assert.match(loginForm, /externalProviders\.map/);
   assert.match(loginForm, /signIn\(providerId/);
   assert.match(sessionTypes, /externalEmailVerified/);
+});
+
+test("native provider metadata is deployment-specific and contains no credentials", () => {
+  const konglomerat = {
+    AUTH_PASSWORD_ENABLED: "false", AUTH_OIDC_PROVIDER_ID: "konglomerat",
+    AUTH_OIDC_PROVIDER_NAME: "Konglomerat", AUTH_OIDC_ISSUER: "https://identity.example.com",
+    AUTH_OIDC_CLIENT_ID: "private-client", AUTH_OIDC_CLIENT_SECRET: "private-secret",
+  };
+  assert.deepEqual(getPublicAuthOptions(konglomerat), {
+    passwordEnabled: false, browserSignIn: true, providers: [{ id: "konglomerat", name: "Konglomerat" }],
+  });
+  assert.deepEqual(getPublicAuthOptions({}), { passwordEnabled: true, browserSignIn: false, providers: [] });
+  assert.deepEqual(getPublicAuthOptions({ ...konglomerat, AUTH_OIDC_PROVIDER_NAME: "Another organization" }).providers,
+    [{ id: "konglomerat", name: "Another organization" }]);
+  assert.deepEqual(getPublicAuthOptions({ AUTH_OIDC_PROVIDER_NAME: "Konglomerat" }).providers, []);
 });

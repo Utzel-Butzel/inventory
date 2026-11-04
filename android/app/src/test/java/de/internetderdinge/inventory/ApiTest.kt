@@ -9,6 +9,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ApiTest {
+    @org.junit.Before fun initializeTranslations() { installLocaleResources() }
     @Test fun serverAddressesRejectCredentialLeaksAndPublicHttp() {
         listOf("http://inventory.example", "https://user:password@inventory.example", "https://inventory.example/api/v1", "https://inventory.example/?token=secret", "https://inventory.example/#fragment").forEach { value ->
             assertTrue(value, runCatching { Api.normalizeServer(value) }.isFailure)

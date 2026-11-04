@@ -29,7 +29,7 @@ struct ResourcePickerView: View {
     var body: some View {
         List {
             if loading && resources.isEmpty {
-                ProgressView("Inventar wird geladen …")
+                ProgressView(L10n.text("ui_loading_inventory_fa7ba9ab"))
                     .frame(maxWidth: .infinity)
             } else if resources.isEmpty {
                 ContentUnavailableView.search(text: query)
@@ -68,10 +68,10 @@ struct ResourcePickerView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "Name, SKU oder Barcode")
+        .searchable(text: $query, prompt: L10n.text("ui_name_sku_or_barcode_41fa1715"))
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Abbrechen") { dismiss() }
+                Button(L10n.text("ui_cancel_f7ff1178")) { dismiss() }
             }
         }
         .task(id: query) {
@@ -116,12 +116,12 @@ struct ResourceDetailLoaderView: View {
                 ResourceDetailView(resource: resource)
             } else if let errorMessage {
                 ContentUnavailableView(
-                    "Eintrag nicht verfügbar",
+                    L10n.text("ui_inventory_item_unavailable_9d3512e1"),
                     systemImage: "exclamationmark.triangle",
                     description: Text(errorMessage)
                 )
             } else {
-                ProgressView("Eintrag wird geladen …")
+                ProgressView(L10n.text("ui_loading_item_b6c8e052"))
             }
         }
         .task {

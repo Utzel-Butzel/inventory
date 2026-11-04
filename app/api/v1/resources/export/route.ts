@@ -1,3 +1,4 @@
+import { buildMigrationCsv, parseInventorySystem } from "@/lib/inventory-migration";
 import { requirePermission } from "@/lib/api-auth";
 import {
   buildInventoryCsv,
@@ -32,10 +33,11 @@ export async function GET(request: Request) {
   const authorization = await requirePermission(request, "inventory.export");
   if (authorization.response) return authorization.response;
 
+  const system = parseInventorySystem(new URL(request.url).searchParams.get("system"));
   const exportOptions = parseInventoryExportOptions(request.url);
-  if (!exportOptions) {
+  if (!exportOptions || !system || (system !== "open-inventory" && exportOptions.format !== "csv")) {
     return Response.json(
-      { error: "Unsupported export format. Choose csv, xlsx, or pdf." },
+      { error: "Choose csv, xlsx, or pdf for Open Inventory, or csv for snipe-it or homebox." },
       { status: 400 },
     );
   }
@@ -68,9 +70,17 @@ export async function GET(request: Request) {
   const generatedAt = new Date();
   const date = generatedAt.toISOString().slice(0, 10);
   const metadata = responseMetadata[exportOptions.format];
+  let migrationCsv: string | undefined;
+  if (system !== "open-inventory") {
+    try {
+      migrationCsv = buildMigrationCsv(rows, system);
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Unable to export inventory." }, { status: 422 });
+    }
+  }
   const body =
     exportOptions.format === "csv"
-      ? buildInventoryCsv(rows)
+      ? migrationCsv ?? buildInventoryCsv(rows)
       : exportOptions.format === "xlsx"
         ? new Uint8Array(
             await buildInventoryXlsx(rows, {
@@ -89,7 +99,7 @@ export async function GET(request: Request) {
     headers: {
       "Cache-Control": "no-store",
       "Content-Disposition":
-        `attachment; filename="inventory-${date}.${metadata.extension}"`,
+        `attachment; filename="inventory-${system === "open-inventory" ? "" : `${system}-`}${date}.${metadata.extension}"`,
       "Content-Type": metadata.contentType,
       "X-Content-Type-Options": "nosniff",
     },

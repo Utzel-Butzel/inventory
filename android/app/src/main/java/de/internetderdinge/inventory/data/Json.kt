@@ -22,13 +22,17 @@ fun canonical(value: Any?): String = when (value) {
 fun uuid() = UUID.randomUUID().toString()
 fun String.sha256() = MessageDigest.getInstance("SHA-256").digest(toByteArray()).joinToString("") { "%02x".format(it) }
 
-data class Session(val server: String, val token: String, val organization: String, val principal: String, val capabilities: JSONObject) {
+data class Session(val server: String, val token: String, val organization: String, val principal: String, val capabilities: JSONObject,
+    val accountId: String = uuid(), val label: String = "", val userId: String = "", val deviceLogin: Boolean = false, val expiresAt: Long = 0) {
+    val expired: Boolean get() = deviceLogin && expiresAt <= System.currentTimeMillis()
     val context: String get() = "$server#$organization#$principal".sha256()
     fun allows(permission: String, legacy: String = "read"): Boolean {
         if (capabilities.o("organization").optBoolean("isReadOnly") && legacy != "read") return false
         return if (capabilities.has("permissions") && !capabilities.isNull("permissions")) permission in capabilities.a("permissions").strings()
         else legacy in capabilities.a("scopes").strings()
     }
-    fun json() = obj("server" to server, "token" to token, "organization" to organization, "principal" to principal, "capabilities" to capabilities)
-    companion object { fun from(j: JSONObject) = Session(j.getString("server"), j.getString("token"), j.s("organization"), j.getString("principal"), j.o("capabilities")) }
+    fun json() = obj("server" to server, "token" to token, "organization" to organization, "principal" to principal, "capabilities" to capabilities,
+        "accountId" to accountId, "label" to label, "userId" to userId, "deviceLogin" to deviceLogin, "expiresAt" to expiresAt)
+    companion object { fun from(j: JSONObject) = Session(j.getString("server"), j.getString("token"), j.s("organization"), j.getString("principal"), j.o("capabilities"),
+        j.s("accountId").ifEmpty { uuid() }, j.s("label"), j.s("userId"), j.optBoolean("deviceLogin"), j.optLong("expiresAt")) }
 }

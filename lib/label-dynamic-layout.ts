@@ -28,8 +28,9 @@ export function resolveLabelLayout(setup: LabelSetupDto, textWidthMm: number): L
       width: isText ? oldTextWidth + delta : element.width / 100 * setup.widthMm,
     };
   });
-  // A second row can set a lower bound. Never cut off other visible content.
-  const widthMm = Math.max(1, setup.widthMm + delta, ...boxes
+  // Hug the visible element boxes, then add only the explicit right margin.
+  // Other rows still set a lower bound, but unused template space does not.
+  const widthMm = Math.max(1, ...boxes
     .filter(box => box.element.visible && box.element.type !== "background")
     .map(box => box.x + box.width)) + (text.autoWidthRightMarginMm ?? 0);
   return {

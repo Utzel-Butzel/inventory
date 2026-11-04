@@ -14,6 +14,8 @@ export const labelElementTypes = [
 ] as const;
 
 export const MAX_LABEL_ELEMENTS = 32;
+// Allow deliberate left/top bleed by up to one complete label dimension.
+export const MIN_LABEL_POSITION = -100;
 export const MAX_LABEL_TEXT_LENGTH = 8_000;
 
 export const labelTextRunSchema = z.object({
@@ -64,7 +66,7 @@ const labelBackgroundSourceSchema = z
     /^data:image\/(?:png|jpeg|webp|gif|avif|svg\+xml);base64,[a-z0-9+/=\s]+$/i,
   );
 
-const normalizedPositionSchema = z.number().finite().min(0).max(100);
+const normalizedPositionSchema = z.number().finite().min(MIN_LABEL_POSITION).max(100);
 const normalizedSizeSchema = z.number().finite().positive().max(100);
 
 const labelElementBoxShape = {

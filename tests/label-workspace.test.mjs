@@ -1,3 +1,4 @@
+import { labelEditorHref, labelWorkspaceHref } from '../lib/label-editor-route.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -55,4 +56,14 @@ test('database persistence, isolation and concurrent updates', { skip: !process.
   await db.execute(sql`DELETE FROM users WHERE id IN (${user},${otherUser})`);
   await globalThis.inventorySql.end();
  }
+});
+
+test('editor routes preserve item/device context without leaking editor parameters into the workspace', () => {
+  const search = 'resourceId=item-1&unitId=device-2&copyFrom=old-template';
+  assert.equal(labelEditorHref('template-3', search), '/labels/editor/template-3?resourceId=item-1&unitId=device-2');
+  assert.equal(labelEditorHref('new', search, 'template-3'), '/labels/editor/new?resourceId=item-1&unitId=device-2&copyFrom=template-3');
+  assert.equal(labelWorkspaceHref(search), '/labels?resourceId=item-1&unitId=device-2');
+  assert.equal(labelWorkspaceHref('copyFrom=template-3'), '/labels');
+  assert.equal(labelEditorHref('new', ''), '/labels/editor/new');
+  assert.equal(labelEditorHref('id/with?special', ''), '/labels/editor/id%2Fwith%3Fspecial');
 });

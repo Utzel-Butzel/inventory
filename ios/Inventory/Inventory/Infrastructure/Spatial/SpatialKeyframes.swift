@@ -245,11 +245,11 @@ enum SpatialPhotoQueryError: Error, LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .encodedImageTooLarge:
-            "Das Foto ist für die lokale Zuordnung zu groß."
+            L10n.text("ui_the_photo_is_too_large_for_local_c821db65")
         case .unreadableImage:
-            "Das ausgewählte Foto konnte nicht gelesen werden."
+            L10n.text("ui_could_not_read_the_selected_photo_b9779554")
         case .unableToEncodeImage:
-            "Das Foto konnte nicht für die Zuordnung vorbereitet werden."
+            L10n.text("ui_could_not_prepare_the_photo_for_matching_d193e48c")
         }
     }
 }

@@ -1041,7 +1041,7 @@ public struct ScanActionWorkflow: Codable, Equatable, Identifiable, Sendable {
     public var actions: [ActionChainSummary]? = nil
     public var hasActionChain: Bool { !(actions ?? []).isEmpty }
     public var summary: String {
-        hasActionChain ? "\((actions ?? []).filter { $0.enabled != false }.count) Schritte · vor dem Ausführen prüfen" : operation.summary
+        hasActionChain ? L10n.text("ui_0_steps_review_before_running_32c0d21e", (actions ?? []).filter { $0.enabled != false }.count) : operation.summary
     }
     public let id: UUID
     public let name: String
@@ -1062,12 +1062,12 @@ public struct ScanActionOperation: Codable, Equatable, Sendable {
     public var summary: String {
         switch type {
         case "assembly-build":
-            return "\(quantity ?? 1) × Baugruppe fertigstellen"
+            return L10n.text("ui_complete_0_assembly_aa91f2f6", quantity ?? 1)
         case "stock-adjustment":
             let amount = delta ?? 0
-            return "\(amount > 0 ? "+" : "")\(amount) Bestand"
+            return L10n.text("ui_0_1_stock_6bbe3f09", amount > 0 ? "+" : "", amount)
         default:
-            return "Inventareinheit aktualisieren"
+            return L10n.text("ui_update_inventory_unit_b1600a5b")
         }
     }
 }

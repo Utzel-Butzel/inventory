@@ -274,3 +274,13 @@ export function validateAuthProviderEnvironment(
 
   return { errors, configuration };
 }
+
+/** Never expose issuer credentials, API keys or OAuth client secrets to apps. */
+export function getPublicAuthOptions(environment: AuthEnvironment = process.env) {
+  const configuration = getAuthProviderConfiguration(environment);
+  return {
+    passwordEnabled: configuration.passwordEnabled,
+    browserSignIn: configuration.externalProviders.length > 0,
+    providers: configuration.externalProviders.map(({ id, name }) => ({ id, name })),
+  };
+}

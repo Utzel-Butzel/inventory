@@ -9,12 +9,12 @@ public enum KeychainCredentialError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .emptyToken:
-            return "The bearer token is empty."
+            return L10n.text("ui_the_bearer_token_is_empty_fecd8f23")
         case .invalidStoredValue:
-            return "The saved bearer token is not valid UTF-8."
+            return L10n.text("ui_the_saved_bearer_token_is_not_valid_6f6e5226")
         case .unexpectedStatus(let status):
             let message = SecCopyErrorMessageString(status, nil) as String?
-            return message ?? "Keychain failed with status \(status)."
+            return message ?? L10n.text("ui_keychain_failed_with_status_0_3e1f0767", status)
         }
     }
 }

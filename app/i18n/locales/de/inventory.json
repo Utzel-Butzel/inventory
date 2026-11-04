@@ -321,7 +321,8 @@
     "location": "Standort",
     "value": "Wert",
     "priority": "Priorität",
-    "created": "Erstellt"
+    "created": "Erstellt",
+    "barcode": "Barcode"
   },
   "values": {
     "yes": "Ja",

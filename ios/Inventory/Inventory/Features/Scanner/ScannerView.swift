@@ -31,7 +31,7 @@ struct ScannerView: View {
                 .padding(.bottom, 24)
             }
             .background(InventoryTheme.canvas)
-            .navigationTitle("QR & Barcode")
+            .navigationTitle(L10n.text("ui_qr_barcode_29cf3034"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if let onClose {
@@ -41,7 +41,7 @@ struct ScannerView: View {
                         } label: {
                             Image(systemName: "xmark")
                         }
-                        .accessibilityLabel("Scanner schließen")
+                        .accessibilityLabel(L10n.text("ui_close_scanner_e657d12e"))
                     }
                 }
             }
@@ -75,18 +75,18 @@ struct ScannerView: View {
                 )
             }
             .alert(
-                "Code konnte nicht verarbeitet werden",
+                L10n.text("ui_could_not_process_code_9a640900"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil; resumeScanning() } }
                 )
             ) {
-                Button("Noch einmal", role: .cancel) {
+                Button(L10n.text("ui_try_again_130ba1e2"), role: .cancel) {
                     errorMessage = nil
                     resumeScanning()
                 }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }
@@ -108,7 +108,7 @@ struct ScannerView: View {
             VStack {
                 HStack {
                     Label(
-                        isResolving ? "Wird gesucht …" : "Code ins Quadrat halten",
+                        isResolving ? L10n.text("ui_searching_295864f3") : L10n.text("ui_hold_the_code_inside_the_square_279dbd02"),
                         systemImage: isResolving ? "magnifyingglass" : "viewfinder"
                     )
                     .font(.caption.weight(.semibold))
@@ -138,9 +138,9 @@ struct ScannerView: View {
             if camera.state == .denied {
                 VStack(spacing: 12) {
                     Image(systemName: "camera.fill").font(.largeTitle)
-                    Text("Kamera in den Einstellungen erlauben")
+                    Text(L10n.text("ui_allow_camera_access_in_settings_99e79884"))
                         .font(.headline)
-                    Button("Einstellungen öffnen") {
+                    Button(L10n.text("ui_open_settings_b05424fb")) {
                         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                         UIApplication.shared.open(url)
                     }
@@ -160,7 +160,7 @@ struct ScannerView: View {
     private var resultCard: some View {
         if let code = unmatchedCode {
             VStack(alignment: .leading, spacing: 12) {
-                Label("Noch nicht im Inventar", systemImage: "questionmark.app.dashed")
+                Label(L10n.text("ui_not_in_inventory_yet_003eb9c5"), systemImage: "questionmark.app.dashed")
                     .font(.headline)
                 Text(code)
                     .font(.caption.monospaced())
@@ -173,7 +173,7 @@ struct ScannerView: View {
                         unmatchedCode = nil
                         state.presentedTool = .capture
                     } label: {
-                        Label("Mit Fotos erfassen", systemImage: "camera.fill")
+                        Label(L10n.text("ui_capture_with_photos_2c95bc6a"), systemImage: "camera.fill")
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
@@ -181,16 +181,16 @@ struct ScannerView: View {
                     Button {
                         showCreateForm = true
                     } label: {
-                        Label("Nur Stammdaten anlegen", systemImage: "doc.badge.plus")
+                        Label(L10n.text("ui_create_basic_details_only_dc33a725"), systemImage: "doc.badge.plus")
                             .frame(maxWidth: .infinity, minHeight: 42)
                     }
                     .buttonStyle(.bordered)
                 } else {
-                    Label("Nur Lesezugriff", systemImage: "lock.fill")
+                    Label(L10n.text("ui_read_only_access_014dace5"), systemImage: "lock.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Button("Anderen Code scannen") {
+                Button(L10n.text("ui_scan_a_different_code_408f68c5")) {
                     unmatchedCode = nil
                     resumeScanning()
                 }
@@ -203,9 +203,9 @@ struct ScannerView: View {
 
     private var manualEntry: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Code manuell eingeben").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(L10n.text("ui_enter_code_manually_0162322b")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             HStack {
-                TextField("UUID, SKU oder Seriennummer", text: $manualCode)
+                TextField(L10n.text("ui_uuid_sku_or_serial_number_0145c2ae"), text: $manualCode)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .submitLabel(.search)
@@ -227,7 +227,7 @@ struct ScannerView: View {
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !code.isEmpty, !isResolving, code != lastCode else { return }
         guard let client = state.client else {
-            errorMessage = "Keine Serververbindung eingerichtet."
+            errorMessage = L10n.text("ui_no_server_connection_configured_4a1c3f55")
             return
         }
         lastCode = code

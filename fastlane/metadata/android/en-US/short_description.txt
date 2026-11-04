@@ -1,0 +1,1 @@
+Capture inventory, track stock and manage loans with your own server.

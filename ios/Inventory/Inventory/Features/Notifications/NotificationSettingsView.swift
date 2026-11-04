@@ -15,30 +15,30 @@ struct NotificationSettingsView: View {
     var body: some View {
         Group {
             if loading && draft == nil {
-                ProgressView("Einstellungen werden geladen …")
+                ProgressView(L10n.text("ui_loading_settings_1ebc9020"))
             } else if draft == nil {
                 ContentUnavailableView {
-                    Label("Einstellungen nicht verfügbar", systemImage: "exclamationmark.triangle")
+                    Label(L10n.text("ui_settings_unavailable_67d8548c"), systemImage: "exclamationmark.triangle")
                 } description: {
-                    Text(errorMessage ?? "Die Benachrichtigungseinstellungen konnten nicht geladen werden.")
+                    Text(errorMessage ?? L10n.text("ui_could_not_load_notification_settings_bd66d640"))
                 } actions: {
-                    Button("Erneut versuchen") { Task { await load() } }
+                    Button(L10n.text("ui_retry_948643cb")) { Task { await load() } }
                 }
             } else {
                 settingsForm
             }
         }
-        .navigationTitle("Benachrichtigungsregeln")
+        .navigationTitle(L10n.text("ui_notification_rules_154e021e"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Speichern") { Task { await save() } }
+                Button(L10n.text("ui_save_f6b2ff39")) { Task { await save() } }
                     .disabled(!hasChanges || saving || organizationIsReadOnly)
             }
         }
         .task(id: state.client?.contextIdentifier) { await load() }
         .alert(
-            "Aktion fehlgeschlagen",
+            L10n.text("ui_action_failed_3a20cc65"),
             isPresented: Binding(
                 get: { errorMessage != nil && draft != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -46,10 +46,10 @@ struct NotificationSettingsView: View {
         ) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
         .alert(
-            "Kanalvorschau",
+            L10n.text("ui_channel_preview_5264869f"),
             isPresented: Binding(
                 get: { previewMessage != nil },
                 set: { if !$0 { previewMessage = nil } }
@@ -66,7 +66,7 @@ struct NotificationSettingsView: View {
             if organizationIsReadOnly {
                 Section {
                     Label(
-                        "Dieser Arbeitsbereich ist schreibgeschützt.",
+                        L10n.text("ui_this_workspace_is_read_only_ca669940"),
                         systemImage: "lock.fill"
                     )
                     .foregroundStyle(.secondary)
@@ -93,22 +93,22 @@ struct NotificationSettingsView: View {
                     .disabled(saving || organizationIsReadOnly)
                 }
             } header: {
-                Text("Beobachtete Ereignisse")
+                Text(L10n.text("ui_monitored_events_265b1428"))
             } footer: {
-                Text("Diese Auswahl steuert das In-App-Postfach und alle aktivierten externen Kanäle.")
+                Text(L10n.text("ui_this_selection_controls_the_in_app_inbox_182e4e21"))
             }
 
-            Section("Versandhäufigkeit") {
+            Section(L10n.text("ui_delivery_frequency_1355c6ae")) {
                 Picker(
-                    "Externe Zustellung",
+                    L10n.text("ui_external_delivery_70da1701"),
                     selection: preferenceBinding(\.frequency, fallback: .daily)
                 ) {
-                    Text("Tägliche Zusammenfassung").tag(NotificationFrequency.daily)
-                    Text("Sofort").tag(NotificationFrequency.immediate)
+                    Text(L10n.text("ui_daily_summary_ea79c397")).tag(NotificationFrequency.daily)
+                    Text(L10n.text("ui_immediate_02f195c0")).tag(NotificationFrequency.immediate)
                 }
 
                 Stepper(
-                    "Zusammenfassung um \(draft?.digestHour ?? 8) Uhr",
+                    L10n.text("ui_summary_at_0_00_6858f643", draft?.digestHour ?? 8),
                     value: preferenceBinding(\.digestHour, fallback: 8),
                     in: 0 ... 23
                 )
@@ -117,7 +117,7 @@ struct NotificationSettingsView: View {
                 )
 
                 TextField(
-                    "Zeitzone",
+                    L10n.text("ui_time_zone_00507b23"),
                     text: preferenceBinding(\.timezone, fallback: "UTC")
                 )
                 .textInputAutocapitalization(.never)
@@ -125,7 +125,7 @@ struct NotificationSettingsView: View {
                 .disabled(saving || organizationIsReadOnly)
 
                 Picker(
-                    "Benachrichtigungssprache",
+                    L10n.text("ui_notification_language_c63c42c6"),
                     selection: preferenceBinding(\.locale, fallback: .german)
                 ) {
                     Text("Deutsch").tag(NotificationLocale.german)
@@ -133,7 +133,7 @@ struct NotificationSettingsView: View {
                 }
 
                 Stepper(
-                    "Mindestabstand: \(draft?.cooldownHours ?? 24) Stunden",
+                    L10n.text("ui_minimum_interval_0_hours_92dfaa9e", draft?.cooldownHours ?? 24),
                     value: preferenceBinding(\.cooldownHours, fallback: 24),
                     in: 1 ... 720
                 )
@@ -142,50 +142,50 @@ struct NotificationSettingsView: View {
 
             Section {
                 Stepper(
-                    "Niedrigbestand: \(draft?.lowStockThresholdPercent ?? 100) % vom Minimum",
+                    L10n.text("ui_low_stock_0_of_minimum_c405fd6b", draft?.lowStockThresholdPercent ?? 100),
                     value: preferenceBinding(\.lowStockThresholdPercent, fallback: 100),
                     in: 1 ... 500
                 )
                 Stepper(
-                    "Ablauf-Fenster: \(draft?.expiryWindowDays ?? 30) Tage",
+                    L10n.text("ui_expiry_window_0_days_3a847fff", draft?.expiryWindowDays ?? 30),
                     value: preferenceBinding(\.expiryWindowDays, fallback: 30),
                     in: 0 ... 3_650
                 )
                 TextField(
-                    "Feld für Ablaufdatum",
+                    L10n.text("ui_expiry_date_field_a59b7f17"),
                     text: preferenceBinding(\.expiryFieldKey, fallback: "expiry_date")
                 )
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 Stepper(
-                    "Wartungsfenster: \(draft?.maintenanceWindowDays ?? 7) Tage",
+                    L10n.text("ui_maintenance_window_0_days_c7ec66ba", draft?.maintenanceWindowDays ?? 7),
                     value: preferenceBinding(\.maintenanceWindowDays, fallback: 7),
                     in: 0 ... 3_650
                 )
                 TextField(
-                    "Feld für Wartungsdatum",
+                    L10n.text("ui_maintenance_date_field_18928d32"),
                     text: preferenceBinding(\.maintenanceFieldKey, fallback: "maintenance_due")
                 )
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 Stepper(
-                    "Rückgabefenster: \(draft?.returnDueWindowDays ?? 3) Tage",
+                    L10n.text("ui_return_window_0_days_94b0ccf8", draft?.returnDueWindowDays ?? 3),
                     value: preferenceBinding(\.returnDueWindowDays, fallback: 3),
                     in: 0 ... 365
                 )
             } header: {
-                Text("Schwellenwerte")
+                Text(L10n.text("ui_thresholds_3f793122"))
             } footer: {
-                Text("Feldschlüssel beginnen mit einem Kleinbuchstaben und enthalten nur Kleinbuchstaben, Zahlen oder Unterstriche.")
+                Text(L10n.text("ui_field_keys_start_with_a_lowercase_letter_cff12e57"))
             }
             .disabled(saving || organizationIsReadOnly)
 
             Section {
                 LabeledContent {
-                    Text("Immer aktiv")
+                    Text(L10n.text("ui_always_active_af0f7411"))
                         .foregroundStyle(.green)
                 } label: {
-                    Label("In-App-Postfach", systemImage: "bell.fill")
+                    Label(L10n.text("ui_in_app_inbox_f7bd0e62"), systemImage: "bell.fill")
                 }
 
                 externalChannelRow(.email)
@@ -194,9 +194,9 @@ struct NotificationSettingsView: View {
                 externalChannelRow(.teams)
                 externalChannelRow(.webhook)
             } header: {
-                Text("Zustellkanäle")
+                Text(L10n.text("ui_delivery_channels_c06a4d3b"))
             } footer: {
-                Text("Externe Kanäle werden nur verwendet, wenn sie serverseitig eingerichtet und hier aktiviert sind.")
+                Text(L10n.text("ui_external_channels_are_only_used_when_configured_2b731df0"))
             }
         }
         .refreshable { await load() }
@@ -217,7 +217,7 @@ struct NotificationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Vorschau") { Task { await preview(channel) } }
+                Button(L10n.text("ui_preview_69337f6d")) { Task { await preview(channel) } }
                     .font(.caption.weight(.semibold))
                     .disabled(previewingChannel != nil)
             }
@@ -228,12 +228,12 @@ struct NotificationSettingsView: View {
     private var webPushRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             LabeledContent {
-                Text(draft?.pushEnabled == true ? "Im Web aktiv" : "Inaktiv")
+                Text(draft?.pushEnabled == true ? L10n.text("ui_active_on_the_web_42ed9f38") : L10n.text("ui_disabled_bf7c9171"))
                     .foregroundStyle(.secondary)
             } label: {
-                Label("Web Push", systemImage: "safari")
+                Label(L10n.text("ui_web_push_4ba2056e"), systemImage: "safari")
             }
-            Text("Web Push ist an ein Browser-Abo gebunden und wird deshalb in der Webapp verwaltet.")
+            Text(L10n.text("ui_web_push_is_linked_to_a_browser_d30fb116"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack {
@@ -241,7 +241,7 @@ struct NotificationSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Vorschau") { Task { await preview(.push) } }
+                Button(L10n.text("ui_preview_69337f6d")) { Task { await preview(.push) } }
                     .font(.caption.weight(.semibold))
                     .disabled(previewingChannel != nil)
             }
@@ -334,7 +334,7 @@ struct NotificationSettingsView: View {
             }
             self.draft = response.preference
             errorMessage = nil
-            noticeMessage = "Benachrichtigungseinstellungen gespeichert."
+            noticeMessage = L10n.text("ui_notification_settings_saved_055f8d25")
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -343,7 +343,7 @@ struct NotificationSettingsView: View {
     private func validate(_ preference: NotificationPreference) -> Bool {
         let timezone = preference.timezone.trimmingCharacters(in: .whitespacesAndNewlines)
         guard TimeZone(identifier: timezone) != nil else {
-            errorMessage = "Gib eine gültige IANA-Zeitzone ein, zum Beispiel Europe/Berlin."
+            errorMessage = L10n.text("ui_enter_a_valid_iana_time_zone_such_2cd53870")
             return false
         }
         for fieldKey in [preference.expiryFieldKey, preference.maintenanceFieldKey] {
@@ -352,7 +352,7 @@ struct NotificationSettingsView: View {
                 of: #"^[a-z][a-z0-9_]{0,63}$"#,
                 options: .regularExpression
             ) != nil else {
-                errorMessage = "Die Feldschlüssel dürfen nur Kleinbuchstaben, Zahlen und Unterstriche enthalten."
+                errorMessage = L10n.text("ui_field_keys_may_only_contain_lowercase_letters_6e57f3bd")
                 return false
             }
         }
@@ -365,7 +365,7 @@ struct NotificationSettingsView: View {
         defer { previewingChannel = nil }
         do {
             let response = try await client.previewNotificationChannel(channel)
-            let target = response.preview.target ?? "Kein Ziel konfiguriert"
+            let target = response.preview.target ?? L10n.text("ui_no_destination_configured_25942135")
             let events = response.preview.events
                 .map { "\($0.title): \($0.body)" }
                 .joined(separator: "\n")
@@ -390,36 +390,36 @@ struct NotificationSettingsView: View {
     }
 
     private func channelStatus(_ runtime: NotificationRuntimeChannel?) -> String {
-        guard let runtime else { return "Status unbekannt" }
-        guard runtime.configured else { return "Serverseitig nicht konfiguriert" }
-        return runtime.target ?? "Serverseitig konfiguriert"
+        guard let runtime else { return L10n.text("ui_status_unknown_19b3e98c") }
+        guard runtime.configured else { return L10n.text("ui_not_configured_on_server_041e9095") }
+        return runtime.target ?? L10n.text("ui_configured_on_server_7410f333")
     }
 
     private func eventTitle(_ eventType: NotificationEventType) -> String {
         switch eventType {
-        case .lowStock: "Niedriger Bestand"
-        case .expiry: "Ablaufdatum"
-        case .maintenance: "Wartung"
-        case .returnDue: "Rückgabe fällig"
+        case .lowStock: L10n.text("ui_low_stock_a6c3211e")
+        case .expiry: L10n.text("ui_expiry_fa1bc3d0")
+        case .maintenance: L10n.text("ui_maintenance_854f69bd")
+        case .returnDue: L10n.text("ui_return_due_dcfd59d6")
         }
     }
 
     private func eventDescription(_ eventType: NotificationEventType) -> String {
         switch eventType {
-        case .lowStock: "Meldet, wenn der Bestand den festgelegten Anteil des Minimums erreicht."
-        case .expiry: "Überwacht ein Datumsfeld auf bevorstehende oder überfällige Abläufe."
-        case .maintenance: "Überwacht Wartungsstatus und das konfigurierte Wartungsdatum."
-        case .returnDue: "Meldet fällige Ausleihen, Zuordnungen und Reservierungen."
+        case .lowStock: L10n.text("ui_notifies_when_stock_reaches_the_configured_proportion_79eed1a5")
+        case .expiry: L10n.text("ui_monitors_a_date_field_for_upcoming_or_866e3b92")
+        case .maintenance: L10n.text("ui_monitors_maintenance_status_and_the_configured_maintenance_cbaa3ea5")
+        case .returnDue: L10n.text("ui_notifies_about_due_loans_assignments_and_reservations_cc58cffe")
         }
     }
 
     private func channelTitle(_ channel: NotificationChannel) -> String {
         switch channel {
-        case .email: "E-Mail"
-        case .push: "Web Push"
-        case .slack: "Slack"
-        case .teams: "Microsoft Teams"
-        case .webhook: "Generischer Webhook"
+        case .email: L10n.text("ui_email_2fae6fb3")
+        case .push: L10n.text("ui_web_push_4ba2056e")
+        case .slack: L10n.text("ui_slack_b27fb38b")
+        case .teams: L10n.text("ui_microsoft_teams_a7b52b26")
+        case .webhook: L10n.text("ui_generic_webhook_a9d57a3e")
         }
     }
 

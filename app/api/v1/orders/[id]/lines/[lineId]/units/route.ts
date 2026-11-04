@@ -1,3 +1,4 @@
+import { readHandoverRequest, HandoverBodyError } from "@/lib/loan-handover-contract";
 import { z } from "zod";
 
 import { requirePermission } from "@/lib/api-auth";
@@ -59,8 +60,9 @@ export async function POST(request: Request, context: Context) {
   }
   let payload: unknown;
   try {
-    payload = await request.json();
-  } catch {
+    payload = await readHandoverRequest(request);
+  } catch (error) {
+    if (error instanceof HandoverBodyError) return Response.json({ error: error.message }, { status: error.status });
     return Response.json(
       { error: "Expected a JSON request body." },
       { status: 400 },

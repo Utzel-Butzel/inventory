@@ -43,13 +43,13 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
         var errorDescription: String? {
             switch self {
             case .cameraNotReady:
-                "Die Kamera ist noch nicht bereit. Bitte versuche es erneut."
+                L10n.text("ui_the_camera_is_not_ready_yet_please_8e5e35c7")
             case .captureFailed(let message):
-                "Die Aufnahme wurde nicht abgeschlossen: \(message)"
+                L10n.text("ui_the_capture_did_not_finish_0_481f87ad", message)
             case .processingFailed(let message):
-                "Das Foto konnte nicht aufgenommen werden: \(message)"
+                L10n.text("ui_could_not_take_the_photo_0_ba51abac", message)
             case .missingImageData:
-                "Die Kamera hat kein lesbares Foto geliefert. Bitte versuche es erneut."
+                L10n.text("ui_the_camera_did_not_provide_a_readable_572d20e1")
             }
         }
     }
@@ -62,11 +62,11 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
         var errorDescription: String? {
             switch self {
             case .cameraNotReady:
-                "Die Kamera ist noch nicht bereit. Bitte versuche es erneut."
+                L10n.text("ui_the_camera_is_not_ready_yet_please_8e5e35c7")
             case .unsupported:
-                "Videoaufnahmen werden auf diesem Gerät nicht unterstützt."
+                L10n.text("ui_video_recording_is_not_supported_on_this_73109090")
             case .recordingFailed(let message):
-                "Das Video konnte nicht aufgenommen werden: \(message)"
+                L10n.text("ui_could_not_record_the_video_0_4baa6158", message)
             }
         }
     }
@@ -325,14 +325,14 @@ final class CameraService: NSObject, ObservableObject, @unchecked Sendable {
             let device = Self.videoDevice(position: .back)
                 ?? AVCaptureDevice.default(for: .video)
         else {
-            setState(.unavailable("Auf diesem Gerät wurde keine Kamera gefunden."))
+            setState(.unavailable(L10n.text("ui_no_camera_was_found_on_this_device_58e556fe")))
             return false
         }
 
         do {
             let input = try AVCaptureDeviceInput(device: device)
             guard session.canAddInput(input), session.canAddOutput(photoOutput) else {
-                setState(.unavailable("Die Kamera konnte nicht konfiguriert werden."))
+                setState(.unavailable(L10n.text("ui_could_not_configure_the_camera_095a8068")))
                 return false
             }
             session.addInput(input)
@@ -807,7 +807,7 @@ extension CameraService: AVCaptureFileOutputRecordingDelegate {
         guard recordingSucceeded else {
             try? FileManager.default.removeItem(at: outputFileURL)
             deliverVideoResult(
-                .failure(.recordingFailed(error?.localizedDescription ?? "Unbekannter Fehler"))
+                .failure(.recordingFailed(error?.localizedDescription ?? L10n.text("ui_unknown_error_617580f0")))
             )
             return
         }
@@ -823,7 +823,7 @@ extension CameraService: AVCaptureFileOutputRecordingDelegate {
                 .success(
                     MediaUploadFile(
                         fileURL: outputFileURL,
-                        filename: "Inventar-Video.mov",
+                        filename: L10n.text("ui_video_filename"),
                         mimeType: "video/quicktime"
                     )
                 )

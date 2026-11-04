@@ -1,2 +1,6 @@
-app_identifier("digital.congru.inventory.scan")
+app_identifier("de.polyxo.openinventory")
 team_id("6CXYQL7FXP")
+
+for_platform :android do
+  package_name("de.polyxo.openinventory")
+end

@@ -14,8 +14,8 @@ Unterstützung für Android Gradle Plugin 8.13. Android-Geräte ab Android 8.0
 1. `android/` in Android Studio öffnen und Gradle synchronisieren.
 2. Einen Emulator oder ein Android-Gerät auswählen und `app` starten.
 3. Die HTTPS-Adresse des Inventory-Servers ohne Unterpfad eingeben.
-4. Mit E-Mail/Passwort anmelden oder unter der Expertenoption einen API-Token
-   verwenden. Der Server muss den aktuellen Migrationsstand dieses Repositories
+4. Mit einem auf diesem Server konfigurierten SSO-Anbieter, E-Mail/Passwort
+   oder unter der Expertenoption einem API-Token anmelden. Der Server muss den aktuellen Migrationsstand dieses Repositories
    einschließlich Aktionsketten und Idempotenz unterstützen.
 
 Alternativ vom Repository-Stamm:
@@ -25,7 +25,8 @@ npm run android:check   # JVM-Tests, Android Lint und Debug-APK
 npm run android:build   # Debug-APK erstellen
 npm run android:test    # Gerätetests auf einem laufenden Emulator/Gerät
 npm run android:install # Debug-App installieren
-npm run android:bundle  # unsigniertes Release-App-Bundle
+npm run android:bundle  # signiertes Release-App-Bundle
+npm run android:release # signiertes Bundle plus Signatur-/16-KB-Prüfung
 ```
 
 `ANDROID_HOME` und `JAVA_HOME` können explizit gesetzt werden. Das Node-Skript
@@ -42,17 +43,17 @@ Ergebnisse:
 - Lint: `app/build/reports/lint-results-debug.html`
 - Gerätetests: `app/build/reports/androidTests/connected/debug/index.html`
 
-Release-Artefakte sind absichtlich unsigniert. Für eine Veröffentlichung einen
-eigenen Upload-Schlüssel in Android Studio verwenden, Version und Buildnummer
-erhöhen und das signierte Bundle separat verteilen. Schlüssel gehören nicht
-ins Repository. Die enthaltene GitHub-Actions-Pipeline baut und testet; sie
-veröffentlicht nichts in Google Play.
+Store-ID: `de.polyxo.openinventory`. Release-Builds benötigen den privaten
+Upload-Schlüssel in `android/keystore.properties` oder den dokumentierten
+Umgebungsvariablen. Einrichtung, Backups, Versionierung und Store-Upload stehen
+in [Mobile Release](../docs/mobile-release.md). Die GitHub-Actions-Pipeline
+prüft weiterhin Debug-Builds ohne Release-Schlüssel.
 
 ## Funktionsabgleich
 
 | Bereich der iOS-App | Android-Umsetzung |
 | --- | --- |
-| Anmeldung und Arbeitsbereiche | E-Mail/Passwort, API-Token, Organisationswechsel, Berechtigungen, Abmelden, verschlüsselte Zugangsdaten im Android Keystore |
+| Anmeldung und Arbeitsbereiche | Serverabhängiges Browser-SSO, E-Mail/Passwort, API-Token, gespeicherte Konten auf mehreren Domains, schneller Organisationswechsel, Start mit Lade-/Wiederholungsansicht, verschlüsselter Kontenspeicher mit Android Keystore |
 | Inventar | Suche, Seiten, Typ-/Statusfilter, Favoriten, ausleihbare Einträge, Details, Erstellen, Bearbeiten und Löschen |
 | Stammdaten | Kategorien, Tags, SKU/Barcode/Seriennummer, Standort/GPS, Zahlen, eigene Felder und Ressourcenverweise |
 | Struktur | Hauptressourcen/Varianten, Beziehungen, Stücklisten einschließlich Vererbung und Rücksetzen |
@@ -147,3 +148,22 @@ Zusätzlich auf einem physischen Gerät gegen einen Test-Arbeitsbereich prüfen:
 Emulatortests mit einem simulierten Server ersetzen diese Geräte- und
 Deploymentabnahme nicht. Zum Ausführen der Tests einen Emulator mit genügend
 freiem Speicher verwenden; die Debug-APK enthält mehrere native Architekturen.
+
+## SSO und mehrere Konten
+
+Die App fragt `/api/v1/auth/options` an der eingegebenen Domain ab. Ein Button
+wie „Mit Konglomerat anmelden“ erscheint ausschließlich bei dort konfiguriertem
+Anbieter. Bei Domainwechsel werden bisherige Anbieter sofort ausgeblendet.
+SSO läuft über Android Custom Tabs und denselben Web-Login wie die PWA; ein
+Browser mit Custom-Tabs-Unterstützung muss installiert sein. „Anderes SSO-Konto“
+benötigt einen Browser mit Unterstützung für eine private Custom-Tab-Sitzung.
+
+Über das Kontosymbol im Inventar oder in den Einstellungen lassen sich weitere
+Konten hinzufügen und gespeicherte Konten/Organisationen ohne erneute Anmeldung
+wechseln, solange die jeweiligen Gerätezugänge gültig sind. Abmelden entfernt
+nur das aktive Konto. Bestehende Einzelkonten werden automatisch in den neuen
+verschlüsselten Speicher übernommen. Auch eine laufende SSO-Anmeldung bleibt
+bei einem Prozessneustart erhalten. Netzfehler beim Start zeigen eine
+Wiederholungsansicht und löschen keine gültigen Anmeldedaten.
+
+Servervoraussetzungen und Prüfungen stehen in [Native SSO](../docs/native-sso.md).

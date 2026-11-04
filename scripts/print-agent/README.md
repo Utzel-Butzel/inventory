@@ -39,6 +39,31 @@ The Windows PC must remain awake, online and connected to the powered-on printer
 4. Verify **Online** in Inventory and send one test label. Remove the temporary
    copy of `config.json` and any temporary transfer share after installation.
 
+## Another Inventory website on the same Windows PC
+
+Register a printer on the second website and download its own `config.json`.
+Put that configuration and the PowerShell scripts in a separate source folder,
+then install with a stable, unique name (lowercase letters, digits and hyphens):
+
+```powershell
+.\Install-InventoryPrintAgent.ps1 -InstanceName konglomerat -AllowLocalScripts
+```
+
+Use `-AllowLocalScripts` only with the same explicit policy authorization as for
+the first installation. This creates `Inventory Office Label Printer (konglomerat)`
+and `C:\ProgramData\InventoryPrintAgent-konglomerat`, with a separate credential,
+process lock and journal. The default installation remains unchanged. Both may
+target the same local RAW queue; Windows schedules each complete print job.
+Do not register the same server credential in two instances. Keep the instance
+name and its `pending.json` when updating. For manual diagnostics pass the same
+`-InstanceName konglomerat` to `InventoryPrintAgent.ps1` so its process lock
+matches the scheduled task.
+
+The RAW queue may use the printer's outgoing Bluetooth SPP COM port instead of
+USB. Pair it in Windows first, select that port on the dedicated queue and ensure
+**Use Printer Offline** is disabled. Confirm one physical test label before
+using it for batches; pairing alone does not verify printing.
+
 ## Saved lists and API authentication
 
 Prepared label lists and destination preferences are saved per user and

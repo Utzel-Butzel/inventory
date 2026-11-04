@@ -1,5 +1,7 @@
 "use client";
 
+import { LoanHandoverDialog, LoanHandoverReports } from "@/components/loan-handover-dialog";
+import type { LoanHandoverInput } from "@/lib/loan-handover-contract";
 import { ResourceTitle } from "@/components/resource-title";
 import { ListViewToolbar, ListViewResults, useListView } from "@/components/list-view";
 import { orderListItems } from "@/lib/list-view-contract";
@@ -175,6 +177,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
   } = useFieldArray({ control, name: "lines" });
   const draftLines = useWatch({ control, name: "lines" });
   const createKey = useRef<string | null>(null);
+  const [handoverAction, setHandoverAction] = useState<{ order: Order; line: OrderLine; action: "issue" | "return"; unitId?: string; quantity?: number } | null>(null);
   const movementKeys = useRef(new Map<string, string>());
 
   const load = useCallback(async (quiet = false) => {
@@ -356,14 +359,15 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
     }
   }
 
-  async function move(order: Order, line: OrderLine, action: "issue" | "return") {
+  async function move(order: Order, line: OrderLine, action: "issue" | "return", handover?: LoanHandoverInput, fixedQuantity?: number) {
     const maximum = action === "return" ? line.openReturnQuantity : line.openQuantity;
-    const quantity = Number(movementQuantities[line.id] || maximum);
+    const quantity = fixedQuantity ?? Number(movementQuantities[line.id] || maximum);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > maximum) {
       setError(t("errors.invalidMovementQuantity", { maximum }));
       return;
     }
-    const operation = `${line.id}:${action}:${quantity}`;
+    if (type === "loan" && !handover) { setHandoverAction({ order, line, action, quantity }); return; }
+    const operation = `${line.id}:${action}:${quantity}:${JSON.stringify(handover)}`;
     const key = movementKeys.current.get(operation) ?? randomId();
     movementKeys.current.set(operation, key);
     setActingLineId(line.id);
@@ -377,7 +381,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
             "Content-Type": "application/json",
             "Idempotency-Key": key,
           },
-          body: JSON.stringify({ action, quantity }),
+          body: JSON.stringify({ action, quantity, ...(handover ? { handover } : {}) }),
         },
       );
       movementKeys.current.delete(operation);
@@ -385,6 +389,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
       await load(true);
       setNotice(t(`notices.${action}`, { quantity, name: line.resourceName }));
     } catch (movementError) {
+      if (handover) throw movementError;
       setError(
         movementError instanceof Error ? movementError.message : t("errors.movement"),
       );
@@ -427,8 +432,10 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
     line: OrderLine,
     action: "reserve" | "release" | "issue" | "return",
     unitId: string,
+    handover?: LoanHandoverInput,
   ) {
     if (!unitId) return;
+    if (type === "loan" && (action === "issue" || action === "return") && !handover) { setHandoverAction({ order, line, action, unitId, quantity: 1 }); return; }
     const actionKey = `${line.id}:${unitId}:${action}`;
     setActingUnitKey(actionKey);
     setError(null);
@@ -440,7 +447,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
       }>(`/api/v1/orders/${order.id}/lines/${line.id}/units`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, unitIds: [unitId] }),
+        body: JSON.stringify({ action, unitIds: [unitId], ...(handover ? { handover } : {}) }),
       });
       setUnitPanel(payload.units);
       setSelectedUnitIds((current) => ({
@@ -456,6 +463,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
         unitId;
       setNotice(t(`notices.unit.${action}`, { code: affected }));
     } catch (unitError) {
+      if (handover) throw unitError;
       setError(
         unitError instanceof Error ? unitError.message : t("errors.unitAction"),
       );
@@ -483,6 +491,16 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
 
   return (
     <div className="space-y-5">
+      {handoverAction && <LoanHandoverDialog
+        phase={handoverAction.action === "issue" ? "checkout" : "return"}
+        reportsUrl={`/api/v1/orders/${handoverAction.order.id}/lines/${handoverAction.line.id}/handovers${handoverAction.unitId ? `?unitId=${handoverAction.unitId}` : ""}`}
+        borrower={handoverAction.order.contactName}
+        itemName={`${handoverAction.line.resourceName} · ${handoverAction.quantity ?? 1}`}
+        onClose={() => setHandoverAction(null)}
+        onConfirm={(handover) => handoverAction.unitId
+          ? applyUnitAction(handoverAction.order, handoverAction.line, handoverAction.action, handoverAction.unitId, handover)
+          : move(handoverAction.order, handoverAction.line, handoverAction.action, handover, handoverAction.quantity)} />}
+
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand">
@@ -641,6 +659,7 @@ function TradeOrdersManager({ type }: { type: TradeOrderType }) {
                                   <p className="mt-0.5 text-xs text-muted">
                                     {line.resourceSku || t("fields.noSku")} · {line.trackingMode === "serialized" ? t("tracking.serialized") : line.unitName}
                                   </p>
+                                  {type === "loan" && line.fulfilledQuantity > 0 && <LoanHandoverReports assignmentId={line.id} reportsUrl={`/api/v1/orders/${order.id}/lines/${line.id}/handovers`} />}
                                   {line.trackingMode === "serialized" && line.units.length ? (
                                     <div className="mt-2 flex flex-wrap gap-1.5">
                                       {line.units.map((unit) => (

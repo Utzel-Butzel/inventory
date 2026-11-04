@@ -31,6 +31,7 @@ import {
 import {
   isPinnedReadOnlyDemoMembershipSet,
   organizationAllowsPermission,
+  PUBLIC_DEMO_NATIVE_TOKEN,
   PUBLIC_DEMO_ORGANIZATION_ID,
   PUBLIC_DEMO_USER_ID,
   restrictOrganizationPermissions,
@@ -218,6 +219,24 @@ export async function getRequestIdentity(
   const authorization = request.headers.get("authorization");
   if (authorization?.toLowerCase().startsWith("bearer ")) {
     const rawToken = authorization.slice(7).trim();
+    if (rawToken === PUBLIC_DEMO_NATIVE_TOKEN) {
+      if (!demoAccessEnabled) return null;
+      const [user] = await db.select().from(users).where(and(
+        eq(users.id, PUBLIC_DEMO_USER_ID),
+        eq(users.email, (process.env.DEMO_USER_EMAIL?.trim() || "demo@inventory.invalid").toLowerCase()),
+        eq(users.isActive, true),
+      )).limit(1);
+      if (!user) return null;
+      const identity = await identityForUser({
+        kind: "token", user, requestedOrganizationId,
+        tokenScopes: ["read"],
+        demoOrganizationId: PUBLIC_DEMO_ORGANIZATION_ID,
+        demoOrganizationSlug: process.env.DEMO_ORGANIZATION_SLUG?.trim() || "demo",
+      });
+      // Public demo access never inherits deployment-wide admin privileges and
+      // never creates credentials or updates token usage in the database.
+      return identity ? { ...identity, developerMode: false, isSuperAdmin: false } : null;
+    }
     if (!rawToken.startsWith("inv_") || rawToken.length < 24) return null;
 
     const now = new Date();

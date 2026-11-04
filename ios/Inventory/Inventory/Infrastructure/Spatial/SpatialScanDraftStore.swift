@@ -9,7 +9,7 @@ struct SpatialPendingScan: Codable, Identifiable, Sendable {
     var roomResourceIDs: [UUID: UUID]
     var uploadedScanIDs: Set<UUID>
 
-    var title: String { drafts.first?.structureName ?? drafts.first?.roomName ?? "Raumscan" }
+    var title: String { drafts.first?.structureName ?? drafts.first?.roomName ?? L10n.text("ui_room_scan_c81267f9") }
 }
 
 /// Upload checkpoints are scoped to server, organization and signed-in user.
@@ -50,7 +50,7 @@ struct SpatialScanDraftStore {
     @discardableResult
     func save(_ scan: SpatialPendingScan) throws -> SpatialPendingScan {
         guard scan.contextIdentifier == contextIdentifier else {
-            throw APIClientError.invalidUpload("Dieser Scan gehört zu einem anderen Konto oder einer anderen Organisation.")
+            throw APIClientError.invalidUpload(L10n.text("ui_this_scan_belongs_to_another_account_or_30712c2b"))
         }
         let folder = directory.appendingPathComponent(scan.id.uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

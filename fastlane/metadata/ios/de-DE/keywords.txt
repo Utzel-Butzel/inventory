@@ -1,0 +1,1 @@
+Inventar,Lager,Bestand,Barcode,QR,Ausleihe,Werkstatt,Werkzeuge,Material

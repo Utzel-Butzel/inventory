@@ -29,20 +29,20 @@ struct ResourceAssignmentsView: View {
     var body: some View {
         Group {
             if loading && response == nil {
-                ProgressView("Nutzungen werden geladen …")
+                ProgressView(L10n.text("ui_loading_assignments_8a063f94"))
             } else if response == nil, let errorMessage {
                 ContentUnavailableView {
-                    Label("Nutzungen nicht verfügbar", systemImage: "exclamationmark.triangle")
+                    Label(L10n.text("ui_assignments_unavailable_a19b731f"), systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(errorMessage)
                 } actions: {
-                    Button("Erneut versuchen") { Task { await load() } }
+                    Button(L10n.text("ui_retry_948643cb")) { Task { await load() } }
                 }
             } else {
                 assignmentsList
             }
         }
-        .navigationTitle("Nutzung")
+        .navigationTitle(L10n.text("ui_assignment_1b436405"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -54,7 +54,7 @@ struct ResourceAssignmentsView: View {
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .accessibilityLabel("Aktualisieren")
+                    .accessibilityLabel(L10n.text("ui_refresh_96bf0098"))
                 }
 
                 if canEdit, response != nil {
@@ -62,17 +62,17 @@ struct ResourceAssignmentsView: View {
                         Button {
                             showCreation = true
                         } label: {
-                            Label("Neue Nutzung", systemImage: "person.badge.plus")
+                            Label(L10n.text("ui_new_assignment_945507bd"), systemImage: "person.badge.plus")
                         }
                         Button {
                             showLendingSettings = true
                         } label: {
-                            Label("Ausleihregeln", systemImage: "gearshape")
+                            Label(L10n.text("ui_lending_rules_21ff147e"), systemImage: "gearshape")
                         }
                     } label: {
                         Image(systemName: "plus")
                     }
-                    .accessibilityLabel("Nutzung hinzufügen oder Regeln bearbeiten")
+                    .accessibilityLabel(L10n.text("ui_add_an_assignment_or_edit_rules_6d10c2c6"))
                 }
             }
         }
@@ -127,64 +127,64 @@ struct ResourceAssignmentsView: View {
             Button(action.buttonTitle, role: action.buttonRole) {
                 Task { await perform(action) }
             }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         } message: { action in
             Text(action.message)
         }
         .alert(
-            "Aktion fehlgeschlagen",
+            L10n.text("ui_action_failed_3a20cc65"),
             isPresented: Binding(
                 get: { errorMessage != nil && response != nil },
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
             if let retryMutation {
-                Button("Erneut versuchen") { Task { await perform(retryMutation) } }
+                Button(L10n.text("ui_retry_948643cb")) { Task { await perform(retryMutation) } }
             } else {
-                Button("Erneut laden") { Task { await load() } }
+                Button(L10n.text("ui_retry_1b8b908f")) { Task { await load() } }
             }
-            Button("Abbrechen", role: .cancel) {
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) {
                 retryMutation = nil
                 errorMessage = nil
             }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
     private var assignmentsList: some View {
         List {
             if let response {
-                Section("Verfügbarkeit") {
-                    LabeledContent("Verfügbar") {
+                Section(L10n.text("ui_availability_98360c41")) {
+                    LabeledContent(L10n.text("ui_available_3aa55273")) {
                         Text(response.availability.availableQuantity.formatted())
                             .foregroundStyle(.green)
                     }
                     LabeledContent(
-                        "Aktiv zugeordnet",
+                        L10n.text("ui_currently_assigned_de234b1b"),
                         value: response.availability.activeQuantity.formatted()
                     )
                     if response.availability.reservedQuantity > 0 {
                         LabeledContent(
-                            "Reserviert",
+                            L10n.text("ui_reserved_10814cd6"),
                             value: response.availability.reservedQuantity.formatted()
                         )
                     }
                     LabeledContent(
-                        "Bestandsführung",
+                        L10n.text("ui_stock_tracking_c0237f4d"),
                         value: response.trackingMode == .serialized
-                            ? "Serialisiert"
-                            : "Mengenbestand"
+                            ? L10n.text("ui_serialized_ce661476")
+                            : L10n.text("ui_bulk_8dff8f29")
                     )
                 }
             }
 
-            Section("Aktiv") {
+            Section(L10n.text("ui_active_8163454f")) {
                 if activeAssignments.isEmpty {
                     ContentUnavailableView {
-                        Label("Keine aktive Nutzung", systemImage: "shippingbox.and.arrow.backward")
+                        Label(L10n.text("ui_no_active_assignment_d82ce91c"), systemImage: "shippingbox.and.arrow.backward")
                     } description: {
-                        Text("Dieser Eintrag ist derzeit niemandem zugeordnet oder ausgeliehen.")
+                        Text(L10n.text("ui_this_item_is_not_currently_assigned_or_2d72e37d"))
                     }
                 } else {
                     ForEach(activeAssignments) { assignment in
@@ -200,7 +200,7 @@ struct ResourceAssignmentsView: View {
             }
 
             if !historyAssignments.isEmpty {
-                Section("Verlauf") {
+                Section(L10n.text("ui_history_5fd70311")) {
                     ForEach(historyAssignments) { assignment in
                         assignmentRow(assignment)
                     }
@@ -210,7 +210,7 @@ struct ResourceAssignmentsView: View {
             if !canEdit {
                 Section {
                     Label(
-                        "Du kannst die Nutzungen dieses Eintrags ansehen, aber nicht ändern.",
+                        L10n.text("ui_you_can_view_this_item_s_assignments_f5a30bc6"),
                         systemImage: "lock.fill"
                     )
                     .font(.caption)
@@ -255,7 +255,7 @@ struct ResourceAssignmentsView: View {
                 )
                 if let dueAt = assignment.dueAt {
                     Label(
-                        "Fällig \(dueAt.formatted(date: .abbreviated, time: .shortened))",
+                        L10n.text("ui_due_0_d4df2183", dueAt.formatted(date: .abbreviated, time: .shortened)),
                         systemImage: "clock"
                     )
                     .foregroundStyle(assignment.overdue ? .red : .secondary)
@@ -272,7 +272,7 @@ struct ResourceAssignmentsView: View {
             }
 
             if let completedAt = assignment.completedAt {
-                Text("Abgeschlossen \(completedAt.formatted(date: .abbreviated, time: .shortened))")
+                Text(L10n.text("ui_completed_0_03fa6bc1", completedAt.formatted(date: .abbreviated, time: .shortened)))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -302,7 +302,7 @@ struct ResourceAssignmentsView: View {
                 Button {
                     prepareCheckout(assignment)
                 } label: {
-                    Label("Ausgeben", systemImage: "person.crop.circle.badge.checkmark")
+                    Label(L10n.text("ui_issue_b9eaa08e"), systemImage: "person.crop.circle.badge.checkmark")
                 }
                 .tint(InventoryTheme.accent)
                 .disabled(actingID != nil)
@@ -310,7 +310,7 @@ struct ResourceAssignmentsView: View {
                 Button {
                     requestMutation(assignment, operation: .complete(.returned))
                 } label: {
-                    Label("Zurückgeben", systemImage: "arrow.uturn.backward.circle")
+                    Label(L10n.text("ui_return_96ee1fd4"), systemImage: "arrow.uturn.backward.circle")
                 }
                 .tint(.green)
                 .disabled(actingID != nil)
@@ -319,7 +319,7 @@ struct ResourceAssignmentsView: View {
             Button(role: .destructive) {
                 requestMutation(assignment, operation: .complete(.cancelled))
             } label: {
-                Label("Stornieren", systemImage: "xmark.circle")
+                Label(L10n.text("ui_cancel_81a5f66b"), systemImage: "xmark.circle")
             }
             .disabled(actingID != nil)
         }
@@ -348,7 +348,7 @@ struct ResourceAssignmentsView: View {
     }
 
     private var confirmationTitle: String {
-        pendingConfirmation?.confirmationTitle ?? "Nutzung aktualisieren?"
+        pendingConfirmation?.confirmationTitle ?? L10n.text("ui_update_assignment_6eba3209")
     }
 
     private func prepareCheckout(_ assignment: ResourceAssignment) {
@@ -421,11 +421,11 @@ struct ResourceAssignmentsView: View {
     }
 
     private func statusTitle(_ assignment: ResourceAssignment) -> String {
-        if assignment.overdue { return "Überfällig" }
+        if assignment.overdue { return L10n.text("ui_overdue_a1f573d6") }
         return switch assignment.status {
-        case .active: "Aktiv"
-        case .returned: "Zurückgegeben"
-        case .cancelled: "Storniert"
+        case .active: L10n.text("ui_active_8163454f")
+        case .returned: L10n.text("ui_returned_48d94b8b")
+        case .cancelled: L10n.text("ui_cancelled_0aa6a1fa")
         }
     }
 
@@ -485,8 +485,8 @@ private struct ResourceAssignmentCreateView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Aktion") {
-                    Picker("Art", selection: $kind) {
+                Section(L10n.text("ui_action_a4ad259e")) {
+                    Picker(L10n.text("ui_kind_75df3579"), selection: $kind) {
                         ForEach(availableKinds) { option in
                             Text(kindTitle(option)).tag(option)
                         }
@@ -495,23 +495,23 @@ private struct ResourceAssignmentCreateView: View {
                         configureDates(for: updated)
                     }
 
-                    Picker("Empfängertyp", selection: $recipientMode) {
-                        Text("Externe Person oder Gruppe").tag(AssignmentRecipientMode.label)
+                    Picker(L10n.text("ui_recipient_type_e70d5ca4"), selection: $recipientMode) {
+                        Text(L10n.text("ui_external_person_or_group_5781efb7")).tag(AssignmentRecipientMode.label)
                         if !data.recipients.users.isEmpty {
-                            Text("Registrierter Benutzer").tag(AssignmentRecipientMode.user)
+                            Text(L10n.text("ui_registered_user_6ba4dc71")).tag(AssignmentRecipientMode.user)
                         }
                     }
 
                     if recipientMode == .user {
-                        Picker("Empfänger", selection: $selectedUserID) {
-                            Text("Benutzer auswählen").tag(nil as UUID?)
+                        Picker(L10n.text("ui_recipient_2f3ce594"), selection: $selectedUserID) {
+                            Text(L10n.text("ui_choose_a_user_516adb63")).tag(nil as UUID?)
                             ForEach(data.recipients.users) { user in
                                 Text("\(user.name) · \(user.email)")
                                     .tag(user.id as UUID?)
                             }
                         }
                     } else {
-                        TextField("Name oder Bezeichnung", text: $recipientLabel)
+                        TextField(L10n.text("ui_name_or_description_02845f9b"), text: $recipientLabel)
                             .onChange(of: recipientLabel) { _, value in
                                 if value.count > 240 {
                                     recipientLabel = String(value.prefix(240))
@@ -520,17 +520,17 @@ private struct ResourceAssignmentCreateView: View {
                     }
                 }
 
-                Section("Bestand") {
+                Section(L10n.text("ui_stock_82cb99ec")) {
                     if data.trackingMode == .serialized, kind != .reservation {
-                        Picker("Serialisierte Einheit", selection: $selectedUnitID) {
-                            Text("Einheit auswählen").tag(nil as UUID?)
+                        Picker(L10n.text("ui_serialized_unit_bb072e4f"), selection: $selectedUnitID) {
+                            Text(L10n.text("ui_select_unit_46f7d88b")).tag(nil as UUID?)
                             ForEach(data.availableUnits) { unit in
                                 Text(unitLabel(unit)).tag(unit.id as UUID?)
                             }
                         }
                         if data.availableUnits.isEmpty {
                             Label(
-                                "Es ist keine verfügbare Einheit vorhanden.",
+                                L10n.text("ui_no_unit_is_available_2fdc7ef8"),
                                 systemImage: "exclamationmark.triangle"
                             )
                             .font(.caption)
@@ -538,41 +538,41 @@ private struct ResourceAssignmentCreateView: View {
                         }
                     } else if data.trackingMode == .serialized {
                         Label(
-                            "Die konkrete Einheit wird erst bei der Ausgabe ausgewählt.",
+                            L10n.text("ui_the_specific_unit_is_selected_when_the_a416561a"),
                             systemImage: "info.circle"
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     } else {
-                        TextField("Menge", value: $quantity, format: .number)
+                        TextField(L10n.text("ui_quantity_1bece813"), value: $quantity, format: .number)
                             .keyboardType(.numberPad)
                         LabeledContent(
-                            "Aktuell verfügbar",
+                            L10n.text("ui_currently_available_334b022a"),
                             value: data.availability.availableQuantity.formatted()
                         )
                     }
                 }
 
                 if kind != .assignment {
-                    Section("Zeitraum") {
+                    Section(L10n.text("ui_period_ab0f2fd5")) {
                         DatePicker(
-                            "Beginn",
+                            L10n.text("ui_start_0d95fd6a"),
                             selection: $startsAt,
                             displayedComponents: [.date, .hourAndMinute]
                         )
                         DatePicker(
-                            "Rückgabe",
+                            L10n.text("ui_return_6223760a"),
                             selection: $dueAt,
                             in: startsAt...,
                             displayedComponents: [.date, .hourAndMinute]
                         )
-                        Text("Maximale Ausleihdauer: \(data.lending.maxDurationDays) Tage")
+                        Text(L10n.text("ui_maximum_loan_duration_0_days_f9ee256d", data.lending.maxDurationDays))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                Section("Notiz") {
+                Section(L10n.text("ui_note_74b487d9")) {
                     TextEditor(text: $note)
                         .frame(minHeight: 90)
                         .onChange(of: note) { _, value in
@@ -590,11 +590,11 @@ private struct ResourceAssignmentCreateView: View {
                     }
                 }
             }
-            .navigationTitle("Neue Nutzung")
+            .navigationTitle(L10n.text("ui_new_assignment_945507bd"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
+                    Button(L10n.text("ui_cancel_f7ff1178")) { dismiss() }
                         .disabled(saving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -604,16 +604,16 @@ private struct ResourceAssignmentCreateView: View {
             }
             .interactiveDismissDisabled(saving)
             .alert(
-                "Nutzung konnte nicht angelegt werden",
+                L10n.text("ui_could_not_create_the_assignment_6d27992e"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
                 )
             ) {
-                Button("Erneut versuchen") { Task { await save() } }
-                Button("Abbrechen", role: .cancel) { errorMessage = nil }
+                Button(L10n.text("ui_retry_948643cb")) { Task { await save() } }
+                Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { errorMessage = nil }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }
@@ -647,35 +647,35 @@ private struct ResourceAssignmentCreateView: View {
 
     private var validationMessage: String? {
         if recipientMode == .user, selectedUserID == nil {
-            return "Wähle einen registrierten Benutzer aus."
+            return L10n.text("ui_select_a_registered_user_de45d9a4")
         }
         if recipientMode == .label,
            recipientLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Gib einen Empfänger ein."
+            return L10n.text("ui_enter_a_recipient_35117f58")
         }
         if quantity < 1 || quantity > 2_000_000_000 {
-            return "Die Menge muss eine positive ganze Zahl sein."
+            return L10n.text("ui_the_quantity_must_be_a_positive_whole_5765d774")
         }
         if data.trackingMode == .serialized,
            kind != .reservation,
            selectedUnitID == nil {
-            return "Wähle eine verfügbare serialisierte Einheit aus."
+            return L10n.text("ui_select_an_available_serialized_unit_b5d9b33c")
         }
         if kind != .reservation,
            !allowNegativeStock,
            quantity > data.availability.availableQuantity {
-            return "Die Menge überschreitet den aktuell verfügbaren Bestand."
+            return L10n.text("ui_the_quantity_exceeds_the_currently_available_stock_f81b9ffb")
         }
         if kind == .reservation, startsAt <= Date() {
-            return "Eine Reservierung muss in der Zukunft beginnen."
+            return L10n.text("ui_a_reservation_must_start_in_the_future_20cff5e4")
         }
         if kind != .assignment {
             guard dueAt > startsAt else {
-                return "Die Rückgabe muss nach dem Beginn liegen."
+                return L10n.text("ui_the_return_must_be_after_the_start_4c506d74")
             }
             let duration = dueAt.timeIntervalSince(startsAt) / 86_400
             if duration > Double(data.lending.maxDurationDays) {
-                return "Der Zeitraum überschreitet die maximale Ausleihdauer."
+                return L10n.text("ui_the_period_exceeds_the_maximum_loan_duration_ebb966ad")
             }
         }
         return nil
@@ -683,9 +683,9 @@ private struct ResourceAssignmentCreateView: View {
 
     private var submitTitle: String {
         switch kind {
-        case .checkout: "Ausleihen"
-        case .assignment: "Zuweisen"
-        case .reservation: "Reservieren"
+        case .checkout: L10n.text("ui_loans_ca70339f")
+        case .assignment: L10n.text("ui_assign_3acf9bb7")
+        case .reservation: L10n.text("ui_reserve_8d0f3cd8")
         }
     }
 
@@ -752,52 +752,52 @@ private struct ResourceLendingSettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle("Ausleihen und Reservierungen aktivieren", isOn: $settings.enabled)
+                    Toggle(L10n.text("ui_enable_loans_and_reservations_094f6a1d"), isOn: $settings.enabled)
                 } footer: {
-                    Text("Dauerhafte Zuweisungen bleiben auch bei deaktivierter Ausleihe möglich.")
+                    Text(L10n.text("ui_permanent_assignments_remain_available_when_lending_is_b171943c"))
                 }
 
-                Section("Laufzeit") {
+                Section(L10n.text("ui_duration_956ba2f5")) {
                     Stepper(
-                        "Standard: \(settings.defaultDurationDays) Tage",
+                        L10n.text("ui_default_0_days_b29d6b8b", settings.defaultDurationDays),
                         value: $settings.defaultDurationDays,
                         in: 1 ... settings.maxDurationDays
                     )
                     Stepper(
-                        "Maximum: \(settings.maxDurationDays) Tage",
+                        L10n.text("ui_maximum_0_days_c1993e97", settings.maxDurationDays),
                         value: $settings.maxDurationDays,
                         in: settings.defaultDurationDays ... 3_650
                     )
                 }
 
                 Section {
-                    Toggle("Genehmigung erforderlich", isOn: $settings.approvalRequired)
+                    Toggle(L10n.text("ui_approval_required_251680d9"), isOn: $settings.approvalRequired)
                 }
             }
-            .navigationTitle("Ausleihregeln")
+            .navigationTitle(L10n.text("ui_lending_rules_21ff147e"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
+                    Button(L10n.text("ui_cancel_f7ff1178")) { dismiss() }
                         .disabled(saving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") { Task { await save() } }
+                    Button(L10n.text("ui_save_f6b2ff39")) { Task { await save() } }
                         .disabled(saving)
                 }
             }
             .interactiveDismissDisabled(saving)
             .alert(
-                "Regeln konnten nicht gespeichert werden",
+                L10n.text("ui_could_not_save_the_rules_1c378b1f"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
                 )
             ) {
-                Button("Erneut versuchen") { Task { await save() } }
-                Button("Abbrechen", role: .cancel) { errorMessage = nil }
+                Button(L10n.text("ui_retry_948643cb")) { Task { await save() } }
+                Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { errorMessage = nil }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }
@@ -833,19 +833,19 @@ private struct ReservationCheckoutView: View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("Empfänger", value: assignment.assignee.label)
-                    LabeledContent("Menge", value: quantityLabel(assignment.quantity))
+                    LabeledContent(L10n.text("ui_recipient_2f3ce594"), value: assignment.assignee.label)
+                    LabeledContent(L10n.text("ui_quantity_1bece813"), value: quantityLabel(assignment.quantity))
                 }
-                Section("Serialisierte Einheit") {
-                    Picker("Einheit", selection: $selectedUnitID) {
-                        Text("Einheit auswählen").tag(nil as UUID?)
+                Section(L10n.text("ui_serialized_unit_bb072e4f")) {
+                    Picker(L10n.text("ui_unit_d5ba1549"), selection: $selectedUnitID) {
+                        Text(L10n.text("ui_select_unit_46f7d88b")).tag(nil as UUID?)
                         ForEach(availableUnits) { unit in
                             Text(unitLabel(unit)).tag(unit.id as UUID?)
                         }
                     }
                     if availableUnits.isEmpty {
                         Label(
-                            "Es ist keine verfügbare Einheit vorhanden.",
+                            L10n.text("ui_no_unit_is_available_2fdc7ef8"),
                             systemImage: "exclamationmark.triangle"
                         )
                         .font(.caption)
@@ -853,14 +853,14 @@ private struct ReservationCheckoutView: View {
                     }
                 }
             }
-            .navigationTitle("Reservierung ausgeben")
+            .navigationTitle(L10n.text("ui_issue_reservation_42772f5c"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
+                    Button(L10n.text("ui_cancel_f7ff1178")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Ausgeben") {
+                    Button(L10n.text("ui_issue_b9eaa08e")) {
                         guard let selectedUnitID else { return }
                         onCheckout(selectedUnitID)
                         dismiss()
@@ -899,17 +899,17 @@ private struct PendingResourceAssignmentAction: Sendable {
 
     var confirmationTitle: String {
         switch operation {
-        case .complete(.returned): "Nutzung zurückgeben?"
-        case .complete(.cancelled): "Nutzung stornieren?"
-        case .activate: "Reservierung ausgeben?"
+        case .complete(.returned): L10n.text("ui_return_assignment_ba8be97e")
+        case .complete(.cancelled): L10n.text("ui_cancel_assignment_6fde9eab")
+        case .activate: L10n.text("ui_issue_reservation_6de0eb0c")
         }
     }
 
     var buttonTitle: String {
         switch operation {
-        case .complete(.returned): "Zurückgeben"
-        case .complete(.cancelled): "Stornieren"
-        case .activate: "Ausgeben"
+        case .complete(.returned): L10n.text("ui_return_96ee1fd4")
+        case .complete(.cancelled): L10n.text("ui_cancel_81a5f66b")
+        case .activate: L10n.text("ui_issue_b9eaa08e")
         }
     }
 
@@ -920,20 +920,20 @@ private struct PendingResourceAssignmentAction: Sendable {
     var message: String {
         switch operation {
         case .complete(.returned):
-            "Die Nutzung durch „\(assignment.assignee.label)“ wird als zurückgegeben markiert."
+            L10n.text("ui_the_assignment_to_0_will_be_marked_0e0e138b", assignment.assignee.label)
         case .complete(.cancelled):
-            "Die Nutzung durch „\(assignment.assignee.label)“ wird storniert."
+            L10n.text("ui_the_assignment_to_0_will_be_cancelled_4a81e4df", assignment.assignee.label)
         case .activate:
-            "Die Reservierung für „\(assignment.assignee.label)“ wird jetzt ausgegeben."
+            L10n.text("ui_the_reservation_for_0_will_now_be_5e1d7b17", assignment.assignee.label)
         }
     }
 }
 
 private func kindTitle(_ kind: ResourceAssignmentKind) -> String {
     switch kind {
-    case .checkout: "Ausleihe"
-    case .assignment: "Zuweisung"
-    case .reservation: "Reservierung"
+    case .checkout: L10n.text("ui_loans_7b19cf9d")
+    case .assignment: L10n.text("ui_assignment_2505acf3")
+    case .reservation: L10n.text("ui_reservation_2123f330")
     }
 }
 
@@ -946,7 +946,7 @@ private func kindSymbol(_ kind: ResourceAssignmentKind) -> String {
 }
 
 private func quantityLabel(_ quantity: Int) -> String {
-    quantity == 1 ? "1 Einheit" : "\(quantity) Einheiten"
+    quantity == 1 ? L10n.text("ui_1_unit_f5489a1b") : L10n.text("ui_units_0_516a0351", quantity)
 }
 
 private func unitLabel(_ unit: AssignmentAvailableUnit) -> String {

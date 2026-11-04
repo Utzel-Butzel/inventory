@@ -5,11 +5,36 @@ import { fileURLToPath } from "node:url";
 
 import { createInstance } from "i18next";
 
-import i18nConfig, { UI_NAMESPACES } from "../i18n.config.ts";
+import i18nConfig, { UI_NAMESPACES, resolveUiLanguage } from "../i18n.config.ts";
 
 const localeRoot = fileURLToPath(
   new URL("../app/i18n/locales/", import.meta.url),
 );
+
+test("browser preferences select DE or EN with an English fallback", () => {
+  for (const [header, expected] of [
+    ["de-DE,de;q=0.9,en;q=0.8", "de"],
+    ["de-AT", "de"],
+    ["de-CH", "de"],
+    ["en-GB,de;q=0.9", "en"],
+    ["de;q=0.5,en;q=0.9", "en"],
+    ["fr-FR,en;q=0.9,de;q=0.8", "en"],
+    ["fr-FR,de;q=0.9,en;q=0.8", "de"],
+    ["fr-FR,es;q=0.9", "en"],
+    ["fr-FR,de;q=0", "en"],
+    ["de;q=invalid", "en"],
+    ["de;q=-1", "en"],
+    ["de;q=2", "en"],
+    ["de;q=", "en"],
+    ["*", "en"],
+    ["", "en"],
+    [null, "en"],
+  ]) assert.equal(resolveUiLanguage(null, header), expected, String(header));
+
+  assert.equal(resolveUiLanguage("en", "de-DE"), "en");
+  assert.equal(resolveUiLanguage("de", "en-US"), "de");
+  assert.equal(resolveUiLanguage("fr", "de-DE"), "de");
+});
 
 async function readNamespace(language, namespace) {
   const contents = await readFile(

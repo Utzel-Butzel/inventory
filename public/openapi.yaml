@@ -878,6 +878,138 @@ paths:
           headers:
             Retry-After:
               schema: { type: integer, minimum: 1 }
+  /auth/options:
+    get:
+      tags: [Authentication]
+      operationId: getNativeAuthOptions
+      summary: Get sign-in methods configured on this deployment
+      description: Public display metadata only. Provider names and IDs come from this server's configuration. No credentials are exposed; responses are never cached.
+      security: []
+      responses:
+        "200":
+          description: Available sign-in methods
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [passwordEnabled, browserSignIn, providers]
+                properties:
+                  passwordEnabled:
+                    type: boolean
+                  browserSignIn:
+                    type: boolean
+                  providers:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+  /auth/browser/start:
+    post:
+      tags: [Authentication]
+      summary: Start native browser sign-in using the existing web SSO providers
+      security: []
+      description: Requires an external SSO provider configured on this deployment. Creates a ten-minute PKCE-bound handoff. The native app opens /api/v1/auth/browser/authorize with the returned requestId. Callback destinations are fixed by the server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [codeChallenge, codeChallengeMethod, state]
+              properties:
+                codeChallenge: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+                codeChallengeMethod: { type: string, const: S256 }
+                state: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+                deviceName: { type: string, minLength: 1, maxLength: 80, default: iOS }
+      responses:
+        "201":
+          description: Browser handoff created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requestId, expiresAt]
+                properties:
+                  requestId: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+                  expiresAt: { type: string, format: date-time }
+        "400": { description: Invalid sign-in request }
+        "413": { description: Request exceeds 4096 bytes }
+        "429": { description: Too many sign-in attempts }
+  /auth/browser/authorize:
+    get:
+      tags: [Authentication]
+      summary: Open native sign-in in the system authentication browser
+      security: []
+      description: Binds a host-only browser cookie, redirects through the existing web login if needed, and displays explicit account and organization confirmation. No bearer token is accepted as browser authentication.
+      parameters:
+        - in: query
+          name: request
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+      responses:
+        "200": { description: HTML account confirmation }
+        "303": { description: Continue through web login }
+        "403": { description: Invalid browser binding or unavailable account }
+        "410": { description: Expired or already approved handoff }
+  /auth/browser/complete:
+    post:
+      tags: [Authentication]
+      summary: Confirm or cancel a native browser handoff
+      security: []
+      description: Requires the bound browser cookie, same-origin Origin header, CSRF value from the confirmation form and a valid web session for approval. Redirects only to de.polyxo.openinventory://auth/callback with state and a one-time code or access_denied. Codes expire after sixty seconds.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [requestId, csrf, decision]
+              properties:
+                requestId: { type: string }
+                csrf: { type: string }
+                decision: { type: string, enum: [allow, deny] }
+                organizationId: { type: string, format: uuid }
+                userId: { type: string, format: uuid }
+      responses:
+        "303": { description: Return one-time code or cancellation to the native app }
+        "403": { description: Invalid confirmation or access denied }
+        "409": { description: Handoff already used }
+        "410": { description: Expired or already approved handoff }
+  /auth/browser/exchange:
+    post:
+      tags: [Authentication]
+      summary: Exchange a native sign-in code with its original PKCE verifier
+      security: []
+      description: Atomically consumes the server-bound code and issues a revocable user-bound token. Rechecks active user, session version, membership and current role policy. Invalid verifiers do not consume the code; successful codes cannot be replayed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestId, code, codeVerifier]
+              properties:
+                requestId: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+                code: { type: string, pattern: '^[A-Za-z0-9_-]{43}$' }
+                codeVerifier: { type: string, pattern: '^[A-Za-z0-9._~-]{43,128}$' }
+      responses:
+        "201":
+          description: Revocable native device session issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NativeLoginResponse" }
+        "400": { description: Invalid exchange request }
+        "401": { description: Invalid or expired code or session }
+        "403": { description: Current account or role cannot connect a native app }
+        "404": { description: Organization membership is no longer available }
+        "429": { description: Too many exchange attempts }
   /auth/logout:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -2292,6 +2424,14 @@ paths:
       description: Creates up to 1,000 items from a raw CSV body of at most 5 MB. Rows are validated independently, existing items are never overwritten, and structured fields may contain JSON. The same Idempotency-Key and identical file can be retried safely.
       parameters:
         - { $ref: "#/components/parameters/RequiredIdempotencyKey" }
+        - in: query
+          name: system
+          schema: { type: string, enum: [open-inventory, snipe-it, homebox], default: open-inventory }
+          description: Source CSV schema. External CSV also accepts semicolon or tab delimiters. Extra columns are retained in notes; attachments and relationships are not migrated.
+        - in: query
+          name: currency
+          schema: { type: string, pattern: "^[A-Za-z]{3}$", default: EUR }
+          description: Currency for external purchase prices without a currency column. Included in the external import idempotency hash.
       requestBody:
         required: true
         content:
@@ -2299,7 +2439,7 @@ paths:
             schema:
               type: string
               format: binary
-              description: UTF-8 CSV with a required name header. See CsvImportResponse for row-level outcomes.
+              description: UTF-8 CSV using the selected source schema (native CSV requires name). See CsvImportResponse for row-level outcomes.
           application/csv:
             schema: { type: string, format: binary }
           application/vnd.ms-excel:
@@ -2335,6 +2475,10 @@ paths:
       description: Returns up to 100,000 inventory records. CSV remains the default and is BOM-prefixed with potential spreadsheet formulas escaped. Excel includes formatted, filterable inventory and variant sheets; PDF is a compact printable report.
       parameters:
         - in: query
+          name: system
+          schema: { type: string, enum: [open-inventory, snipe-it, homebox], default: open-inventory }
+          description: Destination CSV schema. External systems require format=csv. Snipe-IT requires one unit per entry; Homebox portable text limits are checked before download.
+        - in: query
           name: format
           schema: { type: string, enum: [csv, xlsx, pdf], default: csv }
           description: Download format. Omitting the parameter preserves the existing CSV response.
@@ -2358,6 +2502,7 @@ paths:
               schema: { type: string, format: binary }
         "400": { description: "Unsupported export format" }
         "413": { description: "The workspace contains more than 100,000 records" }
+        "422": { description: "Inventory cannot be represented in the selected destination format; no partial file is returned" }
   /resources/batch:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -3529,6 +3674,40 @@ paths:
         "200":
           description: Loans and reservations with resource context and management capability
         "403": { description: Assignment read access is required }
+  /assignments/{assignmentId}/handovers:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: assignmentId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Assignments]
+      summary: Read immutable checkout and return reports or download their PDF
+      description: Requires assignments.read for the associated item in the current organization. Responses must not be cached.
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, pdf], default: json }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [de, en], default: en }
+      responses:
+        "200":
+          description: Stored reports or their PDF, including condition photos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: "#/components/schemas/LoanHandoverDocument" }
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { description: Insufficient permissions }
+        "404": { description: Assignment not found, or PDF requested without any report }
+        "422": { description: Invalid assignment ID }
   /assignments/{assignmentId}:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -4131,6 +4310,48 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Invalid lifecycle transition or duplicate tracking number }
         "422": { description: Invalid shipment details or timestamp }
+  /orders/{orderId}/lines/{lineId}/handovers:
+    parameters:
+      - { $ref: "#/components/parameters/OrganizationId" }
+      - name: orderId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: lineId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Orders]
+      summary: Read immutable checkout and return reports or download their PDF
+      description: Requires orders.read in the current organization. Includes separate reports for partial issues and returns. Responses must not be cached.
+      parameters:
+        - name: unitId
+          in: query
+          schema: { type: string, format: uuid }
+          description: Limit reports to this serialized unit.
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, pdf], default: json }
+        - name: locale
+          in: query
+          schema: { type: string, enum: [de, en], default: en }
+      responses:
+        "200":
+          description: Stored reports or their PDF, including condition photos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: "#/components/schemas/LoanHandoverDocument" }
+            application/pdf:
+              schema: { type: string, format: binary }
+        "403": { description: Insufficient permissions }
+        "404": { description: Loan line not found, or PDF requested without any report }
+        "422": { description: Invalid order, line or unit ID }
   /orders/{orderId}/lines/{lineId}/movements:
     parameters:
       - { $ref: "#/components/parameters/OrganizationId" }
@@ -9600,6 +9821,7 @@ components:
       additionalProperties: false
       required: [action, quantity]
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         action: { type: string, enum: [issue, return] }
         quantity: { type: integer, minimum: 1, maximum: 2000000000 }
         occurredAt: { type: string, format: date-time }
@@ -9649,6 +9871,7 @@ components:
       additionalProperties: false
       required: [action, unitIds]
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         action: { type: string, enum: [reserve, release, issue, return] }
         unitIds:
           type: array
@@ -11187,11 +11410,70 @@ components:
             label: { type: string, minLength: 1, maxLength: 240 }
       discriminator:
         propertyName: type
+    LoanHandoverInput:
+      type: object
+      additionalProperties: false
+      required: [condition, givenBy, receivedBy, confirmed]
+      description: Immutable handover evidence saved atomically with checkout or return. Only supported for loans. Damage and missing accessories require notes. Returns must include every accessory from checkout. The names are recorded attestations, not independently authenticated signatures. Existing clients may omit checkout evidence; a documented checkout requires return evidence and cannot be cancelled. Request bodies are limited to 6000000 bytes.
+      properties:
+        condition: { type: string, enum: [good, worn, damaged] }
+        givenBy: { type: string, minLength: 1, maxLength: 240 }
+        receivedBy: { type: string, minLength: 1, maxLength: 240 }
+        confirmed: { type: boolean, const: true }
+        notes: { type: string, maxLength: 4000, default: "" }
+        photos:
+          type: array
+          maxItems: 4
+          items: { type: string, maxLength: 1400000, description: Base64 JPEG/PNG/WebP data URL. Decoded and stored as a metadata-free JPEG snapshot. }
+        accessories:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [name, present]
+            additionalProperties: false
+            properties:
+              name: { type: string, minLength: 1, maxLength: 160 }
+              present: { type: boolean }
+    LoanHandoverDocument:
+      type: object
+      description: Server-generated immutable report. Contains all LoanHandoverInput fields plus the following snapshot fields.
+      required: [version, phase, assignmentId, resourceId, resourceName, quantity, borrower, occurredAt, recordedAt, recordedBy, condition, givenBy, receivedBy, confirmed, accessories, photos, notes]
+      properties:
+        condition: { type: string, enum: [good, worn, damaged] }
+        givenBy: { type: string }
+        receivedBy: { type: string }
+        confirmed: { type: boolean, const: true }
+        notes: { type: string }
+        photos: { type: array, items: { type: string } }
+        accessories:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              present: { type: boolean }
+        version: { type: integer, const: 1 }
+        phase: { type: string, enum: [checkout, return] }
+        assignmentId: { type: [string, "null"], format: uuid }
+        orderId: { type: string, format: uuid }
+        orderLineId: { type: string, format: uuid }
+        movementId: { type: string, format: uuid }
+        resourceId: { type: string, format: uuid }
+        resourceName: { type: string }
+        unitCode: { type: [string, "null"] }
+        quantity: { type: integer }
+        borrower: { type: string }
+        dueAt: { type: [string, "null"], format: date-time }
+        occurredAt: { type: string, format: date-time }
+        recordedAt: { type: string, format: date-time }
+        recordedBy: { type: string }
     InventoryAssignmentInput:
       type: object
       required: [kind, recipient]
       additionalProperties: false
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         kind: { type: string, enum: [checkout, assignment, reservation] }
         quantity: { type: integer, minimum: 1, maximum: 2000000000, default: 1 }
         stockUnitId: { type: [string, "null"], format: uuid, description: Required for serialized stock and omitted for bulk stock. }
@@ -11204,6 +11486,7 @@ components:
       required: [status]
       additionalProperties: false
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         status: { type: string, enum: [returned, cancelled] }
         completedAt: { type: string, format: date-time }
         note: { type: string, maxLength: 20000 }
@@ -11212,6 +11495,7 @@ components:
       required: [action]
       additionalProperties: false
       properties:
+        handover: { $ref: "#/components/schemas/LoanHandoverInput" }
         action: { type: string, const: checkout }
         stockUnitId: { type: [string, "null"], format: uuid, description: Required when the reserved item uses serialized tracking. }
         checkedOutAt: { type: string, format: date-time }
@@ -11235,6 +11519,8 @@ components:
         kind: { type: string, enum: [checkout, assignment, reservation] }
         status: { type: string, enum: [active, returned, cancelled] }
         stockApplied: { type: boolean }
+        checkoutDocumentedAt: { type: [string, "null"], format: date-time }
+        returnDocumentedAt: { type: [string, "null"], format: date-time }
         overdue: { type: boolean, description: Derived from an active checkout whose due date has passed. }
         quantity: { type: integer, minimum: 1 }
         assignee:

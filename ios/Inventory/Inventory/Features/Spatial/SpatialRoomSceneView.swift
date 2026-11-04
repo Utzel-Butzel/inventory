@@ -20,16 +20,16 @@ struct SpatialRoomSceneView: View {
             if let manifest {
                 sceneContent(manifest)
             } else if loading {
-                ProgressView("3D-Raum wird aufgebaut …")
+                ProgressView(L10n.text("ui_building_3d_room_8c495ea3"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(InventoryTheme.canvas)
             } else {
                 ContentUnavailableView {
-                    Label("3D-Raum nicht verfügbar", systemImage: "cube.transparent")
+                    Label(L10n.text("ui_3d_room_unavailable_ecd46a49"), systemImage: "cube.transparent")
                 } description: {
-                    Text(errorMessage ?? "Die Raumdaten konnten nicht geladen werden.")
+                    Text(errorMessage ?? L10n.text("ui_could_not_load_room_data_57f4a63a"))
                 } actions: {
-                    Button("Erneut laden") { Task { await loadScene() } }
+                    Button(L10n.text("ui_retry_1b8b908f")) { Task { await loadScene() } }
                         .buttonStyle(.borderedProminent)
                         .tint(InventoryTheme.accent)
                 }
@@ -56,11 +56,11 @@ struct SpatialRoomSceneView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     sceneBadge(
-                        "Revision \(manifest.scan.revision)",
+                        L10n.text("ui_revision_0_cbe59b6b", manifest.scan.revision),
                         systemImage: "clock.arrow.circlepath"
                     )
                     sceneBadge(
-                        "\(manifest.placements.count) Gegenstände",
+                        L10n.text("ui_items_0_f6eacc92", manifest.placements.count),
                         systemImage: "shippingbox.fill"
                     )
                     Spacer(minLength: 0)
@@ -93,7 +93,7 @@ struct SpatialRoomSceneView: View {
         HStack(spacing: 9) {
             Image(systemName: "hand.draw.fill")
                 .foregroundStyle(InventoryTheme.accent)
-            Text("Ziehen zum Drehen · zwei Finger zum Zoomen")
+            Text(L10n.text("ui_drag_to_rotate_use_two_fingers_to_cf2b960f"))
                 .font(.caption.weight(.medium))
                 .lineLimit(2)
             Button(action: dismissNavigationHint) {
@@ -101,7 +101,7 @@ struct SpatialRoomSceneView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Hinweis schließen")
+            .accessibilityLabel(L10n.text("ui_dismiss_hint_d4481ff4"))
         }
         .foregroundStyle(InventoryTheme.ink)
         .padding(.leading, 12)
@@ -162,8 +162,8 @@ struct SpatialRoomSceneView: View {
 
     private var cameraControls: some View {
         HStack(spacing: 4) {
-            cameraButton("Perspektive zurücksetzen", systemImage: "view.3d", command: .reset)
-            cameraButton("Von oben ansehen", systemImage: "square.3.layers.3d.top.filled", command: .top)
+            cameraButton(L10n.text("ui_reset_perspective_3a5b3332"), systemImage: "view.3d", command: .reset)
+            cameraButton(L10n.text("ui_view_from_above_1619ce28"), systemImage: "square.3.layers.3d.top.filled", command: .top)
         }
         .padding(4)
         .background(.ultraThinMaterial, in: Capsule())
@@ -223,7 +223,7 @@ struct SpatialRoomSceneView: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Auswahl aufheben")
+            .accessibilityLabel(L10n.text("ui_clear_selection_f4d1e48c"))
         }
     }
 
@@ -361,7 +361,7 @@ private struct RoomSceneViewport: UIViewRepresentable {
             view.preferredFramesPerSecond = 60
             view.isPlaying = false
             view.isAccessibilityElement = true
-            view.accessibilityLabel = "Interaktives 3D-Modell von \(parent.manifest.room.name)"
+            view.accessibilityLabel = L10n.text("ui_interactive_3d_model_of_0_92baf3b6", parent.manifest.room.name)
             applySelection(parent.selectedResourceID)
             applyCamera(.reset, animated: false)
         }

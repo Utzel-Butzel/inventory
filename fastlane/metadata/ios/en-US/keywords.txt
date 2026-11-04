@@ -1,0 +1,1 @@
+inventory,stock,barcode,QR,loans,workshop,tools,materials,assets

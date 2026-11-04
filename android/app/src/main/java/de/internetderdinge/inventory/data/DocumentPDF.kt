@@ -1,5 +1,8 @@
 package de.internetderdinge.inventory.data
 
+import de.internetderdinge.inventory.L10n
+import de.internetderdinge.inventory.R
+
 import android.content.Context
 import android.graphics.*
 import android.graphics.pdf.PdfDocument
@@ -24,7 +27,7 @@ object DocumentPDF {
         try {
                 pages.forEachIndexed { index, uri ->
                     val photo = Imaging.import(context, uri, 2200)
-                    val bitmap = BitmapFactory.decodeFile(photo.file.path) ?: error("Dokumentseite konnte nicht gelesen werden.")
+                    val bitmap = BitmapFactory.decodeFile(photo.file.path) ?: error(L10n.text(R.string.ui_could_not_read_document_page_2727c50b))
                     try {
                         val result = recognizer.process(InputImage.fromBitmap(bitmap, 0)).await()
                         val page = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, index + 1).create())
@@ -45,7 +48,7 @@ object DocumentPDF {
                     } finally { bitmap.recycle(); photo.file.delete() }
                 }
                 target.outputStream().use { pdf.writeTo(it) }
-            require(target.length() in 1..(50L * 1024 * 1024)) { "Der Dokumentscan ist zu groß." }
+            require(target.length() in 1..(50L * 1024 * 1024)) { L10n.text(R.string.ui_the_document_scan_is_too_large_b5171628) }
             Upload(target, "Inventar-Dokumentscan.pdf", "application/pdf")
         } catch (e: Exception) { target.delete(); throw e }
         finally { pdf.close(); recognizer.close() }

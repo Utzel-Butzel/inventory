@@ -19,7 +19,7 @@ struct BillOfMaterialsView: View {
     var body: some View {
         Group {
             if loading && billOfMaterials == nil {
-                ProgressView("Stückliste wird geladen …")
+                ProgressView(L10n.text("ui_loading_bill_of_materials_0d65fd81"))
             } else if let billOfMaterials {
                 List {
                     summarySection(billOfMaterials)
@@ -34,39 +34,39 @@ struct BillOfMaterialsView: View {
                 }
             } else {
                 ContentUnavailableView(
-                    "Stückliste nicht verfügbar",
+                    L10n.text("ui_bill_of_materials_unavailable_18a703b5"),
                     systemImage: "list.bullet.rectangle",
-                    description: Text(errorMessage ?? "Die Stückliste konnte nicht geladen werden.")
+                    description: Text(errorMessage ?? L10n.text("ui_unable_to_load_the_bill_of_materials_6755a257"))
                 )
             }
         }
         .environment(\.editMode, $editMode)
-        .navigationTitle("Stückliste")
+        .navigationTitle(L10n.text("ui_bill_of_materials_2a456394"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .toolbar { editorToolbar }
         .sheet(isPresented: $showResourcePicker) {
             NavigationStack {
                 ResourcePickerView(
-                    title: "Komponente auswählen",
+                    title: L10n.text("ui_select_component_cf8fc1e1"),
                     excludedResourceIDs: excludedResourceIDs
                 ) { add($0) }
             }
         }
         .confirmationDialog(
-            "Lokale Stücklistenänderungen zurücksetzen?",
+            L10n.text("ui_reset_local_bill_of_materials_changes_8683af22"),
             isPresented: $confirmReset,
             titleVisibility: .visible
         ) {
-            Button("Auf Primärstückliste zurücksetzen", role: .destructive) {
+            Button(L10n.text("ui_reset_to_primary_bill_of_materials_9bb2ae92"), role: .destructive) {
                 Task { await resetOverrides() }
             }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         } message: {
-            Text("Danach gelten wieder alle Komponenten der Primärvariante.")
+            Text(L10n.text("ui_all_components_from_the_primary_variant_will_1d8e655e"))
         }
         .alert(
-            "Stückliste konnte nicht geändert werden",
+            L10n.text("ui_could_not_change_bill_of_materials_353dea5d"),
             isPresented: Binding(
                 get: { errorMessage != nil && billOfMaterials != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -74,19 +74,19 @@ struct BillOfMaterialsView: View {
         ) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
     private func summarySection(_ billOfMaterials: BillOfMaterialsResponse) -> some View {
-        Section("Montage") {
+        Section(L10n.text("ui_assembly_121e2522")) {
             LabeledContent(
-                "Baubare Einheiten",
+                L10n.text("ui_buildable_units_c1b5b0fd"),
                 value: billOfMaterials.buildableQuantity.formatted()
             )
-            LabeledContent("Komponenten", value: drafts.count.formatted())
+            LabeledContent(L10n.text("ui_components_8934293b"), value: drafts.count.formatted())
             if drafts.isEmpty {
-                Text("Füge Komponenten hinzu, um eine Stückliste für diesen Eintrag zu erstellen.")
+                Text(L10n.text("ui_add_components_to_create_a_bill_of_d79b8ac6"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -96,18 +96,18 @@ struct BillOfMaterialsView: View {
     private func inheritanceSection(
         _ inheritance: BillOfMaterialsInheritance
     ) -> some View {
-        Section("Vererbung") {
+        Section(L10n.text("ui_inheritance_21a5917e")) {
             NavigationLink {
                 ResourceDetailLoaderView(resourceID: inheritance.primaryResourceId)
             } label: {
-                LabeledContent("Primäre Variante", value: inheritance.primaryName)
+                LabeledContent(L10n.text("ui_primary_variant_45e0c6c2"), value: inheritance.primaryName)
             }
             LabeledContent(
-                "Lokale Abweichungen",
+                L10n.text("ui_local_overrides_ee020cda"),
                 value: inheritance.overrideCount.formatted()
             )
             if canEdit && inheritance.overrideCount > 0 && !editMode.isEditing {
-                Button("Abweichungen zurücksetzen", role: .destructive) {
+                Button(L10n.text("ui_reset_overrides_fff71c61"), role: .destructive) {
                     confirmReset = true
                 }
                 .disabled(saving)
@@ -117,7 +117,7 @@ struct BillOfMaterialsView: View {
 
     @ViewBuilder
     private var componentsSection: some View {
-        Section("Komponenten") {
+        Section(L10n.text("ui_components_8934293b")) {
             if editMode.isEditing {
                 ForEach($drafts) { $draft in
                     componentEditor($draft)
@@ -128,7 +128,7 @@ struct BillOfMaterialsView: View {
                 Button {
                     showResourcePicker = true
                 } label: {
-                    Label("Komponente hinzufügen", systemImage: "plus")
+                    Label(L10n.text("ui_add_component_16e8ac36"), systemImage: "plus")
                 }
                 .disabled(drafts.count >= 100 || saving)
             } else {
@@ -154,16 +154,16 @@ struct BillOfMaterialsView: View {
                     }
                 }
                 Spacer()
-                Text("Verfügbar: \(draft.wrappedValue.availableQuantity)")
+                Text(L10n.text("ui_available_0_e6a9045f", draft.wrappedValue.availableQuantity))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             Stepper(
-                "Menge pro Einheit: \(draft.wrappedValue.quantityPerAssembly)",
+                L10n.text("ui_quantity_per_unit_0_c5b93356", draft.wrappedValue.quantityPerAssembly),
                 value: draft.quantityPerAssembly,
                 in: 1...2_000_000_000
             )
-            TextField("Notiz (optional)", text: draft.note, axis: .vertical)
+            TextField(L10n.text("ui_note_optional_337da4d8"), text: draft.note, axis: .vertical)
                 .lineLimit(1...4)
         }
         .padding(.vertical, 4)
@@ -195,7 +195,7 @@ struct BillOfMaterialsView: View {
     private func componentSubtitle(_ draft: BillOfMaterialsDraft) -> String {
         [
             draft.sku,
-            "\(draft.availableQuantity) verfügbar",
+            L10n.text("ui_0_available_7a17a695", draft.availableQuantity),
             draft.originLabel,
         ]
         .compactMap { $0 }
@@ -207,18 +207,18 @@ struct BillOfMaterialsView: View {
         if canEdit, billOfMaterials != nil {
             if editMode.isEditing {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { cancelEditing() }
+                    Button(L10n.text("ui_cancel_f7ff1178")) { cancelEditing() }
                         .disabled(saving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Speichert …" : "Speichern") {
+                    Button(saving ? L10n.text("ui_saving_4e85ab63") : L10n.text("ui_save_f6b2ff39")) {
                         Task { await save() }
                     }
                     .disabled(saving || drafts == baselineDrafts)
                 }
             } else {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Bearbeiten") { beginEditing() }
+                    Button(L10n.text("ui_edit_84e45ee7")) { beginEditing() }
                 }
             }
         }
@@ -364,8 +364,8 @@ private struct BillOfMaterialsDraft: Identifiable, Equatable {
 
     var originLabel: String? {
         switch origin {
-        case "inherited": "Geerbt"
-        case "override": "Abweichung"
+        case "inherited": L10n.text("ui_inherited_a7d9f59b")
+        case "override": L10n.text("ui_override_f172ef3a")
         default: nil
         }
     }

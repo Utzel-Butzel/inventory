@@ -1,7 +1,17 @@
 # Run once in an elevated PowerShell after putting config.json beside this file.
-param([string]$Source = $PSScriptRoot, [switch]$AllowLocalScripts)
+param(
+    [string]$Source = $PSScriptRoot,
+    [switch]$AllowLocalScripts,
+    [ValidatePattern('^[a-z0-9][a-z0-9-]{0,31}$')][string]$InstanceName = 'default'
+)
 $ErrorActionPreference='Stop'
-$target=Join-Path $env:ProgramData 'InventoryPrintAgent'
+$directoryName='InventoryPrintAgent'
+$taskName='Inventory Office Label Printer'
+if ($InstanceName -ne 'default') {
+    $directoryName += '-' + $InstanceName
+    $taskName += ' (' + $InstanceName + ')'
+}
+$target=Join-Path $env:ProgramData $directoryName
 $null=New-Item -ItemType Directory -Path $target -Force
 # The agent credential only permits polling/receipting this single print queue.
 # Keep it readable by administrators and the service account only.
@@ -20,10 +30,10 @@ $printer=Get-Printer -Name $config.printer -ErrorAction Stop
 if($printer.Name -notmatch 'P[ _-]?710BT'){throw 'Select the dedicated PT-P710BT RAW queue.'}
 # Opt-in only: enable local scripts for this task process, never machine-wide.
 $policyArgument=if($AllowLocalScripts){' -ExecutionPolicy RemoteSigned'}else{''}
-$action=New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument ('-NoProfile -NonInteractive'+$policyArgument+' -File "'+$target+'\InventoryPrintAgent.ps1"')
+$action=New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument ('-NoProfile -NonInteractive'+$policyArgument+' -File "'+$target+'\InventoryPrintAgent.ps1" -InstanceName '+$InstanceName)
 $trigger=New-ScheduledTaskTrigger -AtStartup
 $settings=New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 $principal=New-ScheduledTaskPrincipal -UserId 'S-1-5-19' -LogonType ServiceAccount -RunLevel Limited
-$null=Register-ScheduledTask -TaskName 'Inventory Office Label Printer' -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force
-Start-ScheduledTask -TaskName 'Inventory Office Label Printer'
+$null=Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force
+Start-ScheduledTask -TaskName $taskName
 Write-Host 'Inventory print agent installed. Verify its online status in Inventory.'

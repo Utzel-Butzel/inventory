@@ -18,17 +18,17 @@ public enum APIClientError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .invalidServerURL:
-            return "The inventory server URL is invalid."
+            return L10n.text("ui_the_inventory_server_url_is_invalid_7e73745f")
         case .missingCredential:
-            return "Kein Zugang gespeichert."
+            return L10n.text("ui_no_credentials_saved_01341ace")
         case .invalidRequest(let message), .invalidUpload(let message):
             return message
         case .transport(let message):
-            return "The inventory server could not be reached: \(message)"
+            return L10n.text("ui_the_inventory_server_could_not_be_reached_fcfdef00", message)
         case .invalidResponse:
-            return "The inventory server returned an invalid response."
+            return L10n.text("ui_the_inventory_server_returned_an_invalid_response_023ba2d2")
         case .decoding(let message):
-            return "The inventory response could not be read: \(message)"
+            return L10n.text("ui_the_inventory_response_could_not_be_read_e05f9140", message)
         case .http(_, let message, _, _):
             return message
         }
@@ -117,10 +117,10 @@ public final class APIClient: Sendable {
         pageSize: Int = 24
     ) async throws -> ResourceListResponse {
         guard page >= 1 else {
-            throw APIClientError.invalidRequest("Page must be at least one.")
+            throw APIClientError.invalidRequest(L10n.text("ui_page_must_be_at_least_one_c779a482"))
         }
         guard (1 ... 100).contains(pageSize) else {
-            throw APIClientError.invalidRequest("Page size must be between one and 100.")
+            throw APIClientError.invalidRequest(L10n.text("ui_page_size_must_be_between_one_and_eb286deb"))
         }
 
         var queryItems = [
@@ -279,7 +279,7 @@ public final class APIClient: Sendable {
         request.timeoutInterval = 300
         let bodySize = try body.fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
         guard let bodySize, bodySize > 0 else {
-            throw APIClientError.invalidUpload("Die Raumscan-Datei fehlt oder ist leer.")
+            throw APIClientError.invalidUpload(L10n.text("ui_the_room_scan_file_is_missing_or_ad381e0f"))
         }
         request.setValue(String(bodySize), forHTTPHeaderField: "Content-Length")
         request.setValue(
@@ -354,7 +354,7 @@ public final class APIClient: Sendable {
     ) async throws -> LoginResponse {
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedEmail.isEmpty, !password.isEmpty else {
-            throw APIClientError.invalidRequest("E-Mail und Passwort fehlen.")
+            throw APIClientError.invalidRequest(L10n.text("ui_email_and_password_are_missing_af035bd7"))
         }
 
         let url = try makeAPIURL(path: ["auth", "login"])
@@ -375,8 +375,50 @@ public final class APIClient: Sendable {
                 )
             )
         } catch {
-            throw APIClientError.invalidRequest("Die Anmeldung konnte nicht vorbereitet werden.")
+            throw APIClientError.invalidRequest(L10n.text("ui_could_not_prepare_sign_in_3c8bbb2b"))
         }
+        return try await execute(request)
+    }
+
+    func authOptions() async throws -> ServerAuthOptions {
+        var request = URLRequest(url: try makeAPIURL(path: ["auth", "options"]), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        request.httpShouldHandleCookies = false
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        return try await execute(request)
+    }
+
+    func startBrowserSignIn(challenge: String, state: String) async throws -> BrowserSignInStartResponse {
+        struct Input: Encodable {
+            let codeChallenge: String
+            let state: String
+            let codeChallengeMethod = "S256"
+            let deviceName = "Inventory iOS"
+        }
+        return try await browserSignInRequest(
+            endpoint: "start", body: Input(codeChallenge: challenge, state: state)
+        )
+    }
+
+    func exchangeBrowserSignIn(requestID: String, code: String, verifier: String) async throws -> LoginResponse {
+        struct Input: Encodable {
+            let requestId: String
+            let code: String
+            let codeVerifier: String
+        }
+        return try await browserSignInRequest(
+            endpoint: "exchange", body: Input(requestId: requestID, code: code, codeVerifier: verifier)
+        )
+    }
+
+    private func browserSignInRequest<Input: Encodable, Output: Decodable & Sendable>(endpoint: String, body: Input) async throws -> Output {
+        let url = try makeAPIURL(path: ["auth", "browser", endpoint])
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try Self.makeJSONEncoder().encode(body)
+        // Neither the previous account's bearer token nor browser cookies belong here.
+        request.httpShouldHandleCookies = false
         return try await execute(request)
     }
 
@@ -416,7 +458,7 @@ public final class APIClient: Sendable {
     ) async throws -> NotificationInboxResponse {
         guard (1 ... 100).contains(limit) else {
             throw APIClientError.invalidRequest(
-                "Notification limit must be between one and 100."
+                L10n.text("ui_notification_limit_must_be_between_one_and_10b2c449")
             )
         }
         let url = try makeAPIURL(
@@ -473,7 +515,7 @@ public final class APIClient: Sendable {
     public func listLoans(limit: Int = 500) async throws -> LoansResponse {
         guard (1 ... 500).contains(limit) else {
             throw APIClientError.invalidRequest(
-                "Loan limit must be between one and 500."
+                L10n.text("ui_loan_limit_must_be_between_one_and_ff686fbc")
             )
         }
         let url = try makeAPIURL(
@@ -563,7 +605,7 @@ public final class APIClient: Sendable {
     ) async throws -> InternalRequestsResponse {
         guard (1 ... 200).contains(limit) else {
             throw APIClientError.invalidRequest(
-                "Request limit must be between one and 200."
+                L10n.text("ui_request_limit_must_be_between_one_and_7dee9e6d")
             )
         }
         var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
@@ -595,27 +637,27 @@ public final class APIClient: Sendable {
     ) async throws -> InternalRequestResponse {
         guard (1 ... 50).contains(input.lines.count) else {
             throw APIClientError.invalidRequest(
-                "An internal request must contain between one and 50 items."
+                L10n.text("ui_an_internal_request_must_contain_between_one_df69ce77")
             )
         }
         guard input.dueAt > input.startsAt else {
             throw APIClientError.invalidRequest(
-                "The return date must be after the start date."
+                L10n.text("ui_the_return_date_must_be_after_the_c0b509a4")
             )
         }
         guard input.dueAt.timeIntervalSince(input.startsAt) <= 366 * 86_400 else {
             throw APIClientError.invalidRequest(
-                "An internal request may cover at most 366 days."
+                L10n.text("ui_an_internal_request_may_cover_at_most_ff800955")
             )
         }
         guard Set(input.lines.map(\.resourceId)).count == input.lines.count else {
             throw APIClientError.invalidRequest(
-                "Each inventory item may appear only once in an internal request."
+                L10n.text("ui_each_inventory_item_may_appear_only_once_c074bbbd")
             )
         }
         guard input.lines.allSatisfy({ (1 ... 2_000_000_000).contains($0.quantity) }) else {
             throw APIClientError.invalidRequest(
-                "Each requested quantity must be between one and 2,000,000,000."
+                L10n.text("ui_each_requested_quantity_must_be_between_one_9aed04ad")
             )
         }
 
@@ -794,10 +836,10 @@ public final class APIClient: Sendable {
     public func lookupResource(code: String) async throws -> ResourceLookupResponse {
         let parsed = ResourceCodeParser.parse(code)
         guard !parsed.code.isEmpty else {
-            throw APIClientError.invalidRequest("The scanned code is empty.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_scanned_code_is_empty_681fc68c"))
         }
         guard parsed.code.count <= 2_048 else {
-            throw APIClientError.invalidRequest("The scanned code exceeds 2,048 characters.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_scanned_code_exceeds_2_048_characters_e9560eb7"))
         }
 
         let url = try makeAPIURL(
@@ -829,7 +871,7 @@ public final class APIClient: Sendable {
     }
 
     public func executeActionChain(_ body: ActionChainRunRequest, idempotencyKey: UUID) async throws -> ActionChainReport {
-        guard body.expectedPlanHash?.count == 64 else { throw APIClientError.invalidRequest("Bitte den Ablauf zuerst prüfen.") }
+        guard body.expectedPlanHash?.count == 64 else { throw APIClientError.invalidRequest(L10n.text("ui_please_check_the_workflow_first_ee91d122")) }
         let url = try makeAPIURL(path: ["stock", "action-chains", "execute"])
         var request = try await jsonRequest(url: url, method: "POST", body: body)
         setIdempotencyKey(idempotencyKey, on: &request)
@@ -843,7 +885,7 @@ public final class APIClient: Sendable {
     ) async throws -> ScanActionResolution {
         let normalizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedCode.isEmpty else {
-            throw APIClientError.invalidRequest("Der gescannte Code ist leer.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_scanned_code_is_empty_33efb047"))
         }
         let url = try makeAPIURL(path: ["stock", "scans", "resolve"])
         let body = ScanActionResolveRequest(
@@ -871,7 +913,7 @@ public final class APIClient: Sendable {
         idempotencyKey: UUID? = nil
     ) async throws -> MediaUploadResponse {
         guard (1 ... 12).contains(files.count) else {
-            throw APIClientError.invalidUpload("Upload between one and 12 files at a time.")
+            throw APIClientError.invalidUpload(L10n.text("ui_upload_between_one_and_12_files_at_9bf40801"))
         }
         try Task.checkCancellation()
 
@@ -1090,7 +1132,7 @@ public final class APIClient: Sendable {
                     guard Date() < replayDeadline else {
                         throw APIClientError.http(
                             statusCode: 504,
-                            message: "Die Objekterkennung dauert zu lange. Bitte versuche es erneut.",
+                            message: L10n.text("ui_object_recognition_is_taking_too_long_please_960ccf65"),
                             retryAfter: nil,
                             terminal: false
                         )
@@ -1130,7 +1172,7 @@ public final class APIClient: Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let normalizedHint, normalizedHint.utf16.count > 240 {
             throw APIClientError.invalidRequest(
-                "Der Hinweis zum Zählobjekt darf höchstens 240 Zeichen lang sein."
+                L10n.text("ui_the_hint_about_the_object_to_count_e3d38f4d")
             )
         }
         let body = try MultipartFormFileBuilder.buildObjectCount(
@@ -1249,7 +1291,7 @@ public final class APIClient: Sendable {
         }
         throw APIClientError.http(
             statusCode: 504,
-            message: "Die Zählung hat zu lange gedauert. Bitte starte sie erneut.",
+            message: L10n.text("ui_counting_took_too_long_please_restart_it_1127e599"),
             retryAfter: nil,
             terminal: true
         )
@@ -1334,7 +1376,7 @@ public final class APIClient: Sendable {
         idempotencyKey: UUID? = nil
     ) async throws -> StockMovementResponse {
         guard delta != 0 else {
-            throw APIClientError.invalidRequest("The stock change must not be zero.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_stock_change_must_not_be_zero_bd579502"))
         }
         let url = try makeAPIURL(path: [
             "resources",
@@ -1388,7 +1430,7 @@ public final class APIClient: Sendable {
     ) async throws -> StockUnitCreationResponse {
         let count = input.count ?? input.codes?.count ?? 0
         guard (1 ... 100).contains(count) else {
-            throw APIClientError.invalidRequest("Lege zwischen einer und 100 Einheiten an.")
+            throw APIClientError.invalidRequest(L10n.text("ui_create_between_one_and_100_units_e0838c97"))
         }
         let url = try makeAPIURL(path: [
             "resources",
@@ -1419,12 +1461,12 @@ public final class APIClient: Sendable {
     public func resolveMediaURL(_ value: String) throws -> URL {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            throw APIClientError.invalidRequest("The media URL is empty.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_media_url_is_empty_c2003f61"))
         }
 
         if let absoluteURL = URL(string: trimmed), absoluteURL.scheme != nil {
             guard ["http", "https"].contains(absoluteURL.scheme?.lowercased() ?? "") else {
-                throw APIClientError.invalidRequest("The media URL must use HTTP or HTTPS.")
+                throw APIClientError.invalidRequest(L10n.text("ui_the_media_url_must_use_http_or_90a64f0c"))
             }
             return absoluteURL
         }
@@ -1439,7 +1481,7 @@ public final class APIClient: Sendable {
             components.port = serverURL.port
             components.percentEncodedPath = trimmed
             guard let url = components.url else {
-                throw APIClientError.invalidRequest("The media URL is invalid.")
+                throw APIClientError.invalidRequest(L10n.text("ui_the_media_url_is_invalid_d11d55d6"))
             }
             return url
         }
@@ -1652,7 +1694,7 @@ public final class APIClient: Sendable {
                 .flatMap(TimeInterval.init)
             throw APIClientError.http(
                 statusCode: 202,
-                message: payload?.error ?? "The operation is still being processed.",
+                message: payload?.error ?? L10n.text("ui_the_operation_is_still_being_processed_7f9f25f0"),
                 retryAfter: retryAfter
             )
         }
@@ -1688,7 +1730,7 @@ public final class APIClient: Sendable {
             request.httpBody = try Self.makeJSONEncoder().encode(body)
         } catch {
             throw APIClientError.invalidRequest(
-                "The request could not be encoded: \(error.localizedDescription)"
+                L10n.text("ui_the_request_could_not_be_encoded_0_ad00e443", error.localizedDescription)
             )
         }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1750,11 +1792,11 @@ public final class APIClient: Sendable {
         guard !queryItems.isEmpty else { return url }
 
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-            throw APIClientError.invalidRequest("The API URL could not be created.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_api_url_could_not_be_created_2d141a94"))
         }
         components.queryItems = queryItems
         guard let result = components.url else {
-            throw APIClientError.invalidRequest("The API URL could not be created.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_api_url_could_not_be_created_2d141a94"))
         }
         return result
     }
@@ -1769,11 +1811,11 @@ public final class APIClient: Sendable {
         guard !queryItems.isEmpty else { return url }
 
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
-            throw APIClientError.invalidRequest("The server URL could not be created.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_server_url_could_not_be_created_6ceaef55"))
         }
         components.queryItems = queryItems
         guard let result = components.url else {
-            throw APIClientError.invalidRequest("The server URL could not be created.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_server_url_could_not_be_created_6ceaef55"))
         }
         return result
     }
@@ -1872,7 +1914,7 @@ public final class APIClient: Sendable {
             }
             throw DecodingError.dataCorruptedError(
                 in: container,
-                debugDescription: "Invalid ISO-8601 date: \(value)"
+                debugDescription: L10n.text("ui_invalid_iso_8601_date_0_80f6d722", value)
             )
         }
         return decoder

@@ -37,6 +37,8 @@ class InventoryJourneyTest {
                 if (request.method !in listOf("GET", "HEAD")) writes += request
                 val path = request.requestUrl!!.encodedPath
                 val value = when {
+                    path.endsWith("/organizations/select") -> obj("organization" to caps.o("organization"))
+                    path.endsWith("/organizations") -> obj("organizations" to JSONArray(listOf(caps.o("organization"))), "activeOrganizationId" to "test-org")
                     path.endsWith("/auth/capabilities") -> caps
                     path.endsWith("/resources") -> obj("resources" to JSONArray(listOf(resource)), "pagination" to obj("page" to 1, "pageSize" to 24, "total" to 1, "pages" to 1))
                     path.endsWith("/stock/movements") -> obj("resource" to resource.copy().put("quantity", 13))

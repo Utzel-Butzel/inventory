@@ -1,5 +1,8 @@
 package de.internetderdinge.inventory.data
 
+import de.internetderdinge.inventory.L10n
+import de.internetderdinge.inventory.R
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -32,7 +35,7 @@ class Api(val session: Session, val http: OkHttpClient = client) {
     }.build().toString()
 
     fun request(url: HttpUrl): Request.Builder {
-        require(sameOrigin(root, url)) { "Zugriff auf fremden Server blockiert." }
+        require(sameOrigin(root, url)) { L10n.text(R.string.ui_access_to_a_different_server_was_blocked_769a93c3) }
         return Request.Builder().url(url).header("Accept", "application/json").apply {
             if (session.token.isNotEmpty()) header("Authorization", "Bearer ${session.token}")
             if (session.organization.isNotEmpty()) header("X-Organization-ID", session.organization)
@@ -40,7 +43,7 @@ class Api(val session: Session, val http: OkHttpClient = client) {
     }
     suspend fun call(path: String, method: String = "GET", body: JSONObject? = null, key: String? = null, query: Map<String, String> = emptyMap()): JSONObject {
         val reply = raw(path, method, body, key, query)
-        if (reply.status == 202) throw ApiError(202, "Wird auf dem Server verarbeitet. Erneut versuchen.", reply.retryAfter)
+        if (reply.status == 202) throw ApiError(202, L10n.text(R.string.ui_processing_on_the_server_try_again_fc5fb8c4), reply.retryAfter)
         return reply.json
     }
     suspend fun raw(path: String, method: String = "GET", body: JSONObject? = null, key: String? = null, query: Map<String, String> = emptyMap()): ApiReply {
@@ -50,7 +53,7 @@ class Api(val session: Session, val http: OkHttpClient = client) {
     }
     suspend fun runtimeSettings(): JSONObject = execute(request(root.newBuilder().addPathSegments("api/settings/status").build()).get().build()).json
     suspend fun multipart(path: String, files: List<Upload>, key: String, field: String = "files", fields: Map<String, String> = emptyMap()): ApiReply {
-        require(files.isNotEmpty() && files.size <= 12) { "Bitte 1 bis 12 Dateien wählen." }
+        require(files.isNotEmpty() && files.size <= 12) { L10n.text(R.string.ui_please_select_1_to_12_files_c4710ac2) }
         val body = MultipartBody.Builder().setType(MultipartBody.FORM).apply {
             fields.forEach { (k, v) -> addFormDataPart(k, v) }
             files.forEach { require(it.file.isFile && it.file.length() > 0); addFormDataPart(field, it.name, it.file.asRequestBody(it.mime.toMediaType())) }
@@ -60,24 +63,24 @@ class Api(val session: Session, val http: OkHttpClient = client) {
     private suspend fun execute(request: Request): ApiReply = withContext(Dispatchers.IO) {
         http.newCall(request).await().use { response ->
             val text = response.body?.string().orEmpty()
-            val json = if (text.isBlank()) JSONObject() else runCatching { JSONObject(text) }.getOrElse { throw ApiError(response.code, "Ungültige Serverantwort (${response.code}).") }
+            val json = if (text.isBlank()) JSONObject() else runCatching { JSONObject(text) }.getOrElse { throw ApiError(response.code, L10n.text(R.string.ui_invalid_server_response_0_3d5006de, response.code)) }
             val retry = response.header("Retry-After")?.toLongOrNull() ?: 3L
-            if (!response.isSuccessful) throw ApiError(response.code, json.s("error", "Serverfehler ${response.code}"), retry, response.header("Retry-After") != null)
+            if (!response.isSuccessful) throw ApiError(response.code, json.s("error", L10n.text(R.string.ui_server_error_0_030d1351, response.code)), retry, response.header("Retry-After") != null)
             ApiReply(json, response.code, retry)
         }
     }
     suspend fun bytes(value: String): ByteArray = withContext(Dispatchers.IO) {
-        val url = root.resolve(value) ?: error("Ungültige Medienadresse")
-        require(url.isHttps || sameOrigin(root, url)) { "Externe Medien müssen HTTPS verwenden." }
+        val url = root.resolve(value) ?: error(L10n.text(R.string.ui_invalid_media_url_9c84f6a5))
+        require(url.isHttps || sameOrigin(root, url)) { L10n.text(R.string.ui_external_media_must_use_https_94f7ff54) }
         val request = if (sameOrigin(root, url)) request(url).build() else Request.Builder().url(url).build()
         http.newCall(request).await().use {
-            if (!it.isSuccessful) throw ApiError(it.code, "Datei konnte nicht geladen werden.")
-            require((it.body?.contentLength() ?: 0) <= 50 * 1024 * 1024) { "Datei ist zu groß." }
-            val body = it.body ?: error("Leere Datei")
+            if (!it.isSuccessful) throw ApiError(it.code, L10n.text(R.string.ui_could_not_load_file_b950519f))
+            require((it.body?.contentLength() ?: 0) <= 50 * 1024 * 1024) { L10n.text(R.string.ui_file_is_too_large_dd4f5e53) }
+            val body = it.body ?: error(L10n.text(R.string.ui_empty_file_fc769b90))
             val output = java.io.ByteArrayOutputStream()
             body.byteStream().use { input ->
                 val buffer = ByteArray(8192)
-                while (true) { val count = input.read(buffer); if (count < 0) break; require(output.size() + count <= 50 * 1024 * 1024) { "Datei ist zu groß." }; output.write(buffer, 0, count) }
+                while (true) { val count = input.read(buffer); if (count < 0) break; require(output.size() + count <= 50 * 1024 * 1024) { L10n.text(R.string.ui_file_is_too_large_dd4f5e53) }; output.write(buffer, 0, count) }
             }
             output.toByteArray()
         }
@@ -87,9 +90,9 @@ class Api(val session: Session, val http: OkHttpClient = client) {
             .connectTimeout(20, TimeUnit.SECONDS).readTimeout(180, TimeUnit.SECONDS).callTimeout(240, TimeUnit.SECONDS).build()
         fun normalizeServer(value: String): String {
             val url = value.trim().toHttpUrl()
-            require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null && url.encodedPath.trim('/').isEmpty()) { "Bitte die Serveradresse ohne Pfad, Passwort oder Parameter eingeben." }
+            require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null && url.encodedPath.trim('/').isEmpty()) { L10n.text(R.string.ui_please_enter_the_server_address_without_a_9ffe2a8b) }
             val local = url.host in setOf("localhost", "127.0.0.1", "::1", "10.0.2.2") || url.host.endsWith(".local")
-            require(url.isHttps || local) { "Der Server muss HTTPS verwenden." }
+            require(url.isHttps || local) { L10n.text(R.string.ui_the_server_must_use_https_0670a7be) }
             return url.toString()
         }
         fun sameOrigin(a: HttpUrl, b: HttpUrl) = a.scheme == b.scheme && a.host == b.host && a.port == b.port

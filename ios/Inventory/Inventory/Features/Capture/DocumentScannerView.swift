@@ -14,13 +14,13 @@ enum InventoryDocumentScannerError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unavailable:
-            "Der Dokumentenscanner wird auf diesem Gerät nicht unterstützt."
+            L10n.text("ui_the_document_scanner_is_not_supported_on_194fbaaf")
         case .emptyScan:
-            "Der Scan enthält keine Seiten."
+            L10n.text("ui_the_scan_contains_no_pages_dc424e58")
         case .unreadablePage:
-            "Mindestens eine Dokumentseite konnte nicht gelesen werden."
+            L10n.text("ui_at_least_one_document_page_could_not_4f2fcc32")
         case .pdfCreationFailed:
-            "Das durchsuchbare PDF konnte nicht erstellt werden."
+            L10n.text("ui_could_not_create_the_searchable_pdf_2d1774eb")
         }
     }
 }
@@ -147,7 +147,7 @@ private enum SearchableDocumentPDF {
             try data.write(to: url, options: .atomic)
             return MediaUploadFile(
                 fileURL: url,
-                filename: "Inventar-Dokumentscan.pdf",
+                filename: L10n.text("ui_document_filename"),
                 mimeType: "application/pdf"
             )
         }.value
@@ -194,8 +194,8 @@ private enum SearchableDocumentPDF {
         let pageBounds = CGRect(x: 0, y: 0, width: 595.2, height: 841.8)
         let format = UIGraphicsPDFRendererFormat()
         format.documentInfo = [
-            kCGPDFContextTitle as String: "Inventar-Dokumentscan",
-            kCGPDFContextCreator as String: "Open Inventory",
+            kCGPDFContextTitle as String: L10n.text("ui_document_title"),
+            kCGPDFContextCreator as String: L10n.text("ui_open_inventory_166dbd73"),
         ]
         return UIGraphicsPDFRenderer(bounds: pageBounds, format: format).pdfData { renderer in
             for page in pages {

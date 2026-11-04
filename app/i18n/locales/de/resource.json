@@ -389,6 +389,7 @@
   },
   "connectionDiagram": {
     "title": "Verbindungsfluss",
+    "create": "Verbindungsfluss anlegen",
     "description": "Variantenfamilie, Stückliste, Enthaltensein und zugehöriges Inventar dieses Eintrags über mehrere Ebenen visualisieren.",
     "current": "Aktueller Eintrag",
     "bundling": {
@@ -734,6 +735,7 @@
       "overdue": "Überfällig"
     },
     "lending": {
+      "enable": "Ausleihen aktivieren",
       "enabled": "Dieser Eintrag kann ausgeliehen werden",
       "description": "Aktiviert direkte Ausleihen und Reservierungen sowie die Auswahl in internen Anfragen.",
       "approvalRequired": "Interne Anfragen müssen genehmigt werden",

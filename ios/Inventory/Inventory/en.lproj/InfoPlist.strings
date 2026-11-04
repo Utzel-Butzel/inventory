@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "For inventory photos, QR codes and barcodes, 3D room and object scans, and positioning items in AR.";
+"NSLocationWhenInUseUsageDescription" = "For the optional inventory location.";
+"NSMicrophoneUsageDescription" = "For audio in inventory video recordings.";
+"NSPhotoLibraryUsageDescription" = "For photos from your library.";

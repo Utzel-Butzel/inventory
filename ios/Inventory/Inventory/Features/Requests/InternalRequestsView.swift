@@ -14,22 +14,22 @@ struct InternalRequestsView: View {
     var body: some View {
         Group {
             if loading && response == nil {
-                ProgressView("Anfragen werden geladen …")
+                ProgressView(L10n.text("ui_loading_requests_b60481e4"))
             } else if response == nil, let errorMessage {
                 ContentUnavailableView {
-                    Label("Anfragen nicht verfügbar", systemImage: "exclamationmark.triangle")
+                    Label(L10n.text("ui_requests_unavailable_a999f0b3"), systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(errorMessage)
                 } actions: {
-                    Button("Erneut versuchen") { Task { await load() } }
+                    Button(L10n.text("ui_retry_948643cb")) { Task { await load() } }
                 }
             } else {
                 requestsList
             }
         }
-        .navigationTitle("Interne Anfragen")
+        .navigationTitle(L10n.text("ui_internal_requests_32dc9d5c"))
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "Referenz, Person oder Eintrag")
+        .searchable(text: $query, prompt: L10n.text("ui_reference_person_or_item_b6ec2d61"))
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if canCreate {
@@ -38,7 +38,7 @@ struct InternalRequestsView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
-                    .accessibilityLabel("Neue Anfrage")
+                    .accessibilityLabel(L10n.text("ui_new_request_d6b3176f"))
                 }
                 if loading {
                     ProgressView()
@@ -48,7 +48,7 @@ struct InternalRequestsView: View {
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .accessibilityLabel("Aktualisieren")
+                    .accessibilityLabel(L10n.text("ui_refresh_96bf0098"))
                 }
             }
         }
@@ -62,7 +62,7 @@ struct InternalRequestsView: View {
         }
         .task(id: state.client?.contextIdentifier) { await load() }
         .confirmationDialog(
-            pendingConfirmation?.title ?? "Anfrage aktualisieren?",
+            pendingConfirmation?.title ?? L10n.text("ui_update_request_4fba6e97"),
             isPresented: confirmationIsPresented,
             titleVisibility: .visible,
             presenting: pendingConfirmation
@@ -70,28 +70,28 @@ struct InternalRequestsView: View {
             Button(actionTitle(pending.action), role: actionRole(pending.action)) {
                 Task { await perform(pending) }
             }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         } message: { pending in
             Text(pending.message)
         }
         .alert(
-            "Anfrage konnte nicht aktualisiert werden",
+            L10n.text("ui_could_not_update_request_7e3fe9ed"),
             isPresented: Binding(
                 get: { errorMessage != nil && response != nil },
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
-            Button("Stand neu laden") { Task { await load() } }
-            Button("Abbrechen", role: .cancel) { errorMessage = nil }
+            Button(L10n.text("ui_reload_status_1d404097")) { Task { await load() } }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
     private var requestsList: some View {
         List {
             Section {
-                Picker("Status", selection: $filter) {
+                Picker(L10n.text("ui_status_920e413c"), selection: $filter) {
                     ForEach(InternalRequestFilter.allCases) { option in
                         Text("\(option.title) (\(count(for: option)))")
                             .tag(option)
@@ -105,7 +105,7 @@ struct InternalRequestsView: View {
             if visibleRequests.isEmpty {
                 Section {
                     ContentUnavailableView {
-                        Label("Keine Anfragen gefunden", systemImage: "clipboard")
+                        Label(L10n.text("ui_no_requests_found_337a994d"), systemImage: "clipboard")
                     } description: {
                         Text(emptyDescription)
                     }
@@ -235,16 +235,16 @@ struct InternalRequestsView: View {
     }
 
     private var resultCountLabel: String {
-        visibleRequests.count == 1 ? "1 Anfrage" : "\(visibleRequests.count) Anfragen"
+        visibleRequests.count == 1 ? L10n.text("ui_1_request_6b6fab05") : L10n.text("ui_requests_0_0569614d", visibleRequests.count)
     }
 
     private var emptyDescription: String {
         if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Keine Anfrage entspricht der aktuellen Suche."
+            return L10n.text("ui_no_request_matches_the_current_search_2af49feb")
         }
         return filter == .active
-            ? "Es gibt derzeit keine offenen Anfragen."
-            : "Für diesen Status sind keine Anfragen vorhanden."
+            ? L10n.text("ui_there_are_no_open_requests_at_the_b12e9a24")
+            : L10n.text("ui_there_are_no_requests_with_this_status_b949c24c")
     }
 
     private func count(for option: InternalRequestFilter) -> Int {
@@ -343,9 +343,9 @@ private struct InternalRequestCreateView: View {
 
     var body: some View {
         Form {
-            Section("Zeitraum") {
+            Section(L10n.text("ui_period_ab0f2fd5")) {
                 DatePicker(
-                    "Beginn",
+                    L10n.text("ui_start_0d95fd6a"),
                     selection: $startsAt,
                     displayedComponents: [.date, .hourAndMinute]
                 )
@@ -355,7 +355,7 @@ private struct InternalRequestCreateView: View {
                     }
                 }
                 DatePicker(
-                    "Rückgabe",
+                    L10n.text("ui_return_6223760a"),
                     selection: $dueAt,
                     in: startsAt...,
                     displayedComponents: [.date, .hourAndMinute]
@@ -364,24 +364,24 @@ private struct InternalRequestCreateView: View {
 
             Section {
                 if let delivery {
-                    LabeledContent("Ort oder Projekt") {
+                    LabeledContent(L10n.text("ui_location_or_project_985d0bbc")) {
                         Text(delivery.name)
                             .multilineTextAlignment(.trailing)
                     }
-                    Button("Bereitstellung entfernen", role: .destructive) {
+                    Button(L10n.text("ui_remove_delivery_destination_ef78c5fe"), role: .destructive) {
                         self.delivery = nil
                     }
                 } else {
                     Button {
                         pickerPurpose = .delivery
                     } label: {
-                        Label("Ort oder Projekt auswählen", systemImage: "mappin.and.ellipse")
+                        Label(L10n.text("ui_select_location_or_project_198d9e80"), systemImage: "mappin.and.ellipse")
                     }
                 }
             } header: {
-                Text("Bereitstellung")
+                Text(L10n.text("ui_delivery_destination_6227c31c"))
             } footer: {
-                Text("Optional: Wo die angefragten Artikel bereitgestellt werden sollen.")
+                Text(L10n.text("ui_optional_where_the_requested_items_should_be_9074d3f5"))
             }
 
             Section {
@@ -401,14 +401,14 @@ private struct InternalRequestCreateView: View {
                             } label: {
                                 Image(systemName: "trash")
                             }
-                            .accessibilityLabel("\(line.resource.name) entfernen")
+                            .accessibilityLabel(L10n.text("ui_remove_0_41b0bdce", line.resource.name))
                         }
                         Stepper(
-                            "Menge: \(line.quantity)",
+                            L10n.text("ui_quantity_0_ae0b74e1", line.quantity),
                             value: $line.quantity,
                             in: 1 ... 2_000_000_000
                         )
-                        TextField("Notiz zu dieser Position", text: $line.note, axis: .vertical)
+                        TextField(L10n.text("ui_note_for_this_line_5f61557b"), text: $line.note, axis: .vertical)
                             .lineLimit(1 ... 4)
                             .onChange(of: line.note) { _, updated in
                                 if updated.count > 20_000 {
@@ -422,21 +422,21 @@ private struct InternalRequestCreateView: View {
                 Button {
                     pickerPurpose = .item
                 } label: {
-                    Label("Artikel hinzufügen", systemImage: "plus.circle")
+                    Label(L10n.text("ui_add_item_62272168"), systemImage: "plus.circle")
                 }
                 .disabled(lines.count >= 50)
             } header: {
-                Text("Positionen")
+                Text(L10n.text("ui_line_items_9253e170"))
             } footer: {
                 Text(
                     lines.isEmpty
-                        ? "Mindestens ein ausleihbarer Artikel ist erforderlich."
-                        : "\(lines.count) von maximal 50 Positionen"
+                        ? L10n.text("ui_at_least_one_lendable_item_is_required_5a3f520b")
+                        : L10n.text("ui_0_of_up_to_50_line_items_bdc03daa", lines.count)
                 )
             }
 
-            Section("Notiz") {
-                TextField("Hinweise zur Anfrage", text: $note, axis: .vertical)
+            Section(L10n.text("ui_note_74b487d9")) {
+                TextField(L10n.text("ui_request_notes_ded67eb2"), text: $note, axis: .vertical)
                     .lineLimit(3 ... 8)
                     .onChange(of: note) { _, updated in
                         if updated.count > 20_000 {
@@ -453,21 +453,21 @@ private struct InternalRequestCreateView: View {
                 }
             }
         }
-        .navigationTitle("Neue Anfrage")
+        .navigationTitle(L10n.text("ui_new_request_d6b3176f"))
         .navigationBarTitleDisplayMode(.inline)
         .disabled(creating)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Abbrechen") { dismiss() }
+                Button(L10n.text("ui_cancel_f7ff1178")) { dismiss() }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Senden") { Task { await submit() } }
+                Button(L10n.text("ui_send_079bef4e")) { Task { await submit() } }
                     .disabled(validationMessage != nil || creating)
             }
         }
         .overlay {
             if creating {
-                ProgressView("Anfrage wird gesendet …")
+                ProgressView(L10n.text("ui_sending_request_2b32bfac"))
                     .padding()
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
             }
@@ -475,7 +475,7 @@ private struct InternalRequestCreateView: View {
         .sheet(item: $pickerPurpose) { purpose in
             NavigationStack {
                 ResourcePickerView(
-                    title: purpose == .item ? "Artikel hinzufügen" : "Bereitstellung",
+                    title: purpose == .item ? L10n.text("ui_add_item_62272168") : L10n.text("ui_delivery_destination_6227c31c"),
                     excludedResourceIDs: purpose == .item ? Set(lines.map(\.id)) : [],
                     loanableOnly: purpose == .item
                 ) { resource in
@@ -489,7 +489,7 @@ private struct InternalRequestCreateView: View {
             }
         }
         .alert(
-            "Anfrage konnte nicht gesendet werden",
+            L10n.text("ui_could_not_send_request_6903b2c5"),
             isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -497,15 +497,15 @@ private struct InternalRequestCreateView: View {
         ) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
     private var validationMessage: String? {
-        if lines.isEmpty { return "Füge mindestens einen Artikel hinzu." }
-        if dueAt <= startsAt { return "Die Rückgabe muss nach dem Beginn liegen." }
+        if lines.isEmpty { return L10n.text("ui_add_at_least_one_item_19514e82") }
+        if dueAt <= startsAt { return L10n.text("ui_the_return_must_be_after_the_start_4c506d74") }
         if dueAt.timeIntervalSince(startsAt) > 366 * 86_400 {
-            return "Der Zeitraum darf höchstens 366 Tage umfassen."
+            return L10n.text("ui_the_period_must_not_exceed_366_days_b83d62a7")
         }
         return nil
     }
@@ -610,27 +610,27 @@ private struct InternalRequestDetailView: View {
 
     var body: some View {
         List {
-            Section("Anfrage") {
-                LabeledContent("Referenz", value: request.reference)
-                LabeledContent("Status") { requestStatusBadge(request.status) }
-                LabeledContent("Anfragende Person", value: request.requester.name)
+            Section(L10n.text("ui_request_d131ffca")) {
+                LabeledContent(L10n.text("ui_reference_e1311398"), value: request.reference)
+                LabeledContent(L10n.text("ui_status_920e413c")) { requestStatusBadge(request.status) }
+                LabeledContent(L10n.text("ui_requested_by_f2afcce2"), value: request.requester.name)
                 if let email = request.requester.email, !email.isEmpty {
-                    LabeledContent("E-Mail", value: email)
+                    LabeledContent(L10n.text("ui_email_2fae6fb3"), value: email)
                 }
                 LabeledContent(
-                    "Beginn",
+                    L10n.text("ui_start_0d95fd6a"),
                     value: request.startsAt.formatted(date: .long, time: .shortened)
                 )
                 LabeledContent(
-                    "Rückgabe",
+                    L10n.text("ui_return_6223760a"),
                     value: request.dueAt.formatted(date: .long, time: .shortened)
                 )
                 if let delivery = request.delivery {
-                    LabeledContent("Bereitstellung", value: delivery.name)
+                    LabeledContent(L10n.text("ui_delivery_destination_6227c31c"), value: delivery.name)
                 }
             }
 
-            Section("Positionen") {
+            Section(L10n.text("ui_line_items_9253e170")) {
                 ForEach(request.lines) { line in
                     NavigationLink {
                         InternalRequestResourceDestinationView(resourceID: line.resource.id)
@@ -646,10 +646,10 @@ private struct InternalRequestDetailView: View {
                             HStack(spacing: 6) {
                                 Text(
                                     line.resource.trackingMode == .serialized
-                                        ? "Serialisiert"
-                                        : "Mengenbestand"
+                                        ? L10n.text("ui_serialized_ce661476")
+                                        : L10n.text("ui_bulk_8dff8f29")
                                 )
-                                Text("· Bestand \(line.resource.currentQuantity)")
+                                Text(L10n.text("ui_stock_0_463cd367", line.resource.currentQuantity))
                             }
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -665,15 +665,15 @@ private struct InternalRequestDetailView: View {
             }
 
             if !request.note.isEmpty || !request.decisionNote.isEmpty {
-                Section("Notizen") {
+                Section(L10n.text("ui_notes_7800bd53")) {
                     if !request.note.isEmpty {
-                        LabeledContent("Anfrage") {
+                        LabeledContent(L10n.text("ui_request_d131ffca")) {
                             Text(request.note)
                                 .multilineTextAlignment(.trailing)
                         }
                     }
                     if !request.decisionNote.isEmpty {
-                        LabeledContent("Entscheidung") {
+                        LabeledContent(L10n.text("ui_decision_84b5bbbb")) {
                             Text(request.decisionNote)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -681,7 +681,7 @@ private struct InternalRequestDetailView: View {
                 }
             }
 
-            Section("Verlauf") {
+            Section(L10n.text("ui_history_5fd70311")) {
                 ForEach(request.events) { event in
                     HStack(alignment: .top, spacing: 10) {
                         Circle()
@@ -725,12 +725,12 @@ private struct InternalRequestDetailView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .accessibilityLabel("Anfrageaktionen")
+                    .accessibilityLabel(L10n.text("ui_request_actions_9bf0478d"))
                 }
             }
         }
         .confirmationDialog(
-            pendingConfirmation?.title ?? "Anfrage aktualisieren?",
+            pendingConfirmation?.title ?? L10n.text("ui_update_request_4fba6e97"),
             isPresented: Binding(
                 get: { pendingConfirmation != nil },
                 set: { if !$0 { pendingConfirmation = nil } }
@@ -741,21 +741,21 @@ private struct InternalRequestDetailView: View {
             Button(actionTitle(pending.action), role: actionRole(pending.action)) {
                 Task { await perform(pending.action) }
             }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         } message: { pending in
             Text(pending.message)
         }
         .alert(
-            "Aktion fehlgeschlagen",
+            L10n.text("ui_action_failed_3a20cc65"),
             isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
-            Button("Stand neu laden") { Task { await reload() } }
-            Button("Abbrechen", role: .cancel) { errorMessage = nil }
+            Button(L10n.text("ui_reload_status_1d404097")) { Task { await reload() } }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
@@ -817,14 +817,14 @@ private struct InternalRequestResourceDestinationView: View {
                 ResourceDetailView(resource: resource)
             } else if let errorMessage {
                 ContentUnavailableView {
-                    Label("Eintrag nicht verfügbar", systemImage: "exclamationmark.triangle")
+                    Label(L10n.text("ui_inventory_item_unavailable_9d3512e1"), systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(errorMessage)
                 } actions: {
-                    Button("Erneut versuchen") { Task { await load() } }
+                    Button(L10n.text("ui_retry_948643cb")) { Task { await load() } }
                 }
             } else {
-                ProgressView("Eintrag wird geladen …")
+                ProgressView(L10n.text("ui_loading_item_b6c8e052"))
             }
         }
         .task(id: state.client?.contextIdentifier) { await load() }
@@ -856,13 +856,13 @@ private enum InternalRequestFilter: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .active: "Offen"
-        case .all: "Alle"
-        case .submitted: "Eingereicht"
-        case .approved: "Genehmigt"
-        case .fulfilled: "Erfüllt"
-        case .rejected: "Abgelehnt"
-        case .cancelled: "Storniert"
+        case .active: L10n.text("ui_open_64509e1a")
+        case .all: L10n.text("ui_all_3801a35c")
+        case .submitted: L10n.text("ui_submitted_7f8d92f4")
+        case .approved: L10n.text("ui_approved_9b3015a9")
+        case .fulfilled: L10n.text("ui_fulfilled_3d1f3473")
+        case .rejected: L10n.text("ui_rejected_a9148e86")
+        case .cancelled: L10n.text("ui_cancelled_0aa6a1fa")
         }
     }
 
@@ -883,10 +883,10 @@ private struct PendingInternalRequestAction: Sendable {
     let request: InventoryInternalRequest
     let action: InternalRequestAction
 
-    var title: String { "Anfrage \(actionTitle(action).lowercased())?" }
+    var title: String { L10n.text("ui_0_request_695a1133", actionTitle(action).lowercased()) }
 
     var message: String {
-        "\(request.reference) von \(request.requester.name) wird \(actionDescription(action))."
+        L10n.text("ui_0_from_1_will_be_2_5de474ff", request.reference, request.requester.name, actionDescription(action))
     }
 }
 
@@ -908,19 +908,19 @@ private func availableActions(
 
 private func actionTitle(_ action: InternalRequestAction) -> String {
     switch action {
-    case .approve: "Genehmigen"
-    case .reject: "Ablehnen"
-    case .cancel: "Stornieren"
-    case .fulfill: "Erfüllen"
+    case .approve: L10n.text("ui_approve_0c78fbbf")
+    case .reject: L10n.text("ui_reject_7be75ced")
+    case .cancel: L10n.text("ui_cancel_81a5f66b")
+    case .fulfill: L10n.text("ui_fulfill_5983746b")
     }
 }
 
 private func actionDescription(_ action: InternalRequestAction) -> String {
     switch action {
-    case .approve: "genehmigt"
-    case .reject: "abgelehnt"
-    case .cancel: "storniert"
-    case .fulfill: "als erfüllt markiert"
+    case .approve: L10n.text("ui_approved_946c489d")
+    case .reject: L10n.text("ui_rejected_e3109947")
+    case .cancel: L10n.text("ui_cancelled_1678cafe")
+    case .fulfill: L10n.text("ui_marked_as_fulfilled_4930365b")
     }
 }
 
@@ -956,11 +956,11 @@ private func requestStatusBadge(_ status: InternalRequestStatus) -> some View {
 
 private func requestStatusTitle(_ status: InternalRequestStatus) -> String {
     switch status {
-    case .submitted: "Eingereicht"
-    case .approved: "Genehmigt"
-    case .rejected: "Abgelehnt"
-    case .fulfilled: "Erfüllt"
-    case .cancelled: "Storniert"
+    case .submitted: L10n.text("ui_submitted_7f8d92f4")
+    case .approved: L10n.text("ui_approved_9b3015a9")
+    case .rejected: L10n.text("ui_rejected_a9148e86")
+    case .fulfilled: L10n.text("ui_fulfilled_3d1f3473")
+    case .cancelled: L10n.text("ui_cancelled_0aa6a1fa")
     }
 }
 

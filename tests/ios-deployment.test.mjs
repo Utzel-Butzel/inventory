@@ -42,7 +42,8 @@ test("Fastlane builds a local App Store IPA before uploading only to TestFlight"
   assert.match(fastfile, /destination: "export"/);
   assert.match(fastfile, /upload_to_testflight\(/);
   assert.match(fastfile, /changelog = nil if changelog\.empty\?/);
-  assert.doesNotMatch(fastfile, /upload_to_app_store/);
+  assert.match(fastfile, /submit_for_review: false/);
+  assert.match(fastfile, /automatic_release: false/);
   assert.doesNotMatch(fastfile, /increment_build_number/);
 });
 

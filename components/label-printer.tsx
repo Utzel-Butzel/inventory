@@ -18,6 +18,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "next-i18next/client";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useOrganizationHref, useOrganizationPathname } from "@/components/organization-routing";
+import { labelEditorHref, labelWorkspaceHref } from "@/lib/label-editor-route";
 
 import {
   LabelDesigner,
@@ -31,6 +34,7 @@ import { LabelCopyCount } from "@/components/label-copy-count";
 import { repeatLabelCopies } from "@/lib/label-print-copies";
 import { LabelTextFields } from "@/components/label-text-fields";
 import { LabelRenderer } from "@/components/label-renderer";
+import { LabelTemplateSelect } from "@/components/label-template-select";
 import { automaticLabelText } from "@/lib/label-dynamic-layout";
 import { DEFAULT_PRINT_MEDIA, printMediaSchema, layoutLabelPages, type PrintMedia, type LabelSnapshot } from "@/lib/label-document";
 import { captureLabel, preparedSnapshot, ptouchSnapshot, printLabelDocument } from "@/lib/label-document-client";
@@ -82,8 +86,20 @@ const DEFAULT_ELEMENTS: LabelElement[] = [
   { type: "location", x: 46, y: 90, width: 51, height: 7, visible: false, fontSizeMm: 1.55, align: "left" },
 ];
 
-export function LabelPrinter({ canWrite = false, canManagePrinters = false, initialResourceId, initialUnitId }: { canWrite?: boolean; canManagePrinters?: boolean; initialResourceId?: string; initialUnitId?: string }) {
+export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { canWrite?: boolean; canManagePrinters?: boolean }) {
   const { t } = useT("labels");
+  const router = useRouter();
+  const organizationHref = useOrganizationHref();
+  const pathname = useOrganizationPathname();
+  const params = useParams<{ setupId?: string }>();
+  const searchParams = useSearchParams();
+  const initialResourceId = searchParams.get("resourceId") || undefined;
+  const initialUnitId = initialResourceId ? searchParams.get("unitId") || undefined : undefined;
+  const editorId = pathname.startsWith("/labels/editor/") ? params.setupId : undefined;
+  const copyFrom = searchParams.get("copyFrom");
+  const editorKey = editorId ? `${editorId}:${copyFrom ?? ""}` : null;
+  const initializedEditor = useRef<string | null>(null);
+  const closeDesigner = () => router.push(organizationHref(labelWorkspaceHref(searchParams.toString())));
   const [origin, setOrigin] = useState("");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -323,6 +339,32 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
     },
     [setupId, availableSetups, inversionOverride],
   );
+  useEffect(() => {
+    if (!editorId) {
+      initializedEditor.current = null;
+      setDesignerDraft(null);
+      return;
+    }
+    if (!canWrite || setupsLoading || !workspaceReady || initializedEditor.current === editorKey) return;
+    initializedEditor.current = editorKey;
+    setDesignerError(null);
+    const sourceId = editorId === "new" ? copyFrom : editorId;
+    const source = sourceId === "ptouch-preset" ? ptouchSetup
+      : activeSetup?.id === sourceId ? activeSetup : setups.find(setup => setup.id === sourceId);
+    if (sourceId && !source) {
+      setDesignerDraft(null);
+      setDesignerError(t("designer.notFound"));
+      return;
+    }
+    setDesignerDraft(editorId !== "new" && source ? structuredClone(source) : {
+      name: availableLabelSetupName(source ? t("setup.copyName", { name: source.name }) : t("setup.defaultName"), setups.map(setup => setup.name)),
+      widthMm: source?.widthMm ?? 62,
+      heightMm: source?.heightMm ?? 35,
+      elements: structuredClone(source?.elements ?? DEFAULT_ELEMENTS),
+      inverted: source?.inverted ?? false,
+      layout: source?.layout ?? null,
+    });
+  }, [editorId, editorKey, copyFrom, canWrite, setupsLoading, workspaceReady, activeSetup, ptouchSetup, setups, t]);
   const visibleSelected =
     resources.length > 0 && resources.every((resource) => selectedIds.has(resource.id));
   const selectedResources = useMemo(() => Array.from(selected.values()), [selected]);
@@ -407,17 +449,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         "/api/v1/label-setups", { cache: "no-store" },
       );
       setSetups(labelSetups);
-      setDesignerDraft({
-        name: availableLabelSetupName(
-          activeSetup ? t("setup.copyName", { name: activeSetup.name }) : t("setup.defaultName"),
-          labelSetups.map((setup) => setup.name),
-        ),
-        widthMm: activeSetup?.widthMm ?? 62,
-        heightMm: activeSetup?.heightMm ?? 35,
-        elements: structuredClone(activeSetup?.elements ?? DEFAULT_ELEMENTS),
-        inverted: activeSetup?.inverted ?? false,
-        layout: activeSetup?.layout ?? null,
-      });
+      router.push(organizationHref(labelEditorHref("new", searchParams.toString(), activeSetup?.id)));
     } catch {
       setSetupError(t("errors.loadSetups"));
     } finally {
@@ -428,8 +460,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
   const openDesigner = () => {
     if (!activeSetup) return openNewSetup();
     if (activeSetup.id === "ptouch-preset") return openNewSetup();
-    setDesignerError(null);
-    setDesignerDraft(structuredClone(activeSetup));
+    router.push(organizationHref(labelEditorHref(activeSetup.id, searchParams.toString())));
   };
 
   const saveDesigner = async (asNew = false) => {
@@ -474,6 +505,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       );
       setSetupId(result.labelSetup.id);
       setDesignerDraft(null);
+      closeDesigner();
     } catch (saveError) {
       setDesignerError(
         saveError instanceof Error && saveError.message === LABEL_SETUP_NAME_CONFLICT
@@ -502,6 +534,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
       setSetups(remaining);
       setSetupId(remaining[0]?.id ?? "");
       setDesignerDraft(null);
+      closeDesigner();
     } catch (deleteError) {
       setDesignerError(
         deleteError instanceof Error
@@ -784,7 +817,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         <p>{workspaceError || preferenceError}</p>
         <Button className="mt-2" variant="secondary" onClick={() => workspaceError ? window.location.reload() : setPreferenceRetry(n => n + 1)}>{t(workspaceError ? "workspace.reload" : "workspace.retry")}</Button>
       </div> : null}
-      <div className={styles.workspaceShell} inert={!workspaceReady || savingQueue} aria-busy={!workspaceReady || savingQueue}>
+      <div className={styles.workspaceShell} style={editorId ? { display: "none" } : undefined} inert={!!editorId || !workspaceReady || savingQueue} aria-busy={!workspaceReady || savingQueue}>
       <div className="mb-7 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand">
@@ -1058,24 +1091,14 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <label className="block min-w-0 flex-1 basis-52">
-                  <span className="sr-only">{t("setup.label")}</span>
-                  <select
-                    value={activeSetup?.id ?? ""}
-                    onChange={(event) => setSetupId(event.target.value)}
-                    disabled={setupsLoading || availableSetups.length === 0}
-                    className="h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-muted-strong outline-none focus:border-focus focus:ring-4 focus:ring-focus/10 disabled:bg-surface-subtle"
-                  >
-                    {availableSetups.length === 0 ? (
-                      <option value="">{t("setup.empty")}</option>
-                    ) : null}
-                    {availableSetups.map((setup) => (
-                      <option key={setup.id} value={setup.id}>
-                        {setup.name} · {setup.widthMm} × {setup.heightMm} mm
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <LabelTemplateSelect
+                  setups={availableSetups}
+                  value={activeSetup?.id ?? ""}
+                  onChange={setSetupId}
+                  loading={setupsLoading}
+                  sampleResource={labels[0]?.resource ?? resources[0] ?? null}
+                  origin={origin}
+                />
                 {canWrite ? (
                   <div className="flex gap-2">
                     <Button
@@ -1296,6 +1319,8 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
         </Card>
       ) : null}
 
+      </div>
+
       {documentPreview ? <LabelDocumentPreview labels={documentPreview.labels} media={documentPreview.media}
         destination={documentPreview.printer?.name ?? t("direct.browser")}
         onClose={() => setDocumentPreview(null)}
@@ -1304,8 +1329,9 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           else await printLabelDocument(documentPreview.labels, documentPreview.media);
         }} /> : null}
 
-      {designerDraft ? (
+      {editorId && canWrite && designerDraft ? (
         <LabelDesigner
+          key={editorKey}
           value={designerDraft}
           sampleResource={selectedResources[0] ? applyLabelTextOverride(selectedResources[0], textOverrides[labelTargetKey(selectedResources[0])]) : resources[0] ?? null}
           sampleResources={selectedResources.length ? selectedResources.map(resource => applyLabelTextOverride(resource, textOverrides[labelTargetKey(resource)])) : resources}
@@ -1319,12 +1345,15 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false, init
           testPrintDestination={printTarget === "shared" ? t("shared.destination") : printTarget === "ptouch" ? `${printer || "QZ Tray"} · ${tape} mm` : t("direct.browser")}
           testPrintSuccess={t(printTarget === "browser" ? "designer.browserPrintOpened" : printTarget === "shared" ? "shared.sent" : "direct.sent")}
           onClose={() => {
-            if (!designerSaving) setDesignerDraft(null);
+            if (!designerSaving) closeDesigner();
           }}
           onDelete={designerDraft.id ? deleteDesignerSetup : undefined}
         />
-      ) : null}
-      </div>
+      ) : editorId && canWrite ? <Card className="p-6">
+        <Button variant="secondary" onClick={closeDesigner}><ChevronLeft size={16} />{t("designer.back")}</Button>
+        {designerError || setupError ? <p role="alert" className="mt-4 text-danger">{designerError || setupError}</p>
+          : <p role="status" className="mt-4 flex items-center gap-2"><LoaderCircle size={16} className="animate-spin" />{t("workspace.loading")}</p>}
+      </Card> : null}
     </div>
   );
 }

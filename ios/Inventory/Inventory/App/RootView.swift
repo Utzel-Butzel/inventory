@@ -7,13 +7,28 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if state.isConfigured {
+            if state.isRestoringSession || state.isVerifyingStoredCredential {
+                sessionLoadingView
+            } else if state.isConfigured {
                 configuredContent
+                    .disabled(state.isConnecting)
+                    .overlay {
+                        if state.isChangingConnection {
+                            ProgressView(L10n.text("ui_switching_account"))
+                                .padding(24)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        }
+                    }
+            } else if state.hasStoredToken || state.restorationFailed {
+                sessionRecoveryView
             } else {
                 SettingsView(onboarding: true)
             }
         }
         .animation(.easeInOut(duration: 0.22), value: state.isConfigured)
+        .onChange(of: state.organizationContextIdentifier) { _, _ in
+            searchQuery = ""
+        }
         .background(KeyboardDismissalView())
         .onChange(of: state.pendingInventoryLink?.id, initial: true) { _, _ in
             if state.presentedTool != nil {
@@ -28,6 +43,31 @@ struct RootView: View {
         }) { link in
             InventoryLinkView(link: link)
                 .id(link.id)
+        }
+    }
+
+    private var sessionLoadingView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "shippingbox")
+                .font(.system(size: 48))
+                .foregroundStyle(InventoryTheme.accent)
+            Text(L10n.text("ui_open_inventory_166dbd73")).font(.title2.bold())
+            ProgressView(L10n.text("ui_restoring_session"))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var sessionRecoveryView: some View {
+        ContentUnavailableView {
+            Label(L10n.text("ui_connection_unavailable"), systemImage: "wifi.exclamationmark")
+        } description: {
+            Text(state.configurationError ?? L10n.text("ui_connection_retry_hint"))
+        } actions: {
+            Button(L10n.text("ui_retry_session")) {
+                Task { await state.retryRestoration() }
+            }
+            .buttonStyle(.borderedProminent)
+            if !state.restorationFailed { AccountSwitcherMenu() }
         }
     }
 
@@ -64,21 +104,21 @@ struct RootView: View {
     @available(iOS 18.0, *)
     private var modernTabView: some View {
         TabView(selection: $state.selectedTab) {
-            Tab("Inventar", systemImage: "shippingbox", value: RootTab.inventory) {
+            Tab(L10n.text("ui_inventory_d602900f"), systemImage: "shippingbox", value: RootTab.inventory) {
                 primaryInventoryList
             }
 
-            Tab("Karte", systemImage: "map", value: RootTab.map) {
+            Tab(L10n.text("ui_map_36a8c499"), systemImage: "map", value: RootTab.map) {
                 InventoryMapView()
             }
 
             if state.canReadSpatial {
-                Tab("Räume", systemImage: "cube.transparent", value: RootTab.rooms) {
+                Tab(L10n.text("ui_rooms_c8bb1368"), systemImage: "cube.transparent", value: RootTab.rooms) {
                     SpatialRoomsView()
                 }
             }
 
-            Tab("Einstellungen", systemImage: "gearshape", value: RootTab.settings) {
+            Tab(L10n.text("ui_settings_f5750a5d"), systemImage: "gearshape", value: RootTab.settings) {
                 SettingsView(onboarding: false)
             }
 
@@ -92,34 +132,34 @@ struct RootView: View {
         TabView(selection: $state.selectedTab) {
             primaryInventoryList
                 .tabItem {
-                    Label("Inventar", systemImage: "shippingbox")
+                    Label(L10n.text("ui_inventory_d602900f"), systemImage: "shippingbox")
                 }
                 .tag(RootTab.inventory)
 
             InventoryMapView()
                 .tabItem {
-                    Label("Karte", systemImage: "map")
+                    Label(L10n.text("ui_map_36a8c499"), systemImage: "map")
                 }
                 .tag(RootTab.map)
 
             if state.canReadSpatial {
                 SpatialRoomsView()
                     .tabItem {
-                        Label("Räume", systemImage: "cube.transparent")
+                        Label(L10n.text("ui_rooms_c8bb1368"), systemImage: "cube.transparent")
                     }
                     .tag(RootTab.rooms)
             }
 
             SettingsView(onboarding: false)
                 .tabItem {
-                    Label("Einstellungen", systemImage: "gearshape")
+                    Label(L10n.text("ui_settings_f5750a5d"), systemImage: "gearshape")
                 }
                 .tag(RootTab.settings)
 
             inventoryList(query: $searchQuery)
-                .searchable(text: $searchQuery, prompt: "Name, SKU, Tag oder Ort")
+                .searchable(text: $searchQuery, prompt: L10n.text("ui_name_sku_tag_or_location_a7c32941"))
                 .tabItem {
-                    Label("Suchen", systemImage: "magnifyingglass")
+                    Label(L10n.text("ui_search_dd097e77"), systemImage: "magnifyingglass")
                 }
                 .tag(RootTab.search)
         }
@@ -137,7 +177,7 @@ struct RootView: View {
 
     private var searchableInventoryList: some View {
         searchInventoryList
-            .searchable(text: $searchQuery, prompt: "Name, SKU, Tag oder Ort")
+            .searchable(text: $searchQuery, prompt: L10n.text("ui_name_sku_tag_or_location_a7c32941"))
     }
 
     @ViewBuilder

@@ -31,23 +31,23 @@ public enum JPEGDownsamplingError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .invalidMaximumPixelSize:
-            return "The maximum image size must be greater than zero."
+            return L10n.text("ui_the_maximum_image_size_must_be_greater_35c56746")
         case .invalidCompressionQuality:
-            return "JPEG compression quality must be between zero and one."
+            return L10n.text("ui_jpeg_compression_quality_must_be_between_zero_74028e67")
         case .unreadableSource:
-            return "The source image could not be read."
+            return L10n.text("ui_the_source_image_could_not_be_read_7560ca87")
         case .unableToCreateThumbnail:
-            return "The source image could not be downsampled."
+            return L10n.text("ui_the_source_image_could_not_be_downsampled_9de12c9a")
         case .unableToCreateDestination:
-            return "The JPEG destination could not be created."
+            return L10n.text("ui_the_jpeg_destination_could_not_be_created_8ae52f40")
         case .unableToFinalizeDestination:
-            return "The JPEG could not be written."
+            return L10n.text("ui_the_jpeg_could_not_be_written_4b3c6603")
         case .unableToReadOutputSize:
-            return "The size of the processed JPEG could not be determined."
+            return L10n.text("ui_the_size_of_the_processed_jpeg_could_86338616")
         case .invalidCropAspectRatio:
-            return "The requested image crop aspect ratio is invalid."
+            return L10n.text("ui_the_requested_image_crop_aspect_ratio_is_41758763")
         case .unableToCropImage:
-            return "The image could not be cropped to the camera viewfinder."
+            return L10n.text("ui_the_image_could_not_be_cropped_to_b7651eeb")
         }
     }
 }

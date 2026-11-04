@@ -103,7 +103,7 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
         captureRunning = true
         scheduleGeoreferenceCapture()
         scheduleKeyframeCapture()
-        onHint?("Bewege das iPhone langsam entlang aller Wände und Möbel.")
+        onHint?(L10n.text("ui_move_the_iphone_slowly_along_all_walls_fcd06b9a"))
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -165,13 +165,13 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
             arSession.pause()
             keyframeCaptureTask?.cancel()
             keyframeCaptureTask = nil
-            onHint?("Scan pausiert. Zum Fortsetzen bleibe im selben Raum.")
+            onHint?(L10n.text("ui_scan_paused_stay_in_the_same_room_e289e44a"))
         } else if captureRunning, let configuration = arSession.configuration {
             // Keep RoomPlan's capture session and its geometry alive. Calling
             // captureSession.run here would start a new room detection pass.
             arSession.run(configuration)
             scheduleKeyframeCapture()
-            onHint?("Scan fortgesetzt. Bewege das iPhone langsam im selben Raum.")
+            onHint?(L10n.text("ui_scan_resumed_move_the_iphone_slowly_within_65635583"))
         }
     }
 
@@ -214,12 +214,12 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
 
         let normalizedName = currentRoomName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedName.isEmpty else {
-            onHint?("Gib diesem Raum zuerst einen Namen.")
+            onHint?(L10n.text("ui_give_this_room_a_name_first_9cbc1ed5"))
             return
         }
 
         guard let frame = arSession.currentFrame else {
-            onHint?("Die Raumortung startet noch. Bewege das iPhone kurz weiter.")
+            onHint?(L10n.text("ui_room_tracking_is_still_starting_keep_moving_ad5466f7"))
             return
         }
         finishing = true
@@ -263,7 +263,7 @@ final class RoomCaptureController: UIViewController, @preconcurrency RoomCapture
             return
         }
         guard !processedResult.walls.isEmpty || !processedResult.floors.isEmpty || !processedResult.objects.isEmpty else {
-            reportFailure(APIClientError.invalidUpload("Noch keine Raumgeometrie erkannt. Erfasse mindestens eine Wand oder ein Möbelstück und versuche es erneut."))
+            reportFailure(APIClientError.invalidUpload(L10n.text("ui_no_room_geometry_detected_yet_capture_at_5c9964a6")))
             return
         }
 
@@ -889,17 +889,17 @@ enum SpatialCaptureError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .worldMapUnavailable:
-            "Die AR-Weltkarte konnte nicht gespeichert werden. Scanne den Raum erneut."
+            L10n.text("ui_could_not_save_the_ar_world_map_6b91da7c")
         case .imageUnavailable:
-            "Das Kamerabild konnte nicht gespeichert werden."
+            L10n.text("ui_could_not_save_the_camera_image_538ce54c")
         case .relocalizationFailed:
-            "Der gespeicherte Raum wurde noch nicht zuverlässig erkannt."
+            L10n.text("ui_the_saved_room_has_not_been_reliably_959e72be")
         case .sessionFailed(let message):
-            "Die AR-Raumortung ist fehlgeschlagen: \(message)"
+            L10n.text("ui_ar_room_tracking_failed_0_3c80d942", message)
         case .placementUnavailable:
-            "Am Fadenkreuz wurde keine geeignete Oberfläche gefunden."
+            L10n.text("ui_no_suitable_surface_was_found_at_the_0778c75d")
         case .structureUnavailable:
-            "Es wurde noch kein Raum für die Gebäudestruktur erfasst."
+            L10n.text("ui_no_room_has_been_captured_for_the_da3bac48")
         }
     }
 }

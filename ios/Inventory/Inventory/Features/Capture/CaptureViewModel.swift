@@ -112,13 +112,13 @@ final class CaptureViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
             if let cached = state.inventoryAISettings {
                 applyAIDefaults(cached.inventorySettings, canAnalyze: state.canAnalyzeInventory, canResearch: state.canResearchInventory)
-                errorMessage = "KI-Vorgaben konnten nicht aktualisiert werden. Die zuletzt gespeicherten Vorgaben werden verwendet."
+                errorMessage = L10n.text("ui_could_not_update_ai_defaults_the_last_70c7320d")
             } else {
                 applyingAIDefaults = true
                 autoAnalyze = false
                 autoResearch = false
                 applyingAIDefaults = false
-                errorMessage = "KI-Vorgaben sind nicht erreichbar. Du kannst den Eintrag ohne automatische KI speichern oder die Schritte selbst aktivieren."
+                errorMessage = L10n.text("ui_ai_defaults_are_unavailable_you_can_save_4c3a0cf1")
             }
             aiDefaultsLoaded = true
         }
@@ -160,7 +160,7 @@ final class CaptureViewModel: ObservableObject {
 
     private func addEncodedData(_ data: Data, cropAspectRatio: CGFloat?) {
         guard mediaCount + processingCount < Self.maximumPhotos else {
-            errorMessage = "Pro Gegenstand sind höchstens zwölf Mediendateien möglich."
+            errorMessage = L10n.text("ui_a_maximum_of_twelve_media_files_is_cb9e8a91")
             return
         }
         processingCount += 1
@@ -190,7 +190,7 @@ final class CaptureViewModel: ObservableObject {
     func addPickerItems(_ items: [PhotosPickerItem]) {
         let openSlots = Self.maximumPhotos - mediaCount - processingCount
         guard openSlots > 0 else {
-            errorMessage = "Pro Gegenstand sind höchstens zwölf Mediendateien möglich."
+            errorMessage = L10n.text("ui_a_maximum_of_twelve_media_files_is_cb9e8a91")
             return
         }
         for item in items.prefix(openSlots) {
@@ -218,7 +218,7 @@ final class CaptureViewModel: ObservableObject {
                         throw error
                     }
                 } catch {
-                    errorMessage = "Ein Foto konnte nicht vorbereitet werden: \(error.localizedDescription)"
+                    errorMessage = L10n.text("ui_could_not_prepare_a_photo_0_a7637834", error.localizedDescription)
                 }
             }
         }
@@ -231,7 +231,7 @@ final class CaptureViewModel: ObservableObject {
 
     func addAttachment(_ file: MediaUploadFile, kind: CapturedInventoryAttachment.Kind) {
         guard mediaCount + processingCount < Self.maximumPhotos else {
-            errorMessage = "Pro Gegenstand sind höchstens zwölf Mediendateien möglich."
+            errorMessage = L10n.text("ui_a_maximum_of_twelve_media_files_is_cb9e8a91")
             try? FileManager.default.removeItem(at: file.fileURL)
             return
         }
@@ -252,7 +252,7 @@ final class CaptureViewModel: ObservableObject {
             )
             errorMessage = nil
         } catch {
-            errorMessage = "Die Mediendatei konnte nicht hinzugefügt werden: \(error.localizedDescription)"
+            errorMessage = L10n.text("ui_could_not_add_the_media_file_0_c36ae92a", error.localizedDescription)
             try? FileManager.default.removeItem(at: file.fileURL)
         }
     }
@@ -268,7 +268,7 @@ final class CaptureViewModel: ObservableObject {
         if code.count <= 180 {
             barcode = code
         } else {
-            errorMessage = "Der gescannte Code ist länger als die unterstützten 180 Zeichen."
+            errorMessage = L10n.text("ui_the_scanned_code_exceeds_the_supported_180_9f6b20ae")
         }
     }
 
@@ -292,7 +292,7 @@ final class CaptureViewModel: ObservableObject {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let request = ResourceCreateRequest(
             name: normalizedName.isEmpty
-                ? (sku.nilIfBlank ?? barcode.nilIfBlank ?? serialNumber.nilIfBlank ?? "Untitled item")
+                ? (sku.nilIfBlank ?? barcode.nilIfBlank ?? serialNumber.nilIfBlank ?? L10n.text("ui_untitled_item_5f9e46c7"))
                 : normalizedName,
             type: resourceType,
             sku: sku.nilIfBlank,

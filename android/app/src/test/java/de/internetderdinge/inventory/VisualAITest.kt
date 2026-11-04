@@ -10,6 +10,7 @@ import java.io.File
 import java.time.Instant
 
 class VisualAITest {
+    @org.junit.Before fun initializeTranslations() { installLocaleResources() }
     @Test fun countPollsTheSignedJobInsteadOfStartingAnotherPaidPrediction() = runBlocking {
         MockWebServer().use { server ->
             val photo = File.createTempFile("inventory-count", ".jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }

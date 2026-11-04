@@ -13,18 +13,18 @@ struct NotificationInboxView: View {
     var body: some View {
         Group {
             if loading && notifications.isEmpty {
-                ProgressView("Benachrichtigungen werden geladen …")
+                ProgressView(L10n.text("ui_loading_notifications_6eef5eb5"))
             } else if notifications.isEmpty {
                 ContentUnavailableView {
                     Label(
-                        unreadOnly ? "Keine ungelesenen Hinweise" : "Keine Benachrichtigungen",
+                        unreadOnly ? L10n.text("ui_no_unread_notices_0de3e0a2") : L10n.text("ui_no_notifications_d4c242c5"),
                         systemImage: "bell.slash"
                     )
                 } description: {
                     Text(
                         unreadOnly
-                            ? "Alle Hinweise wurden gelesen."
-                            : "Neue Bestands-, Frist- und Rückgabehinweise erscheinen hier."
+                            ? L10n.text("ui_all_notices_have_been_read_4f979f6b")
+                            : L10n.text("ui_new_stock_deadline_and_return_notices_appear_15a7c533")
                     )
                 }
             } else {
@@ -35,7 +35,7 @@ struct NotificationInboxView: View {
                 .refreshable { await load() }
             }
         }
-        .navigationTitle("Benachrichtigungen")
+        .navigationTitle(L10n.text("ui_notifications_f7205df4"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -44,38 +44,38 @@ struct NotificationInboxView: View {
                 } label: {
                     Image(systemName: "gearshape")
                 }
-                .accessibilityLabel("Benachrichtigungsregeln")
+                .accessibilityLabel(L10n.text("ui_notification_rules_154e021e"))
 
                 Menu {
-                    Toggle("Nur ungelesene", isOn: $unreadOnly)
+                    Toggle(L10n.text("ui_unread_only_e7f3c3d5"), isOn: $unreadOnly)
 
                     Button {
                         Task { await markAllRead() }
                     } label: {
-                        Label("Alle als gelesen markieren", systemImage: "checkmark.circle")
+                        Label(L10n.text("ui_mark_all_as_read_f5a8697d"), systemImage: "checkmark.circle")
                     }
                     .disabled(unreadCount == 0 || markingAllRead || organizationIsReadOnly)
                 } label: {
                     Image(systemName: unreadCount > 0 ? "bell.badge.fill" : "bell")
                 }
-                .accessibilityLabel("Benachrichtigungsoptionen")
+                .accessibilityLabel(L10n.text("ui_notification_options_0ef76186"))
                 .accessibilityValue(
-                    unreadCount == 1 ? "1 ungelesen" : "\(unreadCount) ungelesen"
+                    unreadCount == 1 ? L10n.text("ui_1_unread_8cde719b") : L10n.text("ui_0_unread_d2a37de5", unreadCount)
                 )
             }
         }
         .task(id: loadKey) { await load() }
         .alert(
-            "Benachrichtigungen konnten nicht aktualisiert werden",
+            L10n.text("ui_could_not_update_notifications_7252a324"),
             isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
-            Button("Erneut versuchen") { Task { await load() } }
-            Button("Abbrechen", role: .cancel) { errorMessage = nil }
+            Button(L10n.text("ui_retry_948643cb")) { Task { await load() } }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
@@ -116,7 +116,7 @@ struct NotificationInboxView: View {
                         Circle()
                             .fill(InventoryTheme.accent)
                             .frame(width: 8, height: 8)
-                            .accessibilityLabel("Ungelesen")
+                            .accessibilityLabel(L10n.text("ui_unread_de3a8021"))
                     }
                 }
                 Text(notification.body)
@@ -241,14 +241,14 @@ private struct NotificationResourceDestinationView: View {
                 ResourceDetailView(resource: resource)
             } else if let errorMessage {
                 ContentUnavailableView {
-                    Label("Eintrag nicht verfügbar", systemImage: "exclamationmark.triangle")
+                    Label(L10n.text("ui_inventory_item_unavailable_9d3512e1"), systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(errorMessage)
                 } actions: {
-                    Button("Erneut versuchen") { Task { await load() } }
+                    Button(L10n.text("ui_retry_948643cb")) { Task { await load() } }
                 }
             } else {
-                ProgressView("Eintrag wird geladen …")
+                ProgressView(L10n.text("ui_loading_item_b6c8e052"))
             }
         }
         .task(id: state.client?.contextIdentifier) { await load() }

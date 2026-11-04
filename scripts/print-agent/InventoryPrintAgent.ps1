@@ -1,11 +1,20 @@
-param([string]$ConfigPath = "$PSScriptRoot\config.json", [switch]$Once, [switch]$ValidateJournal)
+param(
+    [string]$ConfigPath = "$PSScriptRoot\config.json",
+    [switch]$Once,
+    [switch]$ValidateJournal,
+    [ValidatePattern('^[a-z0-9][a-z0-9-]{0,31}$')][string]$InstanceName = 'default'
+)
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 $base = [Uri]$config.server
 if ($base.Scheme -ne 'https' -or $base.UserInfo -or $base.Query -or $base.Fragment) { throw 'An HTTPS server URL is required.' }
 if ($config.printer -notmatch 'P[ _-]?710BT' -or $config.token -notmatch '^iprt_[A-Za-z0-9_-]{43}$') { throw 'Invalid printer configuration.' }
-$mutex = New-Object Threading.Mutex($false, 'Global\InventoryPTP710BTPrintAgent')
+# Retain the original lock for existing installations. Named instances poll
+# separate server queues; Windows serializes their complete RAW print jobs.
+$mutexName = 'Global\InventoryPTP710BTPrintAgent'
+if ($InstanceName -ne 'default') { $mutexName += '-' + $InstanceName }
+$mutex = New-Object Threading.Mutex($false, $mutexName)
 if (-not $mutex.WaitOne(0)) { exit 0 }
 $statePath = Join-Path (Split-Path -Parent $ConfigPath) 'pending.json'
 function Save-State($state) {

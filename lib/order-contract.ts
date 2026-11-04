@@ -1,3 +1,4 @@
+import { loanHandoverSchema } from "@/lib/loan-handover-contract";
 import { z } from "zod";
 
 import {
@@ -94,6 +95,7 @@ export const orderPatchSchema = z
 
 export const orderLineMovementSchema = z
   .object({
+    handover: loanHandoverSchema.optional(),
     action: z.enum(["issue", "return"]),
     quantity: z.number().int().min(1).max(2_000_000_000),
     occurredAt: z.string().datetime().optional(),
@@ -104,6 +106,7 @@ export const orderLineMovementSchema = z
 
 export const orderLineUnitActionSchema = z
   .object({
+    handover: loanHandoverSchema.optional(),
     action: z.enum(["reserve", "release", "issue", "return"]),
     unitIds: z.array(z.string().uuid()).min(1).max(100),
     occurredAt: z.string().datetime().optional(),

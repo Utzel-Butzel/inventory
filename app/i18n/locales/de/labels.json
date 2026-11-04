@@ -70,6 +70,8 @@
     "description": "Über diesen Computer druckst du mit dem normalen Druckdialog und installierten Treibern. Freigegebene Drucker erreichst du über den Inventory Print Agent am Drucker-PC. Für einen direkt angeschlossenen PT-P710BT ist außerdem QZ Tray verfügbar."
   },
   "designer": {
+    "back": "Zurück zu Etiketten",
+    "notFound": "Diese Vorlage wurde nicht gefunden.",
     "eyebrow": "Etikettendesigner",
     "edit": "Vorlage bearbeiten",
     "create": "Vorlage erstellen",
@@ -264,7 +266,7 @@
     "fontSizeValue": "Schriftgröße",
     "letterSpacing": "Zeichenabstand",
     "shortcuts": "Tastaturkürzel",
-    "shortcutHelp": "← ↑ ↓ → Verschieben um 0,1 mm · Shift + Pfeil: 1 mm · Entf / Rücktaste: Element löschen · ⌘/Strg + D: duplizieren · ⌘/Strg + Z: rückgängig · ⌘/Strg + Shift + Z: wiederholen · ⌘/Strg + ] / [: ganz nach vorne / hinten. In Eingabefeldern bleiben die Tasten zur Texteingabe verfügbar.",
+    "shortcutHelp": "Esc: Auswahl aufheben · ← ↑ ↓ → Verschieben um 0,1 mm · Shift + Pfeil: 1 mm · Entf / Rücktaste: Element löschen · ⌘/Strg + D: duplizieren · ⌘/Strg + Z: rückgängig · ⌘/Strg + Shift + Z: wiederholen · ⌘/Strg + ] / [: ganz nach vorne / hinten. In Eingabefeldern bleiben die Tasten zur Texteingabe verfügbar.",
     "weights": {
       "100": "Thin",
       "200": "Extra Light",
@@ -284,7 +286,7 @@
     "testPrinting_other": "{{count}} Testetiketten werden gesendet…",
     "resizeElementHeight": "Höhe von {{element}} ändern",
     "autoLengthRightMargin": "Zusätzlicher rechter Rand",
-    "autoLengthRightMarginHint": "Zusätzlicher Freiraum am rechten Etikettenrand in Millimetern. Die Elemente behalten ihre Größe und Position.",
+    "autoLengthRightMarginHint": "Freiraum nach dem äußersten sichtbaren Element in Millimetern. Bei 0 mm endet das Etikett direkt an dessen Rahmen.",
     "autoLength": "Etikettenlänge an Text anpassen",
     "fixedLength": "Feste Länge",
     "autoLengthHint": "Wähle das Textfeld, das die Länge bestimmt. Elemente rechts davon rücken mit; QR-Codes und Bilder behalten ihre Größe. Manuelle Zeilenumbrüche bleiben erhalten.",
@@ -332,7 +334,7 @@
     },
     "rowCanvas": "Etikettenfläche. Pfeil links und rechts ändern die Reihenfolge.",
     "rowInstructions": "Ziehen oder Pfeil links/rechts ändert die Reihenfolge. Die Höhe lässt sich am Griff oder über das Maßfeld ändern. Positionen berechnet Auto-Layout.",
-    "rowShortcutHelp": "←/→ Reihenfolge ändern · Entf Element löschen · ⌘/Strg+D Duplizieren · ⌘/Strg+Z Rückgängig · ⌘/Strg+Umschalt+Z Wiederholen"
+    "rowShortcutHelp": "Esc: Auswahl aufheben · ←/→ Reihenfolge ändern · Entf Element löschen · ⌘/Strg+D Duplizieren · ⌘/Strg+Z Rückgängig · ⌘/Strg+Umschalt+Z Wiederholen"
   },
   "renderer": {
     "noImage": "Kein Bild",

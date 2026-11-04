@@ -264,7 +264,9 @@
       "succeeded": "Completed",
       "failed": "Failed"
     },
-    "notices": { "saved": "The monthly AI limit was saved." },
+    "notices": {
+      "saved": "The monthly AI limit was saved."
+    },
     "errors": {
       "load": "The AI usage report could not be loaded.",
       "save": "The AI limit could not be saved.",
@@ -652,28 +654,28 @@
       "scope": "What should be shared?",
       "scopes": {
         "inventory": "Inventory",
-      "item": "Single item"
-    },
-    "accessMode": "Access mode",
-    "accessModes": {
-      "view": {
-        "label": "View only",
-        "description": "Public catalogue without write access"
+        "item": "Single item"
       },
-      "stock": {
-        "label": "Stock tool",
-        "description": "Password-protected stock check-in and check-out"
-      }
-    },
-    "password": "Stock-tool password",
-    "passwordPlaceholder": "At least 8 characters",
-    "passwordHint": "The password is stored only as a hash and protects the catalogue, media, scanner, and bookings.",
+      "accessMode": "Access mode",
+      "accessModes": {
+        "view": {
+          "label": "View only",
+          "description": "Public catalogue without write access"
+        },
+        "stock": {
+          "label": "Stock tool",
+          "description": "Password-protected stock check-in and check-out"
+        }
+      },
+      "password": "Stock-tool password",
+      "passwordPlaceholder": "At least 8 characters",
+      "passwordHint": "The password is stored only as a hash and protects the catalogue, media, scanner, and bookings.",
       "name": "Link name",
       "namePlaceholder": "Workshop samples",
       "filter": "Custom-field filter",
       "optional": "· optional",
-    "allInventory": "All inventory · no filter",
-    "stockTool": "Stock tool",
+      "allInventory": "All inventory · no filter",
+      "stockTool": "Stock tool",
       "filterHint": "Only items whose {{field}} value exactly matches the value below will be visible.",
       "item": "Inventory item",
       "itemPlaceholder": "Search by name, SKU, location, or custom field…",
@@ -705,7 +707,8 @@
       "copied": "Copied",
       "open": "Open",
       "revoke": "Revoke",
-      "confirmRevoke": "Confirm revoke"
+      "confirmRevoke": "Confirm revoke",
+      "stockTool": "Stock tool"
     },
     "notices": {
       "created": "Public link “{{name}}” created.",
@@ -716,8 +719,8 @@
       "loadItems": "Could not load inventory items.",
       "nameRequired": "Give this link a name so it is easy to identify later.",
       "itemRequired": "Select the inventory item this link should share.",
-    "filterValueRequired": "Choose a value for the selected custom-field filter.",
-    "passwordRequired": "Set a stock-tool password with at least 8 characters.",
+      "filterValueRequired": "Choose a value for the selected custom-field filter.",
+      "passwordRequired": "Set a stock-tool password with at least 8 characters.",
       "create": "Could not create the public link.",
       "clipboard": "Clipboard access was blocked. Open the link and copy it from the browser instead.",
       "revoke": "Could not revoke the public link."
@@ -770,9 +773,18 @@
       "customExpiration": "Custom expiration date",
       "scopes": "Scopes",
       "scope": {
-        "read": { "label": "Read", "description": "View resources and media" },
-        "write": { "label": "Write", "description": "Create, edit, and merge" },
-        "ai": { "label": "AI", "description": "Run analysis and generation" }
+        "read": {
+          "label": "Read",
+          "description": "View resources and media"
+        },
+        "write": {
+          "label": "Write",
+          "description": "Create, edit, and merge"
+        },
+        "ai": {
+          "label": "AI",
+          "description": "Run analysis and generation"
+        }
       },
       "cancel": "Cancel",
       "dismissError": "Dismiss error",
@@ -1062,45 +1074,162 @@
       }
     },
     "permissions": {
-      "inventory_read": { "label": "View items", "description": "Browse, search, and open inventory items." },
-      "inventory_create": { "label": "Create items", "description": "Add new inventory items." },
-      "inventory_update": { "label": "Update items", "description": "Edit item fields, media, relations, and bills of materials." },
-      "inventory_delete": { "label": "Delete items", "description": "Permanently delete or merge inventory items." },
-      "inventory_import": { "label": "Import data", "description": "Create and update items from CSV files." },
-      "inventory_export": { "label": "Export data", "description": "Download the inventory as CSV, Excel, or PDF." },
-      "stock_read": { "label": "View stock", "description": "View balances, movements, units, and locations." },
-      "stock_manage": { "label": "Manage stock", "description": "Change balances, units, locations, and builds." },
-      "assignments_read": { "label": "View assignments", "description": "View checkouts, reservations, and assignments." },
-      "assignments_manage": { "label": "Manage assignments", "description": "Create, return, and cancel assignments." },
-      "requests_read": { "label": "View requests", "description": "View internal requests and reservation calendars." },
-      "requests_create": { "label": "Create requests", "description": "Request inventory for a future time period." },
-      "requests_manage": { "label": "Manage requests", "description": "Approve, reject, cancel, and fulfill internal requests." },
-      "counts_read": { "label": "View counts", "description": "View inventory cycles and count history." },
-      "counts_manage": { "label": "Manage counts", "description": "Configure cycles and record inventory counts." },
-      "spatial_read": { "label": "View spaces", "description": "View rooms, scans, maps, and placements." },
-      "spatial_manage": { "label": "Manage spaces", "description": "Create scans, structures, and item placements." },
-      "orders_read": { "label": "View orders", "description": "View purchase orders and receipts." },
-      "orders_manage": { "label": "Manage orders", "description": "Create and update purchase orders and receive stock." },
-      "workflows_read": { "label": "View scan workflows", "description": "View stock scanning workflows." },
-      "workflows_manage": { "label": "Manage scan workflows", "description": "Create, edit, and run stock scanning workflows." },
-      "labels_read": { "label": "View labels", "description": "View label layouts and print labels." },
-      "labels_manage": { "label": "Manage labels", "description": "Create and change reusable label layouts." },
-      "ai_analyze": { "label": "Analyze item photos", "description": "Fill inventory fields from saved item photos." },
-      "ai_research": { "label": "Research items and images", "description": "Fill missing details or find a reusable web image." },
-      "ai_recognize": { "label": "Recognize items", "description": "Match a camera photo to existing inventory." },
-      "ai_count": { "label": "Count from photos", "description": "Count visible items with a selectable vision model." },
-      "ai_images": { "label": "Generate images", "description": "Create or edit catalogue and cover images." },
-      "ai_translate": { "label": "Translate content", "description": "Generate inventory translations with AI." },
-      "ai_rooms": { "label": "Analyze rooms", "description": "Detect finishes and objects from room scan photos." },
-      "settings_inventory_types_manage": { "label": "Manage inventory types", "description": "Create and change inventory and relation types." },
-      "settings_custom_fields_manage": { "label": "Manage custom fields", "description": "Create and change custom field definitions." },
-      "settings_languages_manage": { "label": "Manage languages", "description": "Configure content languages and regenerate translations." },
-      "users_manage": { "label": "Manage users", "description": "Create users, assign roles, reset passwords, and disable accounts." },
-      "roles_manage": { "label": "Manage access", "description": "Create roles and conditional inventory access rules." },
-      "sharing_manage": { "label": "Manage public sharing", "description": "Create and revoke public inventory links." },
-      "tokens_manage": { "label": "Manage API tokens", "description": "Create and revoke workspace API credentials." },
-      "tokens_delegate": { "label": "Delegate token access", "description": "Create API tokens whose scopes may exceed the creator's own permissions." },
-      "webhooks_manage": { "label": "Manage webhooks", "description": "Export workspace inventory events to external endpoints and manage signing secrets and retries." }
+      "inventory_read": {
+        "label": "View items",
+        "description": "Browse, search, and open inventory items."
+      },
+      "inventory_create": {
+        "label": "Create items",
+        "description": "Add new inventory items."
+      },
+      "inventory_update": {
+        "label": "Update items",
+        "description": "Edit item fields, media, relations, and bills of materials."
+      },
+      "inventory_delete": {
+        "label": "Delete items",
+        "description": "Permanently delete or merge inventory items."
+      },
+      "inventory_import": {
+        "label": "Import data",
+        "description": "Create and update items from CSV files."
+      },
+      "inventory_export": {
+        "label": "Export data",
+        "description": "Download the inventory as CSV, Excel, or PDF."
+      },
+      "stock_read": {
+        "label": "View stock",
+        "description": "View balances, movements, units, and locations."
+      },
+      "stock_manage": {
+        "label": "Manage stock",
+        "description": "Change balances, units, locations, and builds."
+      },
+      "assignments_read": {
+        "label": "View assignments",
+        "description": "View checkouts, reservations, and assignments."
+      },
+      "assignments_manage": {
+        "label": "Manage assignments",
+        "description": "Create, return, and cancel assignments."
+      },
+      "requests_read": {
+        "label": "View requests",
+        "description": "View internal requests and reservation calendars."
+      },
+      "requests_create": {
+        "label": "Create requests",
+        "description": "Request inventory for a future time period."
+      },
+      "requests_manage": {
+        "label": "Manage requests",
+        "description": "Approve, reject, cancel, and fulfill internal requests."
+      },
+      "counts_read": {
+        "label": "View counts",
+        "description": "View inventory cycles and count history."
+      },
+      "counts_manage": {
+        "label": "Manage counts",
+        "description": "Configure cycles and record inventory counts."
+      },
+      "spatial_read": {
+        "label": "View spaces",
+        "description": "View rooms, scans, maps, and placements."
+      },
+      "spatial_manage": {
+        "label": "Manage spaces",
+        "description": "Create scans, structures, and item placements."
+      },
+      "orders_read": {
+        "label": "View orders",
+        "description": "View purchase orders and receipts."
+      },
+      "orders_manage": {
+        "label": "Manage orders",
+        "description": "Create and update purchase orders and receive stock."
+      },
+      "workflows_read": {
+        "label": "View scan workflows",
+        "description": "View stock scanning workflows."
+      },
+      "workflows_manage": {
+        "label": "Manage scan workflows",
+        "description": "Create, edit, and run stock scanning workflows."
+      },
+      "labels_read": {
+        "label": "View labels",
+        "description": "View label layouts and print labels."
+      },
+      "labels_manage": {
+        "label": "Manage labels",
+        "description": "Create and change reusable label layouts."
+      },
+      "ai_analyze": {
+        "label": "Analyze item photos",
+        "description": "Fill inventory fields from saved item photos."
+      },
+      "ai_research": {
+        "label": "Research items and images",
+        "description": "Fill missing details or find a reusable web image."
+      },
+      "ai_recognize": {
+        "label": "Recognize items",
+        "description": "Match a camera photo to existing inventory."
+      },
+      "ai_count": {
+        "label": "Count from photos",
+        "description": "Count visible items with a selectable vision model."
+      },
+      "ai_images": {
+        "label": "Generate images",
+        "description": "Create or edit catalogue and cover images."
+      },
+      "ai_translate": {
+        "label": "Translate content",
+        "description": "Generate inventory translations with AI."
+      },
+      "ai_rooms": {
+        "label": "Analyze rooms",
+        "description": "Detect finishes and objects from room scan photos."
+      },
+      "settings_inventory_types_manage": {
+        "label": "Manage inventory types",
+        "description": "Create and change inventory and relation types."
+      },
+      "settings_custom_fields_manage": {
+        "label": "Manage custom fields",
+        "description": "Create and change custom field definitions."
+      },
+      "settings_languages_manage": {
+        "label": "Manage languages",
+        "description": "Configure content languages and regenerate translations."
+      },
+      "users_manage": {
+        "label": "Manage users",
+        "description": "Create users, assign roles, reset passwords, and disable accounts."
+      },
+      "roles_manage": {
+        "label": "Manage access",
+        "description": "Create roles and conditional inventory access rules."
+      },
+      "sharing_manage": {
+        "label": "Manage public sharing",
+        "description": "Create and revoke public inventory links."
+      },
+      "tokens_manage": {
+        "label": "Manage API tokens",
+        "description": "Create and revoke workspace API credentials."
+      },
+      "tokens_delegate": {
+        "label": "Delegate token access",
+        "description": "Create API tokens whose scopes may exceed the creator's own permissions."
+      },
+      "webhooks_manage": {
+        "label": "Manage webhooks",
+        "description": "Export workspace inventory events to external endpoints and manage signing secrets and retries."
+      }
     },
     "fields": {
       "id": "ID",
@@ -1296,6 +1425,31 @@
     }
   },
   "csv": {
+    "migration": {
+      "value": "Purchase price",
+      "exportCsv": "CSV for {{system}}",
+      "exportCsvDescription": "Columns and values for the selected destination system.",
+      "fileHint": "UTF-8 · up to 5 MB and 1,000 entries · preview before importing",
+      "source": "Import from",
+      "target": "Export for",
+      "systems": {
+        "open-inventory": "Open Inventory",
+        "snipe-it": "Snipe-IT (assets)",
+        "homebox": "Homebox"
+      },
+      "currency": "Currency of purchase prices",
+      "mapping": "Review column mapping",
+      "notes": "Notes (original value)",
+      "limitations": "Transfers inventory entries. Images, attachments, loans, users and history are not included. Extra fields and source IDs are retained as text in notes; relationships are not rebuilt. Unknown statuses become Available and their original values remain in notes. Only new entries are created.",
+      "importHints": {
+        "snipe-it": "Export your assets from Snipe-IT as CSV and select the file here. Name, asset tag, serial number, location, category and purchase cost are mapped. Each asset represents one unit.",
+        "homebox": "Select a Homebox CSV export with HB. columns. Quantities, locations, tags, serial numbers and purchase prices are mapped. Quantities must be whole numbers. Comma, semicolon and tab delimiters are detected automatically."
+      },
+      "exportHints": {
+        "snipe-it": "CSV for the Snipe-IT asset importer. Every entry must contain exactly one unit. The name becomes the model; the first category becomes the model category. Check status labels and currency in the destination; loans are not recreated. Asset tags may update existing assets there. Extra data is included in notes.",
+        "homebox": "CSV for the Homebox importer. SKU, barcode and currency become custom fields. Other data is included in notes. Portable CSV files allow up to 1,000 characters in notes and 255 in descriptions; longer content blocks export. Repeated imports may update existing entries using the import reference."
+      }
+    },
     "title": "Inventory import and export",
     "description": "Export inventory as CSV, Excel, or PDF, or preview up to 1,000 new inventory items before importing CSV.",
     "exportOnlyDescription": "Export the current inventory as CSV, Excel, or PDF.",
@@ -1303,9 +1457,18 @@
     "exporting": "Preparing {{format}}…",
     "exportFormats": "Export formats",
     "formats": {
-      "csv": { "label": "CSV data", "description": "Import-compatible UTF-8 data with all fields." },
-      "xlsx": { "label": "Excel workbook", "description": "Formatted workbook with filters, frozen headers, and typed cells." },
-      "pdf": { "label": "PDF report", "description": "Compact printable inventory overview with page numbers." }
+      "csv": {
+        "label": "CSV data",
+        "description": "Import-compatible UTF-8 data with all fields."
+      },
+      "xlsx": {
+        "label": "Excel workbook",
+        "description": "Formatted workbook with filters, frozen headers, and typed cells."
+      },
+      "pdf": {
+        "label": "PDF report",
+        "description": "Compact printable inventory overview with page numbers."
+      }
     },
     "chooseFile": "Choose a UTF-8 CSV file",
     "fileHint": "Use the exported headers; id and timestamps are ignored on import.",

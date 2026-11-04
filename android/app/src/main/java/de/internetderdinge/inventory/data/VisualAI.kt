@@ -1,5 +1,8 @@
 package de.internetderdinge.inventory.data
 
+import de.internetderdinge.inventory.L10n
+import de.internetderdinge.inventory.R
+
 import kotlinx.coroutines.delay
 import org.json.JSONObject
 import java.io.IOException
@@ -11,7 +14,7 @@ object VisualAI {
         while (true) {
             val response = api.multipart("ai/recognize", listOf(image), key, "image")
             if (response.status != 202) return response.json
-            check(System.currentTimeMillis() < deadline) { "Die Erkennung dauert zu lange. Bitte erneut versuchen." }
+            check(System.currentTimeMillis() < deadline) { L10n.text(R.string.ui_recognition_is_taking_too_long_please_try_7b8e648f) }
             delay(response.retryAfter.coerceIn(1, 5) * 1000)
         }
     }
@@ -27,9 +30,9 @@ object VisualAI {
         var deadline = System.currentTimeMillis() + 11 * 60_000
         while (reply.status == 202) {
             val job = reply.json
-            require(job.s("status") == "processing" && job.s("jobToken").isNotBlank()) { "Ungültiger Zählauftrag." }
+            require(job.s("status") == "processing" && job.s("jobToken").isNotBlank()) { L10n.text(R.string.ui_invalid_counting_job_2545f1c1) }
             deadline = minOf(deadline, Instant.parse(job.getString("expiresAt")).toEpochMilli() + 10_000)
-            check(System.currentTimeMillis() < deadline) { "Die Zählung ist abgelaufen." }
+            check(System.currentTimeMillis() < deadline) { L10n.text(R.string.ui_the_counting_job_has_expired_a9bb2c21) }
             delay(reply.retryAfter.coerceIn(1, 10) * 1000)
             try { reply = api.raw("ai/count/jobs", "POST", obj("jobToken" to job.getString("jobToken"))) }
             catch (e: IOException) { if (e is ApiError && !e.retryable) throw e }

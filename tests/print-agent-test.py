@@ -15,6 +15,22 @@ DATA = b'%PDF-1.7\nTest only'
 JOB = {'id':'ac53fa28-e167-47c0-bcbc-581e30554899','format':'pdf','data':base64.b64encode(DATA).decode(),'sha256':hashlib.sha256(DATA).hexdigest(),'pageWidthMm':210,'pageHeightMm':297}
 
 class AgentTests(unittest.TestCase):
+    def test_bluetooth_config_requires_local_helper_and_ptouch(self):
+        config = {**CONFIG, 'kind':'ptouch', 'bluetoothAddress':'B4:22:00:EC:AE:9D', 'bluetoothHelper':'/tmp/helper'}
+        self.assertEqual(agent.validate_config(config)['kind'], 'ptouch')
+        for change in [{'kind':'system'}, {'bluetoothAddress':'--other-device'}, {'bluetoothHelper':'relative-helper'}, {'bluetoothHelper':None}]:
+            with self.assertRaises(ValueError): agent.validate_config({**config, **change})
+
+    @patch.object(agent.sys, 'platform', 'darwin')
+    def test_bluetooth_destination_cannot_be_overridden_by_remote_job(self):
+        with tempfile.NamedTemporaryFile() as helper:
+            Path(helper.name).chmod(0o700)
+            config=agent.validate_config({**CONFIG, 'kind':'ptouch', 'bluetoothAddress':'B4:22:00:EC:AE:9D', 'bluetoothHelper':helper.name})
+            job={**JOB, 'bluetoothAddress':'other-device', 'bluetoothHelper':'/bin/false'}
+            self.assertEqual(agent.system_command(config,job,Path('/tmp/label.bin'),platform='posix'),
+                             [helper.name,config['bluetoothAddress'],'print','/tmp/label.bin'])
+            with self.assertRaises(ValueError): agent.system_command(config,job,Path('/tmp/label.bin'),platform='nt')
+
     def test_payload_validation(self):
         self.assertEqual(agent.validate_job(CONFIG, JOB), DATA)
         for change in [{'format':'ptouch'}, {'sha256':'bad'}, {'pageWidthMm':float('nan')}, {'data':'%bad'}]:

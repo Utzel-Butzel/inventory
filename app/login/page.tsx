@@ -13,6 +13,7 @@ import { LocalizedThemeToggle } from "@/components/theme-toggle";
 import { UiI18nProvider } from "@/components/ui-i18n-provider";
 import { getSessionIdentity } from "@/lib/api-auth";
 import { getAppBranding } from "@/lib/app-branding";
+import { safeLoginCallback } from "@/lib/native-auth-contract";
 import { organizationPath } from "@/lib/organization-path";
 import { getResources, getT } from "@/lib/ui-i18n/server";
 
@@ -30,16 +31,6 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const dynamic = "force-dynamic";
-
-function safeCallback(
-  value: string | string[] | undefined,
-  fallback = "/inventory",
-) {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  return candidate?.startsWith("/") && !candidate.startsWith("//")
-    ? candidate
-    : fallback;
-}
 
 function enabledQueryFlag(value: string | string[] | undefined) {
   const candidate = Array.isArray(value) ? value[0] : value;
@@ -68,12 +59,15 @@ export default async function LoginPage({
     searchParams,
   ]);
   if (identity) {
-    redirect(organizationPath(identity.organization.slug, "/inventory"));
+    redirect(safeLoginCallback(
+      resolvedSearchParams.callbackUrl,
+      organizationPath(identity.organization.slug, "/inventory"),
+    ));
   }
   const demoHighlighted =
     demoAccessEnabled && enabledQueryFlag(resolvedSearchParams.demo);
-  const callbackUrl = safeCallback(resolvedSearchParams.callbackUrl);
-  const demoCallbackUrl = safeCallback(
+  const callbackUrl = safeLoginCallback(resolvedSearchParams.callbackUrl);
+  const demoCallbackUrl = safeLoginCallback(
     resolvedSearchParams.callbackUrl,
     organizationPath(configuredDemoSlug(), "/inventory"),
   );

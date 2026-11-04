@@ -363,7 +363,7 @@ private struct MarkdownDescriptionImage: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(.primary.opacity(0.08), lineWidth: 1)
         }
-        .accessibilityLabel(altText.isEmpty ? "Bild in der Beschreibung" : altText)
+        .accessibilityLabel(altText.isEmpty ? L10n.text("ui_image_in_the_description_eeefe92f") : altText)
     }
 
     private var matchedMedia: InventoryMedia? {

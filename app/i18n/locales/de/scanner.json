@@ -258,7 +258,10 @@
       "unit": "Einheit",
       "resource": "Eintrag",
       "metadata": "Gespeicherte Metadaten",
-      "next": "Nächsten Code scannen"
+      "next": "Nächsten Code scannen",
+      "stockBooked": "Bestandsänderung {{delta}} erfolgreich gebucht.",
+      "assemblyCompleted": "Baugruppe fertiggestellt und Komponenten ausgebucht.",
+      "newStock": "Neuer Bestand"
     },
     "resolving": "EPD-Nummer und Workflow werden aufgelöst…",
     "resolveErrorTitle": "Code konnte nicht aufgelöst werden",
@@ -319,7 +322,13 @@
       "scanAgain": "Erneut scannen",
       "updating": "Bestand wird aktualisiert…",
       "cannotUpdate": "Einheit kann nicht aktualisiert werden",
-      "confirm": "Bestätigen und Bestand aktualisieren"
+      "confirm": "Bestätigen und Bestand aktualisieren",
+      "stockBooking": "Bestandsbuchung",
+      "completeAssembly": "Montage abschließen",
+      "action": "Aktion",
+      "buildQuantity": "{{quantity}} × Baugruppe fertigstellen",
+      "bookDelta": "{{delta}} buchen",
+      "updateUnit": "Einheit aktualisieren"
     }
   },
   "publicAction": {
@@ -547,21 +556,24 @@
           "full": "Vollständiger Wert",
           "url-query": "URL-Parameter",
           "prefix": "Präfix entfernen",
-          "regex": "Regex"
+          "regex": "Regulärer Ausdruck"
         },
-      "queryParameter": "Abfrageparameter",
-      "queryParameterPlaceholder": "d",
-      "sourceOrigin": "Erlaubter Quellursprung",
-      "sourceOriginPlaceholder": "https://paperlesspaper.de",
-      "sourcePath": "Erlaubter Pfad",
-      "sourcePathPlaceholder": "/b",
-      "identifierKey": "Eigenschaftsschlüssel der Kennung",
-      "identifierKeyPlaceholder": "epdNumber",
-      "prefix": "Zu entfernendes Präfix",
-      "prefixPlaceholder": "EPD-",
-      "regexPattern": "Regulärer Ausdruck",
-      "regexFlags": "Flags",
-      "regexGroup": "Capture Group"
+        "queryParameter": "Abfrageparameter",
+        "queryParameterPlaceholder": "d",
+        "sourceOrigin": "Erlaubter Quellursprung",
+        "sourceOriginPlaceholder": "https://paperlesspaper.de",
+        "sourcePath": "Erlaubter Pfad",
+        "sourcePathPlaceholder": "/b",
+        "identifierKey": "Eigenschaftsschlüssel der Kennung",
+        "identifierKeyPlaceholder": "epdNumber",
+        "prefix": "Zu entfernendes Präfix",
+        "prefixPlaceholder": "EPD-",
+        "regexPattern": "Regulärer Ausdruck",
+        "regexFlags": "Flags",
+        "regexGroup": "Capture Group",
+        "fieldLabel": "Bezeichnung",
+        "extraction": "Extraktion",
+        "removeField": "QR-Feld entfernen"
       },
       "target": {
         "openStockSettings": "Bestandseinstellungen für {{name}} öffnen (neuer Tab)",
@@ -616,8 +628,8 @@
         "selectField": "Auswahlfeld",
         "removeField": "{{field}} entfernen",
         "scanInput": "Scan-Eingabe",
-      "propertyKey": "Eigenschaftsschlüssel",
-      "propertyKeyPlaceholder": "color",
+        "propertyKey": "Eigenschaftsschlüssel",
+        "propertyKeyPlaceholder": "color",
         "visibleLabel": "Sichtbare Bezeichnung",
         "required": "Vor dem Anwenden des Scans erforderlich",
         "options": "Optionen",
@@ -630,7 +642,19 @@
         "removeOption": "{{label}} entfernen",
         "none": "Dieser Workflow stellt während des Scans keine Fragen.",
         "addField": "Auswahlfeld hinzufügen",
-        "newProperty": "Eigenschaft {{value}}"
+        "newProperty": "Eigenschaft {{value}}",
+        "inputType": "Eingabetyp",
+        "placeholder": "Platzhalter",
+        "types": {
+          "text": "Text",
+          "textarea": "Mehrzeiliger Text",
+          "number": "Zahl",
+          "checkbox": "Kontrollkästchen",
+          "select": "Auswahlliste",
+          "radio": "Einfachauswahl",
+          "media": "Foto / Video",
+          "file": "Datei / PDF"
+        }
       },
       "actions": {
         "title": "Aktionen festlegen",
@@ -643,11 +667,11 @@
         "fixedTitle": "Feste Eigenschaften",
         "fixedDescription": "Aktionen übernehmen diese Werte, wenn die Übernahme gemeinsamer Eigenschaften aktiviert ist.",
         "addProperty": "Eigenschaft hinzufügen",
-      "key": "Schlüssel",
-      "keyPlaceholder": "assemblyStatus",
+        "key": "Schlüssel",
+        "keyPlaceholder": "assemblyStatus",
         "visibleLabel": "Sichtbare Bezeichnung",
-      "storedValue": "Gespeicherter Wert",
-      "storedValuePlaceholder": "finished-assembled",
+        "storedValue": "Gespeicherter Wert",
+        "storedValuePlaceholder": "finished-assembled",
         "visibleAs": "Sichtbar als {{value}}",
         "remove": "Entfernen",
         "none": "Keine festen Eigenschaften.",

@@ -162,7 +162,7 @@ export function WorkflowInputsStep({
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <label className={labelClass}>
-                Eingabetyp
+                {t("workflows.steps.inputs.inputType")}
                 <select
                   value={field.type}
                   onChange={(event) => {
@@ -177,14 +177,14 @@ export function WorkflowInputsStep({
                   className={inputClass}
                   disabled={!editable}
                 >
-                  <option value="text">Text</option>
-                  <option value="textarea">Mehrzeiliger Text</option>
-                  <option value="number">Zahl</option>
-                  <option value="checkbox">Checkbox</option>
-                  <option value="select">Select</option>
-                  <option value="radio">Radio</option>
-                  <option value="media">Foto / Video</option>
-                  <option value="file">Datei / PDF</option>
+                  <option value="text">{t("workflows.steps.inputs.types.text")}</option>
+                  <option value="textarea">{t("workflows.steps.inputs.types.textarea")}</option>
+                  <option value="number">{t("workflows.steps.inputs.types.number")}</option>
+                  <option value="checkbox">{t("workflows.steps.inputs.types.checkbox")}</option>
+                  <option value="select">{t("workflows.steps.inputs.types.select")}</option>
+                  <option value="radio">{t("workflows.steps.inputs.types.radio")}</option>
+                  <option value="media">{t("workflows.steps.inputs.types.media")}</option>
+                  <option value="file">{t("workflows.steps.inputs.types.file")}</option>
                 </select>
               </label>
               <StorageTargetSelect
@@ -195,7 +195,7 @@ export function WorkflowInputsStep({
                 compact
               />
               <label className={labelClass}>
-                Platzhalter
+                {t("workflows.steps.inputs.placeholder")}
                 <input
                   value={field.placeholder}
                   onChange={(event) =>

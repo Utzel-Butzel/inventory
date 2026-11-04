@@ -16,13 +16,13 @@ struct ResourceRelationsView: View {
     var body: some View {
         List {
             if loading && relations.isEmpty {
-                ProgressView("Beziehungen werden geladen …")
+                ProgressView(L10n.text("ui_loading_relationships_39a81a6f"))
                     .frame(maxWidth: .infinity)
             } else if relations.isEmpty {
                 ContentUnavailableView(
-                    "Keine Beziehungen",
+                    L10n.text("ui_no_relationships_83ea0892"),
                     systemImage: "link",
-                    description: Text("Dieser Eintrag ist noch mit keinem anderen Eintrag verbunden.")
+                    description: Text(L10n.text("ui_this_item_is_not_linked_to_any_821483bb"))
                 )
             } else {
                 ForEach(relations) { relation in
@@ -32,7 +32,7 @@ struct ResourceRelationsView: View {
                                 Button(role: .destructive) {
                                     Task { await remove(relation) }
                                 } label: {
-                                    Label("Entfernen", systemImage: "trash")
+                                    Label(L10n.text("ui_remove_3828375a"), systemImage: "trash")
                                 }
                                 .disabled(deletingID != nil)
                             }
@@ -40,7 +40,7 @@ struct ResourceRelationsView: View {
                 }
             }
         }
-        .navigationTitle("Beziehungen")
+        .navigationTitle(L10n.text("ui_relationships_80a6bf24"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if canEdit, !relationTypes.isEmpty {
@@ -48,7 +48,7 @@ struct ResourceRelationsView: View {
                     Button {
                         showCreate = true
                     } label: {
-                        Label("Beziehung hinzufügen", systemImage: "plus")
+                        Label(L10n.text("ui_add_relationship_7e5e2ac0"), systemImage: "plus")
                     }
                 }
             }
@@ -64,7 +64,7 @@ struct ResourceRelationsView: View {
             }
         }
         .alert(
-            "Beziehung konnte nicht geändert werden",
+            L10n.text("ui_could_not_change_relationship_d9923fb4"),
             isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -72,7 +72,7 @@ struct ResourceRelationsView: View {
         ) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
@@ -99,7 +99,7 @@ struct ResourceRelationsView: View {
                 }
                 Spacer()
                 if relation.origin == "spatial" {
-                    Text("Automatisch")
+                    Text(L10n.text("ui_automatic_4c2a3993"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(InventoryTheme.accent)
                 }
@@ -158,7 +158,7 @@ private enum ResourceRelationDirection: String, CaseIterable, Identifiable {
     case incoming
 
     var id: Self { self }
-    var title: String { self == .outgoing ? "Ausgehend" : "Eingehend" }
+    var title: String { self == .outgoing ? L10n.text("ui_outgoing_59da42ab") : L10n.text("ui_incoming_e60dcb26") }
 }
 
 private struct ResourceRelationCreateView: View {
@@ -190,13 +190,13 @@ private struct ResourceRelationCreateView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Beziehung") {
-                    Picker("Typ", selection: $relationTypeKey) {
+                Section(L10n.text("ui_relationship_b52d492d")) {
+                    Picker(L10n.text("ui_type_1b024183"), selection: $relationTypeKey) {
                         ForEach(relationTypes) { type in
                             Text(type.label).tag(type.key)
                         }
                     }
-                    Picker("Richtung", selection: $direction) {
+                    Picker(L10n.text("ui_direction_73ea47c9"), selection: $direction) {
                         ForEach(ResourceRelationDirection.allCases) { direction in
                             Text(direction.title).tag(direction)
                         }
@@ -204,12 +204,12 @@ private struct ResourceRelationCreateView: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section("Anderer Eintrag") {
+                Section(L10n.text("ui_other_item_e4dfb6af")) {
                     Button {
                         showResourcePicker = true
                     } label: {
                         HStack {
-                            Text(selectedResource?.name ?? "Eintrag auswählen")
+                            Text(selectedResource?.name ?? L10n.text("ui_select_item_cbcea774"))
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption)
@@ -227,27 +227,27 @@ private struct ResourceRelationCreateView: View {
                     }
                 }
             }
-            .navigationTitle("Beziehung hinzufügen")
+            .navigationTitle(L10n.text("ui_add_relationship_7e5e2ac0"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
+                    Button(L10n.text("ui_cancel_f7ff1178")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Speichert …" : "Hinzufügen") { save() }
+                    Button(saving ? L10n.text("ui_saving_4e85ab63") : L10n.text("ui_add_cbb95cf0")) { save() }
                         .disabled(saving || selectedResource == nil || relationTypeKey.isEmpty)
                 }
             }
             .sheet(isPresented: $showResourcePicker) {
                 NavigationStack {
                     ResourcePickerView(
-                        title: "Eintrag auswählen",
+                        title: L10n.text("ui_select_item_cbcea774"),
                         excludedResourceIDs: [resourceID]
                     ) { selectedResource = $0 }
                 }
             }
             .alert(
-                "Beziehung konnte nicht angelegt werden",
+                L10n.text("ui_could_not_create_relationship_566549d0"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
@@ -255,7 +255,7 @@ private struct ResourceRelationCreateView: View {
             ) {
                 Button("OK", role: .cancel) { errorMessage = nil }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }

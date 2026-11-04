@@ -26,7 +26,7 @@ enum MultipartFormFileBuilder {
             .appendingPathExtension("multipart")
 
         guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
-            throw APIClientError.invalidUpload("Unable to create the multipart upload body.")
+            throw APIClientError.invalidUpload(L10n.text("ui_unable_to_create_the_multipart_upload_body_53575cd2"))
         }
 
         do {
@@ -35,7 +35,7 @@ enum MultipartFormFileBuilder {
 
             for file in files {
                 guard file.fileURL.isFileURL else {
-                    throw APIClientError.invalidUpload("Uploads must use local file URLs.")
+                    throw APIClientError.invalidUpload(L10n.text("ui_uploads_must_use_local_file_urls_05685f16"))
                 }
                 let values = try file.fileURL.resourceValues(forKeys: [
                     .isRegularFileKey,
@@ -43,7 +43,7 @@ enum MultipartFormFileBuilder {
                 ])
                 guard values.isRegularFile == true, (values.fileSize ?? 0) > 0 else {
                     throw APIClientError.invalidUpload(
-                        "\(file.fileURL.lastPathComponent) is missing or empty."
+                        L10n.text("ui_0_is_missing_or_empty_a5179cd6", file.fileURL.lastPathComponent)
                     )
                 }
 
@@ -79,19 +79,19 @@ enum MultipartFormFileBuilder {
             .appendingPathExtension("multipart")
 
         guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
-            throw APIClientError.invalidUpload("Unable to create the multipart count body.")
+            throw APIClientError.invalidUpload(L10n.text("ui_unable_to_create_the_multipart_count_body_bd676751"))
         }
 
         do {
             guard image.fileURL.isFileURL else {
-                throw APIClientError.invalidUpload("The count image must use a local file URL.")
+                throw APIClientError.invalidUpload(L10n.text("ui_the_count_image_must_use_a_local_1cc87242"))
             }
             let values = try image.fileURL.resourceValues(forKeys: [
                 .isRegularFileKey,
                 .fileSizeKey,
             ])
             guard values.isRegularFile == true, (values.fileSize ?? 0) > 0 else {
-                throw APIClientError.invalidUpload("The count image is missing or empty.")
+                throw APIClientError.invalidUpload(L10n.text("ui_the_count_image_is_missing_or_empty_6cbb99e7"))
             }
 
             let output = try FileHandle(forWritingTo: outputURL)
@@ -155,14 +155,14 @@ enum MultipartFormFileBuilder {
 
         guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
             throw APIClientError.invalidUpload(
-                "Der Upload für die Objekterkennung konnte nicht vorbereitet werden."
+                L10n.text("ui_could_not_prepare_the_object_recognition_upload_055900c5")
             )
         }
 
         do {
             guard image.fileURL.isFileURL else {
                 throw APIClientError.invalidUpload(
-                    "Das Erkennungsfoto muss eine lokale Datei sein."
+                    L10n.text("ui_the_recognition_photo_must_be_a_local_334a94b1")
                 )
             }
             let values = try image.fileURL.resourceValues(forKeys: [
@@ -171,7 +171,7 @@ enum MultipartFormFileBuilder {
             ])
             guard values.isRegularFile == true, (values.fileSize ?? 0) > 0 else {
                 throw APIClientError.invalidUpload(
-                    "Das Erkennungsfoto fehlt oder ist leer."
+                    L10n.text("ui_the_recognition_photo_is_missing_or_empty_a8530d37")
                 )
             }
 
@@ -205,7 +205,7 @@ enum MultipartFormFileBuilder {
             .appendingPathExtension("multipart")
 
         guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
-            throw APIClientError.invalidUpload("Der Raumscan-Upload konnte nicht vorbereitet werden.")
+            throw APIClientError.invalidUpload(L10n.text("ui_could_not_prepare_the_room_scan_upload_1b02bd34"))
         }
 
         do {
@@ -213,7 +213,7 @@ enum MultipartFormFileBuilder {
             sceneEncoder.outputFormatting = [.sortedKeys]
             let sceneData = try sceneEncoder.encode(draft.scene)
             guard let sceneJSON = String(data: sceneData, encoding: .utf8) else {
-                throw APIClientError.invalidUpload("Die Raumgeometrie konnte nicht codiert werden.")
+                throw APIClientError.invalidUpload(L10n.text("ui_could_not_encode_room_geometry_7539c34b"))
             }
 
             let output = try FileHandle(forWritingTo: outputURL)
@@ -252,7 +252,7 @@ enum MultipartFormFileBuilder {
                 let data = try encoder.encode(georeference)
                 guard let json = String(data: data, encoding: .utf8) else {
                     throw APIClientError.invalidUpload(
-                        "Die geografische Referenz konnte nicht codiert werden."
+                        L10n.text("ui_could_not_encode_geographic_reference_772af340")
                     )
                 }
                 fields.append(("georeference", json))
@@ -278,7 +278,7 @@ enum MultipartFormFileBuilder {
                 let data = try encoder.encode(metadata)
                 guard let json = String(data: data, encoding: .utf8) else {
                     throw APIClientError.invalidUpload(
-                        "Die visuellen Raumreferenzen konnten nicht codiert werden."
+                        L10n.text("ui_could_not_encode_visual_room_references_952ad998")
                     )
                 }
                 fields.append(("keyframes", json))
@@ -344,11 +344,11 @@ enum MultipartFormFileBuilder {
 
     private static func validateLocalFile(_ url: URL) throws {
         guard url.isFileURL else {
-            throw APIClientError.invalidUpload("Raumscan-Dateien müssen lokal gespeichert sein.")
+            throw APIClientError.invalidUpload(L10n.text("ui_room_scan_files_must_be_stored_locally_60d62d77"))
         }
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
         guard values.isRegularFile == true, (values.fileSize ?? 0) > 0 else {
-            throw APIClientError.invalidUpload("\(url.lastPathComponent) fehlt oder ist leer.")
+            throw APIClientError.invalidUpload(L10n.text("ui_0_is_missing_or_empty_da6c1137", url.lastPathComponent))
         }
     }
 

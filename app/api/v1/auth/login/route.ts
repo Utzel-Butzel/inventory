@@ -1,28 +1,13 @@
-import { randomBytes } from "node:crypto";
-
-import { apiTokens } from "@/db/schema";
-import { getEffectiveRole } from "@/lib/access-control";
 import { hashApiToken } from "@/lib/api-auth";
 import { getAuthProviderConfiguration } from "@/lib/auth-provider-config";
-import { db } from "@/lib/db";
 import { authenticateLocalUser } from "@/lib/local-auth";
-import {
-  listOrganizationsForUser,
-  selectOrganization,
-} from "@/lib/organizations";
+import { issueNativeSession, NativeAuthError } from "@/lib/native-session";
 import { checkRateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { nativeLoginInputSchema } from "@/lib/validators";
 
 export const dynamic = "force-dynamic";
 
 const noStoreHeaders = { "Cache-Control": "no-store" };
-
-function nativeTokenLifetimeDays() {
-  const configured = Number(process.env.NATIVE_TOKEN_TTL_DAYS ?? "30");
-  return Number.isInteger(configured) && configured >= 1 && configured <= 365
-    ? configured
-    : 30;
-}
 
 function clientAddress(request: Request) {
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0];
@@ -130,77 +115,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const organizations = await listOrganizationsForUser(user.id);
-  const organization = selectOrganization(
-    organizations,
-    parsed.data.organizationId,
-  );
-  if (!organization) {
-    return Response.json(
-      {
-        error: parsed.data.organizationId
-          ? "Organization not found."
-          : "This account does not belong to an organization.",
-      },
-      { status: parsed.data.organizationId ? 404 : 403, headers: noStoreHeaders },
-    );
+  try {
+    const session = await issueNativeSession(user, parsed.data.deviceName, parsed.data.organizationId);
+    resetRateLimit(accountLimitKey);
+    resetRateLimit(pairLimitKey);
+    return Response.json(session, { status: 201, headers: noStoreHeaders });
+  } catch (error) {
+    if (error instanceof NativeAuthError) {
+      return Response.json({ error: error.message }, { status: error.status, headers: noStoreHeaders });
+    }
+    throw error;
   }
-  if (organization.isReadOnly) {
-    return Response.json(
-      { error: "Native API access is disabled for read-only organizations." },
-      { status: 403, headers: noStoreHeaders },
-    );
-  }
-
-  resetRateLimit(accountLimitKey);
-  resetRateLimit(pairLimitKey);
-
-  const plainToken = `inv_${randomBytes(32).toString("base64url")}`;
-  const expiresAt = new Date(
-    Date.now() + nativeTokenLifetimeDays() * 24 * 60 * 60_000,
-  );
-  const effectiveRole = await getEffectiveRole(
-    organization.role,
-    organization.id,
-  );
-  if (!effectiveRole) {
-    return Response.json(
-      { error: "This account is assigned to a role that no longer exists." },
-      { status: 403, headers: noStoreHeaders },
-    );
-  }
-  // Linked native credentials inherit live role policy on every request. All
-  // transport scopes are stored so a later role or rule grant takes effect
-  // without weakening authorization or forcing a fresh device login.
-  const scopes: Array<"read" | "write" | "ai"> = ["read", "write", "ai"];
-  const tokenName = `Inventory · ${parsed.data.deviceName}`;
-
-  await db.insert(apiTokens).values({
-    name: tokenName,
-    prefix: `${plainToken.slice(0, 12)}…${plainToken.slice(-4)}`,
-    tokenHash: hashApiToken(plainToken),
-    scopes,
-    createdBy: user.email,
-    userId: user.id,
-    userSessionVersion: user.sessionVersion,
-    organizationId: organization.id,
-    expiresAt,
-  });
-
-  return Response.json(
-    {
-      token: plainToken,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: organization.role,
-      },
-      scopes,
-      expiresAt: expiresAt.toISOString(),
-      organization,
-      organizations,
-    },
-    { status: 201, headers: noStoreHeaders },
-  );
 }

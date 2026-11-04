@@ -1,12 +1,16 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { prepareOrderHandover, recordOrderLoanHandover } from "@/lib/order-loan-handovers";
+import { HandoverBodyError } from "@/lib/loan-handover-contract";
+
+import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 
 import {
   assemblyBuildComponents,
   contacts,
   inventoryAssignments,
   orderLineUnits,
+  orderLoanHandovers,
   orderLines,
   orders,
   resources,
@@ -58,7 +62,7 @@ export class OrderOperationError extends Error {
 }
 
 export function orderHttpError(error: unknown, fallback: string) {
-  if (error instanceof OrderOperationError || error instanceof StockOperationError) {
+  if (error instanceof OrderOperationError || error instanceof StockOperationError || error instanceof HandoverBodyError) {
     return { status: error.status, message: error.message };
   }
   const message = error instanceof Error ? error.message : "";
@@ -655,6 +659,12 @@ export async function updateOrder(
         409,
       );
     }
+    if (patch.status === "cancelled" && order.type === "loan") {
+      const [documentedOpenLine] = await transaction.select({ id: orderLines.id }).from(orderLines)
+        .innerJoin(orderLoanHandovers, and(eq(orderLoanHandovers.organizationId, organizationId), eq(orderLoanHandovers.orderLineId, orderLines.id), eq(orderLoanHandovers.phase, "checkout")))
+        .where(and(eq(orderLines.organizationId, organizationId), eq(orderLines.orderId, orderId), gt(orderLines.fulfilledQuantity, orderLines.returnedQuantity))).limit(1);
+      if (documentedOpenLine) throw new OrderOperationError("Return documented equipment before cancelling this loan.", 409);
+    }
     if (patch.status === "cancelled") {
       const [reservedUnit] = await transaction
         .select({ id: orderLineUnits.id })
@@ -783,8 +793,8 @@ export async function executeOrderLineMovement(
     )
     .limit(1);
   if (!initial) throw new OrderOperationError("Order line not found.", 404);
-  assertOrderMovementAllowed(initial.order, input.action);
 
+  const handover = await prepareOrderHandover(initial.order.type, input.action, input.handover);
   const isReturn = input.action === "return";
   const totalPriceCents =
     !isReturn && initial.order.type === "sale" && initial.line.unitPriceCents !== null
@@ -857,6 +867,11 @@ export async function executeOrderLineMovement(
         }
       }
 
+      await recordOrderLoanHandover(transaction, {
+        order, lineId: line.id, resourceId: line.resourceId, unitId: null, unitCode: null,
+        quantity: input.quantity, movementId: movement.id, occurredAt: movement.occurredAt,
+        actor, action: input.action,
+      }, handover);
       await transaction
         .update(stockMovements)
         .set({ orderLineId: line.id })
@@ -1090,6 +1105,7 @@ export async function executeOrderLineUnitAction(
     lineId,
   );
   assertSerializedActionAllowed(initial.order, input.action);
+  const handover = await prepareOrderHandover(initial.order.type, input.action, input.handover);
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
   const unitIds = [...input.unitIds].sort();
 
@@ -1506,6 +1522,12 @@ export async function executeOrderLineUnitAction(
           createdBy: actor,
         })
         .returning();
+      if (input.action === "issue" || input.action === "return") {
+        await recordOrderLoanHandover(transaction, {
+          order, lineId: line.id, resourceId: resource.id, unitId: change.unit.id, unitCode: change.unit.code,
+          quantity: 1, movementId: movement.id, occurredAt, actor, action: input.action,
+        }, handover);
+      }
       movementIds.push(movement.id);
       if (change.delta < 0) {
         await consumeStockCost(transaction, {

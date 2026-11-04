@@ -1,3 +1,4 @@
+import type { LoanHandoverDocument } from "@/lib/loan-handover-contract";
 import type { InventoryAiSettings } from "@/lib/inventory-ai-settings";
 import { sql } from "drizzle-orm";
 import type { AiPromptCollection } from "@/lib/ai-prompt-templates";
@@ -3350,6 +3351,8 @@ export const inventoryAssignments = pgTable(
       .notNull()
       .defaultNow(),
     dueAt: timestamp("due_at", { withTimezone: true }),
+    checkoutDocumentedAt: timestamp("checkout_documented_at", { withTimezone: true }),
+    returnDocumentedAt: timestamp("return_documented_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     note: text("note").notNull().default(""),
     createdBy: varchar("created_by", { length: 320 }),
@@ -3362,6 +3365,7 @@ export const inventoryAssignments = pgTable(
       .defaultNow(),
   },
   (table) => [
+    uniqueIndex("inventory_assignments_organization_id_id_unique").on(table.organizationId, table.id),
     foreignKey({
       name: "inventory_assignments_organization_internal_request_line_fk",
       columns: [table.organizationId, table.internalRequestLineId],
@@ -3410,6 +3414,37 @@ export const inventoryAssignments = pgTable(
     ),
   ],
 );
+
+export const loanHandovers = pgTable("loan_handovers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: organizationIdColumn(),
+  assignmentId: uuid("assignment_id").notNull(),
+  phase: varchar("phase", { length: 16 }).$type<"checkout" | "return">().notNull(),
+  document: jsonb("document").$type<LoanHandoverDocument>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({ name: "loan_handovers_assignment_fk", columns: [table.organizationId, table.assignmentId], foreignColumns: [inventoryAssignments.organizationId, inventoryAssignments.id] }).onDelete("restrict"),
+  uniqueIndex("loan_handovers_assignment_phase_unique").on(table.organizationId, table.assignmentId, table.phase),
+  check("loan_handovers_phase_check", sql`${table.phase} in ('checkout', 'return')`),
+  check("loan_handovers_document_check", sql`jsonb_typeof(${table.document}) = 'object'`),
+]);
+
+export const orderLoanHandovers = pgTable("order_loan_handovers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: organizationIdColumn(),
+  orderLineId: uuid("order_line_id").notNull(),
+  movementId: uuid("movement_id").notNull().references(() => stockMovements.id, { onDelete: "restrict" }),
+  unitId: uuid("unit_id"),
+  phase: varchar("phase", { length: 16 }).$type<"checkout" | "return">().notNull(),
+  document: jsonb("document").$type<LoanHandoverDocument>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  foreignKey({ name: "order_loan_handovers_line_fk", columns: [table.organizationId, table.orderLineId], foreignColumns: [orderLines.organizationId, orderLines.id] }).onDelete("restrict"),
+  uniqueIndex("order_loan_handovers_movement_unique").on(table.movementId),
+  index("order_loan_handovers_line_idx").on(table.organizationId, table.orderLineId, table.unitId),
+  check("order_loan_handovers_phase_check", sql`${table.phase} in ('checkout', 'return')`),
+  check("order_loan_handovers_document_check", sql`jsonb_typeof(${table.document}) = 'object'`),
+]);
 
 export const assemblyBuildComponents = pgTable(
   "assembly_build_components",
@@ -4773,6 +4808,30 @@ export const apiTokens = pgTable(
       "api_tokens_user_binding_check",
       sql`(${table.userId} is null and ${table.userSessionVersion} is null) or (${table.userId} is not null and ${table.userSessionVersion} > 0)`,
     ),
+  ],
+);
+
+export const nativeAuthRequests = pgTable(
+  "native_auth_requests",
+  {
+    requestHash: varchar("request_hash", { length: 64 }).primaryKey(),
+    origin: text("origin").notNull(),
+    codeChallenge: varchar("code_challenge", { length: 43 }).notNull(),
+    state: varchar("state", { length: 43 }).notNull(),
+    deviceName: varchar("device_name", { length: 80 }).notNull(),
+    browserBindingHash: varchar("browser_binding_hash", { length: 64 }),
+    codeHash: varchar("code_hash", { length: 64 }).unique(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userSessionVersion: integer("user_session_version"),
+    organizationId: uuid("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("native_auth_requests_expiry_idx").on(table.expiresAt),
+    check("native_auth_requests_grant_check", sql`
+      (${table.codeHash} is null and ${table.userId} is null and ${table.userSessionVersion} is null and ${table.organizationId} is null)
+      or (${table.codeHash} is not null and ${table.userId} is not null and ${table.userSessionVersion} > 0 and ${table.organizationId} is not null)
+    `),
   ],
 );
 

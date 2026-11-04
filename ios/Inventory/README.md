@@ -30,9 +30,11 @@ deployment and device verification.
   next-scan button that keeps the selected flow
 - Camera-based part counting with confidence, manual correction, and reviewed stock +/-
 - Camera-based object recognition with ranked matches to existing inventory items
-- Email/password login with a device token stored in Keychain
+- Email/password and browser SSO (including Konglomerat) with device tokens stored in Keychain
 - Manual API token as an optional expert login
-- Organization discovery and switching with a remembered selection per server
+- Multiple saved accounts across domains, with a remembered organization per account
+- Quick account/organization switching directly from the inventory toolbar
+- Session restoration behind a loading screen, with retry on connection failures
 - Organization-pinned uploads and media caches that cannot cross workspace boundaries
 - Optional GPS coordinates for new captures
 - Continuous LiDAR multi-room capture with RoomPlan `CapturedStructure` USDZ models
@@ -54,6 +56,40 @@ Use HTTPS for devices. Plain HTTP is accepted only for `localhost`, loopback,
 and `.local` development hosts; bearer tokens are never sent over public HTTP.
 The Simulator can build and exercise API/UI behavior,
 but camera and scanner acceptance must be done on a physical iPhone.
+
+## Browser / SSO login
+
+Enter the server URL; the app loads that deployment’s configured login methods
+from `/api/v1/auth/options`. A button such as **Sign in with Konglomerat** appears
+only when that server has configured the provider, using the same login as the
+PWA. Changing domains immediately clears previous provider options. For Konglomerat, use `https://inventar.konglomerat.org`
+and choose its SSO provider in the browser. Confirm the displayed account to
+return to the app. **Use another SSO account** opens a separate browser session
+when adding a different user on the same server.
+
+The server needs the native browser handoff update and migration `0080`.
+No additional OAuth client configuration is required. See
+[native SSO](../../docs/native-sso.md) for protocol, rollout and verification.
+
+## Saved accounts and startup
+
+The account button at the top of **Inventory**, also available in **Settings →
+Accounts & organizations**, lists saved accounts with their server address and
+organizations. Choose an organization to switch, or **Add account** to connect
+another domain or another user on the same server. Switching keeps the previous
+account signed in. **Sign out** revokes/removes only the active account; the other
+saved accounts remain available from the sign-in screen.
+
+Tokens, account identities, organization selections, and the active account are
+saved together in a device-only Keychain item. Existing single-account installs
+are migrated automatically. Upload jobs and media continue to use their separate
+server/organization/principal contexts. A failed switch leaves the previous
+account active. Expired or revoked sessions require signing in again.
+
+On launch the app shows a loading screen until the saved session has been checked.
+Network failures show a retry screen and retain the credentials. The sign-in form
+appears only when no valid stored session remains. No inventory data or cached
+permissions are used to bypass session validation.
 
 ## Action flows
 
@@ -227,6 +263,11 @@ closes or a new photo is taken. Server access requires both `ai.use` and direct
 `inventory.read` permission.
 
 ## TestFlight deployment
+
+The App Store bundle ID is `de.polyxo.openinventory`. This is a new app record,
+separate from the former Inventree Scanner ID. For the current release steps,
+store-account blockers and Android instructions, see
+[Mobile Release](../../docs/mobile-release.md).
 
 Fastlane is pinned through the root `Gemfile`, and all commands run from the
 repository root. The initial setup needs Ruby 3.2 or newer with Bundler (Ruby

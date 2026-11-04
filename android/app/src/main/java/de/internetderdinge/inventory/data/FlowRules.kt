@@ -1,5 +1,8 @@
 package de.internetderdinge.inventory.data
 
+import de.internetderdinge.inventory.L10n
+import de.internetderdinge.inventory.R
+
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -37,9 +40,9 @@ object FlowRules {
         fields.forEach { f ->
             val key = f.s("key"); val value = values.opt(key)
             val missing = value == null || value == JSONObject.NULL || value == "" || (value is JSONArray && value.length() == 0)
-            require(!f.optBoolean("required") || !missing) { "${f.s("label")} fehlt." }
+            require(!f.optBoolean("required") || !missing) { L10n.text(R.string.ui_0_is_missing_9221e4bd, f.s("label")) }
             if (!missing) {
-                if (f.s("type") in listOf("select", "radio")) require(f.a("options").objects().any { it.s("value") == value }) { "${f.s("label")}: ungültige Auswahl." }
+                if (f.s("type") in listOf("select", "radio")) require(f.a("options").objects().any { it.s("value") == value }) { L10n.text(R.string.ui_0_invalid_selection_f4a03e0f, f.s("label")) }
                 put(key, value)
             }
         }

@@ -12,7 +12,7 @@ struct InventoryListView: View {
     @State private var page = 1
     @State private var pages = 1
     @State private var total = 0
-    @State private var loading = false
+    @State private var loading = true
     @State private var loadingMore = false
     @State private var errorMessage: String?
     @State private var creationSheet: InventoryCreationSheet?
@@ -39,20 +39,20 @@ struct InventoryListView: View {
         NavigationStack {
             Group {
                 if loading && resources.isEmpty {
-                    ProgressView("Inventar wird geladen …")
+                    ProgressView(L10n.text("ui_loading_inventory_fa7ba9ab"))
                 } else if resources.isEmpty {
                     ContentUnavailableView {
                         Label(
-                            hasActiveSearchOrFilters ? "Keine Ergebnisse" : "Keine Einträge",
+                            hasActiveSearchOrFilters ? L10n.text("ui_no_results_5e2dc2c1") : L10n.text("ui_no_items_35719c23"),
                             systemImage: hasActiveSearchOrFilters ? "magnifyingglass" : "shippingbox"
                         )
                     } description: {
                         if hasActiveSearchOrFilters {
-                            Text("Ändere die Suche oder die ausgewählten Filter.")
+                            Text(L10n.text("ui_change_the_search_or_selected_filters_fd16b795"))
                         }
                     } actions: {
                         if hasActiveSearchOrFilters {
-                            Button("Suche und Filter zurücksetzen") { resetSearchAndFilters() }
+                            Button(L10n.text("ui_reset_search_and_filters_8cd47651")) { resetSearchAndFilters() }
                         } else if state.canCreateInventory {
                             creationMenu
                                 .buttonStyle(.borderedProminent)
@@ -79,8 +79,12 @@ struct InventoryListView: View {
                     .refreshable { await load(reset: true) }
                 }
             }
-            .navigationTitle("Inventar")
+            .navigationTitle(L10n.text("ui_inventory_d602900f"))
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    AccountSwitcherMenu()
+                        .labelStyle(.iconOnly)
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     filterMenu
                 }
@@ -90,13 +94,13 @@ struct InventoryListView: View {
                         Button(action: onCapture) {
                             Image(systemName: "camera")
                         }
-                        .accessibilityLabel("Erfassen")
+                        .accessibilityLabel(L10n.text("ui_capture_ef5c867a"))
                     }
 
                     Button(action: onScan) {
                         Image(systemName: "barcode.viewfinder")
                     }
-                    .accessibilityLabel("Scannen")
+                    .accessibilityLabel(L10n.text("ui_scan_2a53b078"))
 
                     if state.canCreateInventory {
                         Menu {
@@ -104,7 +108,7 @@ struct InventoryListView: View {
                         } label: {
                             Image(systemName: "plus")
                         }
-                        .accessibilityLabel("Neuer Eintrag")
+                        .accessibilityLabel(L10n.text("ui_new_item_c325efcf"))
                     }
                 }
             }
@@ -144,32 +148,32 @@ struct InventoryListView: View {
                 }
             }
             .alert(
-                "Inventar konnte nicht geladen werden",
+                L10n.text("ui_could_not_load_inventory_b9f131f0"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
                 )
             ) {
-                Button("Erneut laden") { Task { await load(reset: true) } }
-                Button("Abbrechen", role: .cancel) { errorMessage = nil }
+                Button(L10n.text("ui_retry_1b8b908f")) { Task { await load(reset: true) } }
+                Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { errorMessage = nil }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
             .confirmationDialog(
-                "Eintrag löschen?",
+                L10n.text("ui_delete_item_d8cef291"),
                 isPresented: deletionConfirmationIsPresented,
                 titleVisibility: .visible,
                 presenting: resourcePendingDeletion
             ) { resource in
-                Button("„\(resource.name)“ endgültig löschen", role: .destructive) {
+                Button(L10n.text("ui_permanently_delete_0_a5f56940", resource.name), role: .destructive) {
                     Task { await delete(resource) }
                 }
-                Button("Abbrechen", role: .cancel) { }
+                Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
             } message: { _ in
-                Text("Diese Aktion kann nicht rückgängig gemacht werden.")
+                Text(L10n.text("ui_this_action_cannot_be_undone_4f291cf8"))
             }
             .alert(
-                "Eintrag konnte nicht gelöscht werden",
+                L10n.text("ui_could_not_delete_item_d75ae9eb"),
                 isPresented: Binding(
                     get: { deletionErrorMessage != nil },
                     set: { if !$0 { deletionErrorMessage = nil } }
@@ -177,10 +181,10 @@ struct InventoryListView: View {
             ) {
                 Button("OK", role: .cancel) { deletionErrorMessage = nil }
             } message: {
-                Text(deletionErrorMessage ?? "Unbekannter Fehler")
+                Text(deletionErrorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
             .alert(
-                "Favorit konnte nicht aktualisiert werden",
+                L10n.text("ui_could_not_update_favorite_7972973e"),
                 isPresented: Binding(
                     get: { favoriteErrorMessage != nil },
                     set: { if !$0 { favoriteErrorMessage = nil } }
@@ -188,7 +192,7 @@ struct InventoryListView: View {
             ) {
                 Button("OK", role: .cancel) { favoriteErrorMessage = nil }
             } message: {
-                Text(favoriteErrorMessage ?? "Unbekannter Fehler")
+                Text(favoriteErrorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }
@@ -201,7 +205,7 @@ struct InventoryListView: View {
     }
 
     private var creationMenu: some View {
-        Menu("Neuer Eintrag") {
+        Menu(L10n.text("ui_new_item_c325efcf")) {
             creationMenuActions
         }
     }
@@ -211,14 +215,14 @@ struct InventoryListView: View {
         Button {
             creationSheet = .manual
         } label: {
-            Label("Manuell anlegen", systemImage: "doc.badge.plus")
+            Label(L10n.text("ui_create_manually_735a4f79"), systemImage: "doc.badge.plus")
         }
 
         if state.canCaptureInventory {
             Button {
                 showObjectCapture = true
             } label: {
-                Label("3D-Objekt scannen", systemImage: "cube.transparent")
+                Label(L10n.text("ui_scan_3d_object_32b40842"), systemImage: "cube.transparent")
             }
         }
     }
@@ -241,25 +245,25 @@ struct InventoryListView: View {
 
     private var filterMenu: some View {
         Menu {
-            Picker("Typ", selection: $typeFilter) {
-                Text("Alle Typen").tag(nil as InventoryResourceType?)
+            Picker(L10n.text("ui_type_1b024183"), selection: $typeFilter) {
+                Text(L10n.text("ui_all_types_83162aa9")).tag(nil as InventoryResourceType?)
                 ForEach(selectableTypeFilters, id: \.self) { type in
                     Text(type.localizedName).tag(type as InventoryResourceType?)
                 }
             }
 
-            Picker("Status", selection: $statusFilter) {
-                Text("Alle Status").tag(nil as InventoryResourceStatus?)
+            Picker(L10n.text("ui_status_920e413c"), selection: $statusFilter) {
+                Text(L10n.text("ui_all_statuses_23ee74c4")).tag(nil as InventoryResourceStatus?)
                 ForEach(InventoryResourceStatus.allCases, id: \.self) { status in
                     Text(status.localizedName).tag(status as InventoryResourceStatus?)
                 }
             }
 
-            Toggle("Nur Favoriten", isOn: $favoritesOnly)
+            Toggle(L10n.text("ui_favorites_only_3b7ff0d0"), isOn: $favoritesOnly)
 
             if hasActiveFilters {
                 Divider()
-                Button("Filter zurücksetzen", systemImage: "xmark.circle") {
+                Button(L10n.text("ui_reset_filters_5b59510b"), systemImage: "xmark.circle") {
                     typeFilter = nil
                     statusFilter = nil
                     favoritesOnly = false
@@ -272,7 +276,7 @@ struct InventoryListView: View {
                     : "line.3.horizontal.decrease.circle"
             )
         }
-        .accessibilityLabel("Filter")
+        .accessibilityLabel(L10n.text("ui_filter_638e249f"))
         .accessibilityValue(filterAccessibilityValue)
     }
 
@@ -292,7 +296,7 @@ struct InventoryListView: View {
                 Button(role: .destructive) {
                     resourcePendingDeletion = resource
                 } label: {
-                    Label("Löschen", systemImage: "trash")
+                    Label(L10n.text("ui_delete_6c2d3521"), systemImage: "trash")
                 }
                 .disabled(deletingResourceID != nil)
             }
@@ -302,7 +306,7 @@ struct InventoryListView: View {
                 toggleFavorite(resource)
             } label: {
                 Label(
-                    resource.isFavorite == true ? "Favorit entfernen" : "Als Favorit markieren",
+                    resource.isFavorite == true ? L10n.text("ui_remove_favorite_634fa3a6") : L10n.text("ui_mark_as_favorite_247d1676"),
                     systemImage: resource.isFavorite == true ? "star.slash" : "star"
                 )
             }
@@ -334,7 +338,7 @@ struct InventoryListView: View {
                         Image(systemName: "star.fill")
                             .font(.caption)
                             .foregroundStyle(.yellow)
-                            .accessibilityLabel("Favorit")
+                            .accessibilityLabel(L10n.text("ui_favorite_e2325be7"))
                     }
                 }
                 HStack(spacing: 5) {
@@ -349,7 +353,7 @@ struct InventoryListView: View {
                 HStack {
                     Text(resource.status.localizedName)
                     Spacer()
-                    Text("Bestand \(resource.quantity)").monospacedDigit()
+                    Text(L10n.text("ui_stock_0_7d245045", resource.quantity)).monospacedDigit()
                 }
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -367,18 +371,18 @@ struct InventoryListView: View {
     }
 
     private var filterAccessibilityValue: String {
-        guard hasActiveFilters else { return "Keine Filter aktiv" }
+        guard hasActiveFilters else { return L10n.text("ui_no_active_filters_ab14138c") }
         return [
             typeFilter?.localizedName,
             statusFilter?.localizedName,
-            favoritesOnly ? "Nur Favoriten" : nil,
+            favoritesOnly ? L10n.text("ui_favorites_only_3b7ff0d0") : nil,
         ]
             .compactMap { $0 }
             .joined(separator: ", ")
     }
 
     private var resultCountLabel: String {
-        total == 1 ? "1 Eintrag" : "\(total) Einträge"
+        total == 1 ? L10n.text("ui_1_item_20bd6c27") : L10n.text("ui_items_0_66b1c6ff", total)
     }
 
     private func resetSearchAndFilters() {

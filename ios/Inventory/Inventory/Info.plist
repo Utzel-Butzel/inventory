@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>Inventory</string>
+    <string>Open Inventory</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -24,10 +24,11 @@
     <array>
         <dict>
             <key>CFBundleURLName</key>
-            <string>digital.congru.inventory.resource</string>
+            <string>de.polyxo.openinventory.resource</string>
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>inventory</string>
+                <string>de.polyxo.openinventory</string>
             </array>
         </dict>
     </array>
@@ -41,13 +42,13 @@
         <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-	<string>Für Inventarfotos, QR-/Barcodes, 3D-Raum- und Objektscans sowie die AR-Positionierung von Gegenständen.</string>
+	<string>For inventory photos, QR codes and barcodes, 3D room and object scans, and positioning items in AR.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-	<string>Für den optionalen Inventarstandort.</string>
+	<string>For the optional inventory location.</string>
     <key>NSMicrophoneUsageDescription</key>
-	<string>Für den Ton bei Inventar-Videoaufnahmen.</string>
+	<string>For audio in inventory video recordings.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-	<string>Für Fotos aus deiner Mediathek.</string>
+	<string>For photos from your library.</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

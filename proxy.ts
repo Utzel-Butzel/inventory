@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import {
   UI_LANGUAGE_COOKIE,
   UI_LANGUAGE_HEADER,
-  UI_LANGUAGES,
+  resolveUiLanguage,
   type UiLanguage,
 } from "./i18n.config";
 import {
@@ -21,27 +21,10 @@ const ORGANIZATION_ROUTE_HEADER = "x-inventory-organization-route";
 const ORIGINAL_PATH_HEADER = "x-inventory-original-path";
 
 function requestedLanguage(request: NextRequest): UiLanguage {
-  const cookieLanguage = request.cookies.get(UI_LANGUAGE_COOKIE)?.value;
-  if (UI_LANGUAGES.includes(cookieLanguage as UiLanguage)) {
-    return cookieLanguage as UiLanguage;
-  }
-
-  const requested = (request.headers.get("accept-language") ?? "")
-    .split(",")
-    .map((part) => {
-      const [language, quality] = part.trim().split(";");
-      return {
-        language: language.toLowerCase().split("-")[0],
-        quality: quality?.startsWith("q=") ? Number(quality.slice(2)) : 1,
-      };
-    })
-    .filter((part) => Number.isFinite(part.quality))
-    .sort((left, right) => right.quality - left.quality);
-  return (
-    requested.find((part) =>
-      UI_LANGUAGES.includes(part.language as UiLanguage),
-    )?.language as UiLanguage | undefined
-  ) ?? "en";
+  return resolveUiLanguage(
+    request.cookies.get(UI_LANGUAGE_COOKIE)?.value,
+    request.headers.get("accept-language"),
+  );
 }
 
 function routedHeaders(

@@ -77,8 +77,8 @@ struct SpatialRoomStructureGroup: Equatable, Identifiable, Sendable {
 
         var title: String {
             if let identifier, !identifier.isEmpty { return identifier }
-            if let index { return "Etage \(index)" }
-            return "Etage nicht zugeordnet"
+            if let index { return L10n.text("ui_floor_0_b8fd778f", index) }
+            return L10n.text("ui_floor_not_assigned_1285e89a")
         }
     }
 
@@ -98,7 +98,7 @@ struct SpatialRoomStructureGroup: Equatable, Identifiable, Sendable {
         return SpatialRoomAppendSeed(
             structureID: structureID,
             structureName: structureName,
-            suggestedFloorIdentifier: latestScan.floorIdentifier ?? "EG",
+            suggestedFloorIdentifier: latestScan.floorIdentifier ?? L10n.text("ui_ground_floor_29fc5dee"),
             suggestedFloorIndex: latestScan.floorIndex ?? 0,
             usesGeoreference: latestScan.georeference != nil,
             existingCoordinateSpaceIDs: Set(
@@ -168,7 +168,7 @@ struct SpatialRoomScanLibrary: Equatable, Sendable {
                 id: key,
                 structureID: latestScan?.structureID,
                 structureName: structureName.flatMap { $0.isEmpty ? nil : $0 }
-                    ?? "Struktur \(fallbackID)",
+                    ?? L10n.text("ui_structure_0_e4d9b1e4", fallbackID),
                 floors: floors
             )
         }
@@ -195,7 +195,7 @@ struct SpatialRoomsView: View {
         NavigationStack {
             Group {
                 if loading && !hasLoaded {
-                    ProgressView("3D-Räume werden geladen …")
+                    ProgressView(L10n.text("ui_loading_3d_rooms_2fda4e39"))
                 } else if scans.isEmpty && pendingScans.isEmpty {
                     emptyState
                 } else {
@@ -203,11 +203,11 @@ struct SpatialRoomsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("Räume")
+            .navigationTitle(L10n.text("ui_rooms_c8bb1368"))
             .toolbar {
                 if state.canManageSpatial {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Raum scannen", systemImage: "plus") {
+                        Button(L10n.text("ui_scan_room_eabaecb5"), systemImage: "plus") {
                             presentation = RoomScanPresentation(mode: .newStructure)
                         }
                         .disabled(!RoomCaptureSession.isSupported)
@@ -232,32 +232,32 @@ struct SpatialRoomsView: View {
                 if closed { Task { await loadScans() } }
             }
             .alert(
-                "3D-Räume konnten nicht geladen werden",
+                L10n.text("ui_could_not_load_3d_rooms_74cef6cf"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
                 )
             ) {
-                Button("Erneut laden") { Task { await loadScans() } }
-                Button("Abbrechen", role: .cancel) { errorMessage = nil }
+                Button(L10n.text("ui_retry_1b8b908f")) { Task { await loadScans() } }
+                Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { errorMessage = nil }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("Noch kein Raumscan", systemImage: "viewfinder")
+            Label(L10n.text("ui_no_room_scan_yet_e319be80"), systemImage: "viewfinder")
         } description: {
             Text(
                 RoomCaptureSession.isSupported
-                    ? "Scanne zusammenhängende Räume mit LiDAR. Danach erkennt die AR-Kamera automatisch, in welchem Raum du dich befindest."
-                    : "Dieses iPhone unterstützt RoomPlan nicht. Dafür ist ein LiDAR-fähiges iPhone erforderlich."
+                    ? L10n.text("ui_scan_connected_rooms_with_lidar_the_ar_b27d9b02")
+                    : L10n.text("ui_this_iphone_does_not_support_roomplan_a_91e823e2")
             )
         } actions: {
             if state.canManageSpatial && RoomCaptureSession.isSupported {
-                Button("Ersten Raum scannen") {
+                Button(L10n.text("ui_scan_first_room_f9211506")) {
                     presentation = RoomScanPresentation(mode: .newStructure)
                 }
                 .buttonStyle(.borderedProminent)
@@ -269,7 +269,7 @@ struct SpatialRoomsView: View {
     private var roomList: some View {
         List {
             if !pendingScans.isEmpty && state.canManageSpatial {
-                Section("Gespeicherte Uploads") {
+                Section(L10n.text("ui_saved_uploads_125a4455")) {
                     ForEach(pendingScans) { pending in
                         Button {
                             presentation = RoomScanPresentation(mode: pending.mode, pendingScan: pending)
@@ -277,7 +277,7 @@ struct SpatialRoomsView: View {
                             Label {
                                 VStack(alignment: .leading) {
                                     Text(pending.title)
-                                    Text("\(pending.uploadedScanIDs.count) von \(pending.drafts.count) übertragen · Upload fortsetzen")
+                                    Text(L10n.text("ui_0_of_1_transferred_resume_upload_b24d8bb7", pending.uploadedScanIDs.count, pending.drafts.count))
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                             } icon: { Image(systemName: "icloud.and.arrow.up") }
@@ -290,7 +290,7 @@ struct SpatialRoomsView: View {
             }
 
             if !scanLibrary.standaloneScans.isEmpty {
-                Section("Einzelräume") {
+                Section(L10n.text("ui_individual_rooms_23e496de")) {
                     ForEach(scanLibrary.standaloneScans) { scan in
                         roomRow(scan)
                     }
@@ -326,7 +326,7 @@ struct SpatialRoomsView: View {
             }
 
             if state.canManageSpatial {
-                Button("Raum oder Etage hinzufügen", systemImage: "plus") {
+                Button(L10n.text("ui_add_room_or_floor_38a3bdd9"), systemImage: "plus") {
                     guard let seed = structure.appendSeed else { return }
                     presentation = RoomScanPresentation(mode: .appendToStructure(seed))
                 }
@@ -336,8 +336,8 @@ struct SpatialRoomsView: View {
             Label(structure.structureName, systemImage: "building.2")
         } footer: {
             Text(
-                "\(structure.roomCount) Räume auf \(structure.floors.count) " +
-                    (structure.floors.count == 1 ? "Etage" : "Etagen")
+                L10n.text("ui_0_rooms_on_1_cf5c38cb", structure.roomCount, structure.floors.count) +
+                    (structure.floors.count == 1 ? L10n.text("ui_floor_ef352421") : L10n.text("ui_floors_35689241"))
             )
         }
     }
@@ -350,7 +350,7 @@ struct SpatialRoomsView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(scan.roomName)
                     Text(
-                        "Revision \(scan.revision) · \(scan.placementCount) Gegenstände · " +
+                        L10n.text("ui_revision_0_1_items_d6786669", scan.revision, scan.placementCount) +
                             scan.capturedAt.formatted(date: .abbreviated, time: .omitted)
                     )
                     .font(.caption)
@@ -363,7 +363,7 @@ struct SpatialRoomsView: View {
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if state.canManageSpatial {
-                Button("Neu scannen", systemImage: "viewfinder") {
+                Button(L10n.text("ui_rescan_d98f477b"), systemImage: "viewfinder") {
                     presentation = RoomScanPresentation(mode: .replaceRoom(scan))
                 }
                 .disabled(!RoomCaptureSession.isSupported)
@@ -436,7 +436,7 @@ private struct RoomScanFlowView: View {
     @State private var pendingScanID = UUID()
     @State private var uploadedScanIDs: Set<UUID> = []
     @State private var draftContextIdentifier: String?
-    @State private var hint = "Bewege das iPhone langsam entlang aller Wände und Möbel."
+    @State private var hint = L10n.text("ui_move_the_iphone_slowly_along_all_walls_fcd06b9a")
     @State private var drafts: [SpatialRoomScanDraft] = []
     @State private var createdRoomResourceIDs: [UUID: UUID] = [:]
     @State private var errorMessage: String?
@@ -470,7 +470,7 @@ private struct RoomScanFlowView: View {
         switch mode {
         case .newStructure:
             _structureName = State(initialValue: "")
-            _floorIdentifier = State(initialValue: "EG")
+            _floorIdentifier = State(initialValue: L10n.text("ui_ground_floor_29fc5dee"))
             _floorIndex = State(initialValue: 0)
             _roomName = State(initialValue: "")
             _georeferenceEnabled = State(initialValue: false)
@@ -482,14 +482,14 @@ private struct RoomScanFlowView: View {
             _georeferenceEnabled = State(initialValue: seed.usesGeoreference)
         case .replaceRoom(let scan):
             _structureName = State(initialValue: scan.structureName ?? scan.roomName)
-            _floorIdentifier = State(initialValue: scan.floorIdentifier ?? "EG")
+            _floorIdentifier = State(initialValue: scan.floorIdentifier ?? L10n.text("ui_ground_floor_29fc5dee"))
             _floorIndex = State(initialValue: scan.floorIndex ?? 0)
             _roomName = State(initialValue: scan.roomName)
             _georeferenceEnabled = State(initialValue: scan.georeference != nil)
         }
         if let draft = pendingScan?.drafts.first {
             _structureName = State(initialValue: draft.structureName ?? draft.roomName)
-            _floorIdentifier = State(initialValue: draft.floorIdentifier ?? "EG")
+            _floorIdentifier = State(initialValue: draft.floorIdentifier ?? L10n.text("ui_ground_floor_29fc5dee"))
             _floorIndex = State(initialValue: draft.floorIndex ?? 0)
             _roomName = State(initialValue: draft.roomName)
             _georeferenceEnabled = State(initialValue: false)
@@ -508,11 +508,11 @@ private struct RoomScanFlowView: View {
                     statusView(
                         icon: "icloud.and.arrow.up.fill",
                         title: mode.supportsMultipleRooms
-                            ? "Räume werden übertragen"
-                            : "Raum wird ersetzt",
+                            ? L10n.text("ui_uploading_rooms_2046e8b2")
+                            : L10n.text("ui_replacing_room_95acb238"),
                         message: mode.supportsMultipleRooms
-                            ? "\(uploadProgress) von \(drafts.count) Räumen sind gespeichert."
-                            : "Der neue 3D-Stand wird sicher in Inventory gespeichert.",
+                            ? L10n.text("ui_0_of_1_rooms_saved_e6c65f11", uploadProgress, drafts.count)
+                            : L10n.text("ui_the_new_3d_state_is_being_saved_0e519957"),
                         progress: true
                     )
                 case .complete:
@@ -529,7 +529,7 @@ private struct RoomScanFlowView: View {
             .toolbar {
                 if phase != .complete {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Schließen") {
+                        Button(L10n.text("ui_close_b808f6e9")) {
                             if phase == .details { discardAndDismiss() }
                             else { showsExitOptions = true }
                         }
@@ -537,41 +537,41 @@ private struct RoomScanFlowView: View {
                 }
             }
             .interactiveDismissDisabled(phase != .details && phase != .complete)
-            .confirmationDialog("Scan beenden?", isPresented: $showsExitOptions, titleVisibility: .visible) {
+            .confirmationDialog(L10n.text("ui_end_scan_c7c8cfb2"), isPresented: $showsExitOptions, titleVisibility: .visible) {
                 if phase == .scanning || phase == .paused || (phase == .betweenRooms && capturedRoomCount > 0) {
-                    Button("Stand speichern · später hochladen") {
+                    Button(L10n.text("ui_save_progress_upload_later_f396a459")) {
                         finishCurrentRoom(finalizesStructure: true, saveLocally: true)
                     }
                 }
                 if phase == .scanning || phase == .paused {
-                    Button("Aktuellen Raum verwerfen", role: .destructive) {
+                    Button(L10n.text("ui_discard_current_room_3782feb8"), role: .destructive) {
                         discardRequest += 1
                         phase = .scanning
                     }
                 }
                 if !drafts.isEmpty {
-                    Button("Upload später fortsetzen") { keepDraftsAndDismiss() }
+                    Button(L10n.text("ui_resume_upload_later_7752280c")) { keepDraftsAndDismiss() }
                 }
-                Button("Lokalen Scan verwerfen", role: .destructive) { discardAndDismiss() }
-                Button("Weiter scannen", role: .cancel) {}
+                Button(L10n.text("ui_discard_local_scan_46d27cad"), role: .destructive) { discardAndDismiss() }
+                Button(L10n.text("ui_continue_scanning_3402ece8"), role: .cancel) {}
             } message: {
-                Text("Gespeicherte Uploads bleiben auf diesem iPhone verfügbar. Bereits hochgeladene Räume bleiben erhalten.")
+                Text(L10n.text("ui_saved_uploads_remain_available_on_this_iphone_71442811"))
             }
             .alert(
-                "Raumscan fehlgeschlagen",
+                L10n.text("ui_room_scan_failed_d8220756"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
                 )
             ) {
                 if !drafts.isEmpty {
-                    Button("Upload erneut versuchen") {
+                    Button(L10n.text("ui_retry_upload_48c7b5f6")) {
                         startUpload()
                     }
                 }
-                Button("Schließen", role: .cancel) { errorMessage = nil }
+                Button(L10n.text("ui_close_b808f6e9"), role: .cancel) { errorMessage = nil }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
             .onDisappear {
                 uploadTask?.cancel()
@@ -602,22 +602,22 @@ private struct RoomScanFlowView: View {
     private var navigationTitle: String {
         switch mode {
         case .newStructure:
-            "Neue Struktur scannen"
+            L10n.text("ui_scan_new_structure_6ac1530d")
         case .appendToStructure:
-            "Struktur erweitern"
+            L10n.text("ui_extend_structure_889e98e2")
         case .replaceRoom:
-            "Raum neu scannen"
+            L10n.text("ui_rescan_room_cd23b316")
         }
     }
 
     private var detailsHeading: String {
         switch mode {
         case .newStructure:
-            "Zusammenhängende Räume"
+            L10n.text("ui_connected_rooms_b6dd6bf9")
         case .appendToStructure:
-            "Raum oder Etage hinzufügen"
+            L10n.text("ui_add_room_or_floor_38a3bdd9")
         case .replaceRoom:
-            "Raumstand ersetzen"
+            L10n.text("ui_replace_room_state_4a9e2f9c")
         }
     }
 
@@ -635,22 +635,22 @@ private struct RoomScanFlowView: View {
     private var detailsExplanation: String {
         switch mode {
         case .newStructure:
-            "Scanne einen oder mehrere Räume. Du kannst jederzeit pausieren oder den bisherigen Stand speichern. Für weitere Räume bleibt die gemeinsame Kamerasitzung geöffnet."
+            L10n.text("ui_scan_one_or_more_rooms_you_can_a11c2304")
         case .appendToStructure:
-            "Die Struktur bleibt erhalten. Wähle die vorhandene oder eine neue Etage und scanne die neuen Räume in einem frischen AR-Koordinatensystem."
+            L10n.text("ui_the_structure_is_preserved_choose_an_existing_e1541e3b")
         case .replaceRoom:
-            "Dieser Vorgang ersetzt ausschließlich den ausgewählten Raumstand. Es werden keine weiteren Räume oder Ressourcen angelegt."
+            L10n.text("ui_this_process_only_replaces_the_selected_room_362fe942")
         }
     }
 
     private var scanStartTitle: String {
-        mode.supportsMultipleRooms ? "3D-Scan starten" : "Raum neu scannen"
+        mode.supportsMultipleRooms ? L10n.text("ui_start_3d_scan_7d90e9f0") : L10n.text("ui_rescan_room_cd23b316")
     }
 
     private var scannerTitle: String {
         if mode.supportsMultipleRooms {
             return "\(structureName) · \(floorIdentifier) · " +
-                "\(capturedRoomCount + (phase == .betweenRooms ? 0 : 1)). Raum"
+                L10n.text("ui_room_0_eb5cfd3d", capturedRoomCount + (phase == .betweenRooms ? 0 : 1))
         }
         return "\(structureName) · \(floorIdentifier) · \(roomName)"
     }
@@ -658,22 +658,22 @@ private struct RoomScanFlowView: View {
     private var completionTitle: String {
         switch mode {
         case .newStructure:
-            "3D-Struktur ist verfügbar"
+            L10n.text("ui_3d_structure_is_available_5b5a2211")
         case .appendToStructure:
-            "Struktur wurde erweitert"
+            L10n.text("ui_structure_extended_32fc3ea6")
         case .replaceRoom:
-            "Raumscan wurde aktualisiert"
+            L10n.text("ui_room_scan_updated_09fc37d6")
         }
     }
 
     private var completionMessage: String {
         switch mode {
         case .newStructure:
-            "Der erfasste Stand ist gespeichert. Du kannst weitere Räume hinzufügen oder einzelne Räume neu scannen."
+            L10n.text("ui_the_captured_state_is_saved_you_can_62f0fbb5")
         case .appendToStructure:
-            "Die neuen Räume gehören jetzt zur bestehenden Struktur und können räumlich verwendet werden."
+            L10n.text("ui_the_new_rooms_now_belong_to_the_26d39eed")
         case .replaceRoom:
-            "Der bisherige Stand dieses Raums wurde durch den neuen 3D-Scan ersetzt."
+            L10n.text("ui_the_previous_state_of_this_room_has_0667dd8b")
         }
     }
 
@@ -686,37 +686,37 @@ private struct RoomScanFlowView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Gebäude und Etage") {
+            Section(L10n.text("ui_building_and_floor_ae271bb4")) {
                 if case .newStructure = mode {
-                    TextField("Gebäudename", text: $structureName)
+                    TextField(L10n.text("ui_building_name_e11b310e"), text: $structureName)
                         .textInputAutocapitalization(.words)
                 } else {
-                    LabeledContent("Struktur", value: structureName)
+                    LabeledContent(L10n.text("ui_structure_22650066"), value: structureName)
                 }
                 if case .replaceRoom = mode {
-                    LabeledContent("Etage", value: floorIdentifier)
-                    LabeledContent("Etagenindex", value: String(floorIndex))
+                    LabeledContent(L10n.text("ui_floor_ef352421"), value: floorIdentifier)
+                    LabeledContent(L10n.text("ui_floor_index_8bc6d558"), value: String(floorIndex))
                 } else {
-                    TextField("Etage, z. B. EG", text: $floorIdentifier)
+                    TextField(L10n.text("ui_floor_e_g_ground_floor_2d66fb55"), text: $floorIdentifier)
                     Stepper(
-                        "Etagenindex: \(floorIndex)",
+                        L10n.text("ui_floor_index_0_6f6443ad", floorIndex),
                         value: $floorIndex,
                         in: -20 ... 200
                     )
                 }
             }
 
-            Section(mode.supportsMultipleRooms ? "Erster Raum" : "Zu ersetzender Raum") {
+            Section(mode.supportsMultipleRooms ? L10n.text("ui_first_room_8daaf317") : L10n.text("ui_room_to_replace_b02a1eac")) {
                 if case .replaceRoom = mode {
-                    LabeledContent("Raum", value: roomName)
+                    LabeledContent(L10n.text("ui_room_d2fc5e58"), value: roomName)
                 } else {
-                    TextField("Raumname, z. B. Werkstatt", text: $roomName)
+                    TextField(L10n.text("ui_room_name_e_g_workshop_38d932fa"), text: $roomName)
                         .textInputAutocapitalization(.words)
                 }
             }
 
             Section {
-                Toggle("Auf der Karte verankern", isOn: $georeferenceEnabled)
+                Toggle(L10n.text("ui_anchor_on_map_0e9b7079"), isOn: $georeferenceEnabled)
                     .onChange(of: georeferenceEnabled) { _, enabled in
                         if enabled {
                             locationService.requestCurrentGeoreference()
@@ -728,13 +728,13 @@ private struct RoomScanFlowView: View {
                         }
                     }
                 if georeferenceEnabled {
-                    TextField("Eingangs- oder QR-Marker (optional)", text: $entryMarkerCode)
+                    TextField(L10n.text("ui_entrance_or_qr_marker_optional_d7e4c219"), text: $entryMarkerCode)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     if let coordinates = locationService.coordinates,
                        let heading = locationService.heading {
                         Label(
-                            "GPS ±\(Int(coordinates.accuracy.rounded())) m · Nord ±\(Int(heading.accuracy.rounded()))°",
+                            L10n.text("ui_gps_0_m_north_1_4e2cfcf4", Int(coordinates.accuracy.rounded()), Int(heading.accuracy.rounded())),
                             systemImage: "location.north.fill"
                         )
                         .font(.caption)
@@ -742,7 +742,7 @@ private struct RoomScanFlowView: View {
                     } else if locationService.isRequesting || locationService.isRequestingHeading {
                         HStack(spacing: 8) {
                             ProgressView()
-                            Text("Standort und Richtung werden vorbereitet …")
+                            Text(L10n.text("ui_preparing_location_and_heading_8eb36b48"))
                         }
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -751,16 +751,16 @@ private struct RoomScanFlowView: View {
                         Label(locationError, systemImage: "exclamationmark.triangle")
                             .font(.caption)
                             .foregroundStyle(.red)
-                        Button("Erneut versuchen") {
+                        Button(L10n.text("ui_retry_948643cb")) {
                             locationService.requestCurrentGeoreference()
                         }
                     }
                 }
             } header: {
-                Text("Position")
+                Text(L10n.text("ui_position_6d031af1"))
             } footer: {
                 if georeferenceEnabled {
-                    Text("GPS-Position und Nordausrichtung werden beim Scanstart erfasst.")
+                    Text(L10n.text("ui_gps_position_and_north_alignment_are_captured_c4e1d078"))
                 }
             }
 
@@ -775,7 +775,7 @@ private struct RoomScanFlowView: View {
                     if waitsForGeoreferencedStart {
                         HStack(spacing: 9) {
                             ProgressView()
-                            Text("Standort wird erfasst …")
+                            Text(L10n.text("ui_capturing_location_4be1315f"))
                         }
                         .frame(maxWidth: .infinity)
                     } else {
@@ -802,10 +802,10 @@ private struct RoomScanFlowView: View {
                 onProcessing: {
                     if mode.supportsMultipleRooms && finishCommand.finalizesStructure {
                         phase = .finalizing
-                        hint = "Räume werden zu einer Struktur verbunden …"
+                        hint = L10n.text("ui_connecting_rooms_into_a_structure_014834cc")
                     } else {
                         phase = .processing
-                        hint = "Raum wird verarbeitet …"
+                        hint = L10n.text("ui_processing_room_440f8642")
                     }
                 },
                 onRoomCaptured: { count in
@@ -813,8 +813,8 @@ private struct RoomScanFlowView: View {
                     roomName = mode.replacedScan?.roomName ?? ""
                     phase = .betweenRooms
                     hint = count > 0
-                        ? "Bisherige Räume sind übernommen. Du kannst jetzt speichern oder weiter scannen."
-                        : "Du kannst den Raum erneut beginnen oder den Scan schließen."
+                        ? L10n.text("ui_previous_rooms_have_been_included_you_can_8030effa")
+                        : L10n.text("ui_you_can_restart_the_room_or_close_a8401c64")
                 },
                 onResult: { result in
                     switch result {
@@ -863,18 +863,18 @@ private struct RoomScanFlowView: View {
                     if phase == .betweenRooms {
                     VStack(spacing: 12) {
                         if mode.supportsMultipleRooms || capturedRoomCount == 0 {
-                        Text(capturedRoomCount == 0 ? "Raum beginnen" : "Wie heißt der nächste Raum?")
+                        Text(capturedRoomCount == 0 ? L10n.text("ui_start_room_f3c348a8") : L10n.text("ui_what_is_the_next_room_called_8337646e"))
                             .font(.headline)
-                        TextField("Zum Beispiel Lager", text: $roomName)
+                        TextField(L10n.text("ui_for_example_storage_room_dffe059f"), text: $roomName)
                             .textInputAutocapitalization(.words)
                             .padding(12)
                             .background(.white, in: RoundedRectangle(cornerRadius: 12))
                         Button {
                             resumeRequest += 1
                             phase = .scanning
-                            hint = "Bewege das iPhone langsam entlang der Wände und Möbel."
+                            hint = L10n.text("ui_move_the_iphone_slowly_along_the_walls_0a6aa91f")
                         } label: {
-                            Label(capturedRoomCount == 0 ? "Raum scannen" : "Nächsten Raum scannen", systemImage: "arrow.right")
+                            Label(capturedRoomCount == 0 ? L10n.text("ui_scan_room_eabaecb5") : L10n.text("ui_scan_next_room_f8ee0255"), systemImage: "arrow.right")
                                 .frame(maxWidth: .infinity)
                                 .frame(minHeight: 48)
                         }
@@ -882,7 +882,7 @@ private struct RoomScanFlowView: View {
                         .disabled(roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         }
                         if capturedRoomCount > 0 {
-                            Button(capturedRoomCount == 1 ? "Raum speichern" : "\(capturedRoomCount) Räume speichern") {
+                            Button(capturedRoomCount == 1 ? L10n.text("ui_save_room_e4290148") : L10n.text("ui_save_0_rooms_6e077ae0", capturedRoomCount)) {
                                 finishCurrentRoom(finalizesStructure: true)
                             }
                             .buttonStyle(.bordered)
@@ -893,7 +893,7 @@ private struct RoomScanFlowView: View {
                     } else if phase == .processing || phase == .finalizing {
                         HStack(spacing: 9) {
                             ProgressView()
-                            Text(phase == .finalizing ? "Struktur wird aufgebaut" : "Raum wird verarbeitet")
+                            Text(phase == .finalizing ? L10n.text("ui_building_structure_ef16a84d") : L10n.text("ui_processing_room_dd6a99f3"))
                         }
                         .font(.headline)
                         .foregroundStyle(.primary)
@@ -902,12 +902,12 @@ private struct RoomScanFlowView: View {
                         .background(.white.opacity(0.9), in: Capsule())
                     } else if phase == .paused {
                         VStack(spacing: 12) {
-                            Text("Scan pausiert").font(.headline)
-                            Text("Im selben Raum fortsetzen. Zum Schließen den bisherigen Stand speichern.")
+                            Text(L10n.text("ui_scan_paused_53917423")).font(.headline)
+                            Text(L10n.text("ui_resume_in_the_same_room_save_your_05147643"))
                                 .font(.caption).multilineTextAlignment(.center)
-                            Button("Scan fortsetzen", systemImage: "play.fill") { phase = .scanning }
+                            Button(L10n.text("ui_resume_scan_752c7424"), systemImage: "play.fill") { phase = .scanning }
                                 .buttonStyle(.borderedProminent)
-                            Button("Bisherigen Stand hochladen") {
+                            Button(L10n.text("ui_upload_progress_so_far_a9280122")) {
                                 finishCurrentRoom(finalizesStructure: true)
                             }
                             .buttonStyle(.bordered)
@@ -919,7 +919,7 @@ private struct RoomScanFlowView: View {
                             Button {
                                 finishCurrentRoom(finalizesStructure: false)
                             } label: {
-                                Label("Raum übernehmen · weiter", systemImage: "door.left.hand.open")
+                                Label(L10n.text("ui_accept_room_continue_3e9d5c9f"), systemImage: "door.left.hand.open")
                                     .frame(maxWidth: .infinity)
                                     .frame(minHeight: 48)
                             }
@@ -929,7 +929,7 @@ private struct RoomScanFlowView: View {
                             Button {
                                 finishCurrentRoom(finalizesStructure: true)
                             } label: {
-                                Label("Bisherigen Stand hochladen", systemImage: "icloud.and.arrow.up")
+                                Label(L10n.text("ui_upload_progress_so_far_a9280122"), systemImage: "icloud.and.arrow.up")
                                     .frame(maxWidth: .infinity)
                                     .frame(minHeight: 50)
                             }
@@ -939,7 +939,7 @@ private struct RoomScanFlowView: View {
                         Button {
                             finishCurrentRoom(finalizesStructure: true)
                         } label: {
-                            Label("Raumscan ersetzen", systemImage: "arrow.triangle.2.circlepath")
+                            Label(L10n.text("ui_replace_room_scan_01a178af"), systemImage: "arrow.triangle.2.circlepath")
                                 .frame(maxWidth: .infinity)
                                 .frame(minHeight: 50)
                         }
@@ -948,7 +948,7 @@ private struct RoomScanFlowView: View {
                 }
                 .padding(.bottom, 24)
                 if phase == .scanning {
-                    Button("Pausieren", systemImage: "pause.fill") { phase = .paused }
+                    Button(L10n.text("ui_pause_75a303be"), systemImage: "pause.fill") { phase = .paused }
                         .buttonStyle(.bordered).tint(.white)
                         .padding(.bottom, 12)
                 }
@@ -979,13 +979,13 @@ private struct RoomScanFlowView: View {
                 if uploadTask != nil {
                     ProgressView().padding(.top, 4)
                 } else {
-                    Button("Upload fortsetzen") { startUpload() }
+                    Button(L10n.text("ui_resume_upload_b147c126")) { startUpload() }
                         .buttonStyle(.borderedProminent)
                 }
-                Button("Später hochladen") { keepDraftsAndDismiss() }
+                Button(L10n.text("ui_upload_later_75702eab")) { keepDraftsAndDismiss() }
                     .buttonStyle(.bordered)
             } else {
-                Button("Fertig") { onSaved() }
+                Button(L10n.text("ui_done_25d52d7e")) { onSaved() }
                     .buttonStyle(.borderedProminent)
                     .padding(.top, 8)
             }
@@ -999,7 +999,7 @@ private struct RoomScanFlowView: View {
         defer { uploadTask = nil }
         guard state.canManageSpatial, !drafts.isEmpty, let client = state.client,
               client.contextIdentifier == draftContextIdentifier else {
-            errorMessage = "Zum Hochladen melde dich wieder mit dem ursprünglichen Konto und der ursprünglichen Organisation an."
+            errorMessage = L10n.text("ui_to_upload_sign_in_again_with_the_201afcb4")
             return
         }
         phase = .uploading
@@ -1009,7 +1009,7 @@ private struct RoomScanFlowView: View {
             try persistDrafts()
             if !mode.supportsMultipleRooms, drafts.count != 1 {
                 throw APIClientError.invalidUpload(
-                    "Beim Neu-Scannen darf genau ein Raumstand erzeugt werden."
+                    L10n.text("ui_rescanning_must_produce_exactly_one_room_state_82d25f65")
                 )
             }
             for (index, draft) in drafts.enumerated() {
@@ -1026,7 +1026,7 @@ private struct RoomScanFlowView: View {
                     let room = try await client.createResource(
                         ResourceCreateRequest(
                             name: draft.roomName,
-                            description: "Mit RoomPlan erfasster 3D-Raum in \(draft.structureName ?? draft.roomName), \(draft.floorIdentifier ?? "EG").",
+                            description: L10n.text("ui_3d_room_captured_with_roomplan_in_0_48dcea4b", draft.structureName ?? draft.roomName, draft.floorIdentifier ?? L10n.text("ui_ground_floor_29fc5dee")),
                             type: .place,
                             location: draft.roomName
                         ),
@@ -1063,7 +1063,7 @@ private struct RoomScanFlowView: View {
 
     private func draftStore() throws -> SpatialScanDraftStore {
         guard let draftContextIdentifier else {
-            throw APIClientError.invalidUpload("Die Anmeldung für diesen Scan fehlt.")
+            throw APIClientError.invalidUpload(L10n.text("ui_sign_in_details_for_this_scan_are_2b530ddc"))
         }
         return try SpatialScanDraftStore(contextIdentifier: draftContextIdentifier)
     }
@@ -1089,7 +1089,7 @@ private struct RoomScanFlowView: View {
             dismiss()
         } catch {
             saveForLater = false
-            errorMessage = "Der Scan konnte nicht auf diesem iPhone gespeichert werden: \(error.localizedDescription)"
+            errorMessage = L10n.text("ui_could_not_save_the_scan_on_this_dcd017ad", error.localizedDescription)
         }
     }
 

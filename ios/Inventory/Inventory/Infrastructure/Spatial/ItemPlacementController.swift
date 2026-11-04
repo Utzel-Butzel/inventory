@@ -93,12 +93,12 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
                 options: [.resetTracking, .removeExistingAnchors]
             )
             relocalizationGate.beginSearching()
-            publishTracking("Zeige auf bekannte Wände oder Möbel, bis der Raum erkannt ist.", false)
+            publishTracking(L10n.text("ui_point_at_familiar_walls_or_furniture_until_26eb1615"), false)
             startRelocalizationTimeoutIfNeeded()
         } catch {
             reportSessionFailure(
                 error,
-                message: "Die gespeicherte Raumkarte konnte nicht geladen werden."
+                message: L10n.text("ui_could_not_load_the_saved_room_map_9282926f")
             )
         }
     }
@@ -123,7 +123,7 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
         guard !isStopped, trackingReady, !captureInProgress,
               let roomScan = activeRoomScan
         else {
-            publishTracking("Der Raum muss zuerst vollständig erkannt werden.", false)
+            publishTracking(L10n.text("ui_the_room_must_first_be_fully_recognized_c8a6376d"), false)
             return
         }
         captureInProgress = true
@@ -230,7 +230,7 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
     func session(_ session: ARSession, didFailWithError error: Error) {
         reportSessionFailure(
             SpatialCaptureError.sessionFailed(error.localizedDescription),
-            message: "Die AR-Raumortung wurde beendet. Wähle den Raum erneut."
+            message: L10n.text("ui_ar_room_tracking_has_ended_select_the_5f9d875e")
         )
     }
 
@@ -239,7 +239,7 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
         relocalizationGate.beginSearching()
         trackingReady = false
         startRelocalizationTimeoutIfNeeded()
-        publishTracking("Die Raumortung wurde unterbrochen. Halte die Kamera weiter in den Raum.", false)
+        publishTracking(L10n.text("ui_room_tracking_was_interrupted_keep_pointing_the_11115261"), false)
     }
 
     func sessionInterruptionEnded(_ session: ARSession) {
@@ -247,7 +247,7 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
         relocalizationGate.beginSearching()
         trackingReady = false
         startRelocalizationTimeoutIfNeeded()
-        publishTracking("Der gespeicherte Raum wird erneut gesucht …", false)
+        publishTracking(L10n.text("ui_searching_for_the_saved_room_again_c939fb93"), false)
     }
 
     private func updateTracking(camera: ARCamera) {
@@ -263,26 +263,26 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
             startRelocalizationTimeoutIfNeeded()
             switch reason {
             case .relocalizing:
-                publishTracking("Suche den gespeicherten Raum. Zeige auf markante Möbel oder Ecken.", false)
+                publishTracking(L10n.text("ui_searching_for_the_saved_room_point_at_6ed5d3f2"), false)
             case .insufficientFeatures:
-                publishTracking("Zu wenige Details sichtbar. Bewege das iPhone auf Möbel oder Kanten.", false)
+                publishTracking(L10n.text("ui_too_few_details_visible_point_the_iphone_c20e4e18"), false)
             case .excessiveMotion:
-                publishTracking("Bewege das iPhone langsamer.", false)
+                publishTracking(L10n.text("ui_move_the_iphone_more_slowly_666ce1a4"), false)
             case .initializing:
-                publishTracking("AR-Ortung wird gestartet …", false)
+                publishTracking(L10n.text("ui_starting_ar_tracking_1ec40055"), false)
             @unknown default:
-                publishTracking("Raumortung ist eingeschränkt.", false)
+                publishTracking(L10n.text("ui_room_tracking_is_limited_b55de616"), false)
             }
         case .notAvailable:
             relocalizationGate.beginSearching()
             trackingReady = false
             startRelocalizationTimeoutIfNeeded()
-            publishTracking("AR-Ortung ist derzeit nicht verfügbar.", false)
+            publishTracking(L10n.text("ui_ar_tracking_is_currently_unavailable_e626bfe4"), false)
         @unknown default:
             relocalizationGate.beginSearching()
             trackingReady = false
             startRelocalizationTimeoutIfNeeded()
-            publishTracking("Raumortung wird vorbereitet …", false)
+            publishTracking(L10n.text("ui_preparing_room_tracking_f18a9b4b"), false)
         }
     }
 
@@ -312,14 +312,14 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
         guard let activeRoomScan else {
             trackingReady = false
             publishTracking(
-                "Struktur erkannt. Gehe weiter in einen gescannten Raum oder wähle ihn manuell.",
+                L10n.text("ui_structure_recognized_continue_into_a_scanned_room_6029a2d2"),
                 false
             )
             return
         }
         trackingReady = true
         publishTracking(
-            "\(activeRoomScan.roomName) erkannt. Richte das Fadenkreuz auf den Gegenstand.",
+            L10n.text("ui_0_recognized_aim_the_crosshair_at_the_f3462d1d", activeRoomScan.roomName),
             true
         )
     }
@@ -352,7 +352,7 @@ final class ItemPlacementController: UIViewController, @preconcurrency ARSession
             self.trackingReady = false
             self.arView.session.pause()
             self.publishTracking(
-                "Der Raum wurde nicht erkannt. Wähle ihn erneut und zeige auf markante Ecken.",
+                L10n.text("ui_the_room_was_not_recognized_select_it_099f02ee"),
                 false
             )
             self.onCaptured?(.failure(SpatialCaptureError.relocalizationFailed))

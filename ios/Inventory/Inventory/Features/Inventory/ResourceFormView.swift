@@ -155,7 +155,7 @@ struct ResourceFormView: View {
         _notes = State(
             initialValue: resource?.notes ?? (
                 !scanned.isEmpty && !useAsBarcode
-                    ? "Gescannter Code: \(scanned)"
+                    ? L10n.text("ui_scanned_code_0_684fe566", scanned)
                     : ""
             )
         )
@@ -170,7 +170,7 @@ struct ResourceFormView: View {
                     Section {
                         Label {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Code übernommen").font(.subheadline.weight(.semibold))
+                                Text(L10n.text("ui_code_applied_0de7e9c5")).font(.subheadline.weight(.semibold))
                                 Text(prefilledCode).font(.caption.monospaced()).lineLimit(3)
                             }
                         } icon: {
@@ -180,7 +180,7 @@ struct ResourceFormView: View {
                 }
 
                 if let objectModel {
-                    Section("3D-Modell") {
+                    Section(L10n.text("ui_model_3d")) {
                         HStack(spacing: 14) {
                             LocalThumbnail(url: objectModel.articleImageURL, size: 76)
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -189,7 +189,7 @@ struct ResourceFormView: View {
                                     .font(.subheadline.weight(.semibold))
                                 Text(
                                     objectModel.byteCount.formatted(.byteCount(style: .file))
-                                        + " · Artikelbild "
+                                        + L10n.text("ui_item_image_dd95a2c5")
                                         + objectModel.articleImageByteCount.formatted(.byteCount(style: .file))
                                 )
                                 .font(.caption)
@@ -198,7 +198,7 @@ struct ResourceFormView: View {
                         }
 
                         if objectModel.shotCount > 0 {
-                            LabeledContent("Aufnahmen", value: "\(objectModel.shotCount)")
+                            LabeledContent(L10n.text("ui_captures_e80dd0e9"), value: "\(objectModel.shotCount)")
                         }
 
                         Text(objectCaptureProcessingDescription)
@@ -206,7 +206,7 @@ struct ResourceFormView: View {
                             .foregroundStyle(.secondary)
                         if let estimate = objectCaptureAICostEstimate {
                             Label(
-                                "Geschätzte API-Kosten: \(estimate.formattedUSD)",
+                                L10n.text("ui_estimated_api_cost_0_f15c8c17", estimate.formattedUSD),
                                 systemImage: "dollarsign.circle"
                             )
                             .font(.caption2)
@@ -217,37 +217,37 @@ struct ResourceFormView: View {
 
                 if resource == nil && state.canUseAI {
                     if !aiDefaultsLoaded {
-                        Button("KI-Vorgaben erneut laden") { Task { await loadAIDefaults() } }
+                        Button(L10n.text("ui_reload_ai_defaults_647b46ea")) { Task { await loadAIDefaults() } }
                     }
-                    Section("KI beim Anlegen") {
+                    Section(L10n.text("ui_ai_on_creation_2345a631")) {
                         if objectModel != nil && state.canAnalyzeInventory {
-                            Toggle("Fotos analysieren", isOn: $autoAnalyze)
-                            if autoAnalyze { Toggle("Vorhandene Texte überschreiben", isOn: $analysisOverwrite) }
+                            Toggle(L10n.text("ui_analyze_photos_957b01f7"), isOn: $autoAnalyze)
+                            if autoAnalyze { Toggle(L10n.text("ui_overwrite_existing_text_e3d8f4dd"), isOn: $analysisOverwrite) }
                         }
                         if state.canResearchInventory {
-                            Toggle("Nach dem Anlegen recherchieren", isOn: $autoResearch)
-                            Text("Ergänzt fehlende Angaben aus dem Web und verursacht zusätzliche KI-Kosten.").font(.caption).foregroundStyle(.secondary)
+                            Toggle(L10n.text("ui_research_after_creating_3b405147"), isOn: $autoResearch)
+                            Text(L10n.text("ui_adds_missing_details_from_the_web_and_fb814d36")).font(.caption).foregroundStyle(.secondary)
                         }
                     }.disabled(saving || !aiDefaultsLoaded || createdResource != nil)
                 }
 
-                Section("Gegenstand") {
-                    TextField("Name", text: $name)
-                    Picker("Typ", selection: $type) {
+                Section(L10n.text("ui_item_72e2f335")) {
+                    TextField(L10n.text("ui_name_dcd1d522"), text: $name)
+                    Picker(L10n.text("ui_type_1b024183"), selection: $type) {
                         ForEach(selectableTypes, id: \.self) {
                             Text(typeLabel(for: $0)).tag($0)
                         }
                     }
-                    Picker("Status", selection: $status) {
+                    Picker(L10n.text("ui_status_920e413c"), selection: $status) {
                         ForEach(InventoryResourceStatus.allCases, id: \.self) {
                             Text($0.localizedName).tag($0)
                         }
                     }
-                    TextField("Beschreibung", text: $description, axis: .vertical)
+                    TextField(L10n.text("ui_description_e9262f00"), text: $description, axis: .vertical)
                         .lineLimit(3 ... 8)
                     if !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         DisclosureGroup(
-                            "Markdown-Vorschau",
+                            L10n.text("ui_markdown_preview_2c9f5375"),
                             isExpanded: $showDescriptionPreview
                         ) {
                             MarkdownContentView(
@@ -263,40 +263,40 @@ struct ResourceFormView: View {
 
                 slugEditorSection
 
-                Section("Identifikation") {
+                Section(L10n.text("ui_identification_113dc810")) {
                     TextField("SKU", text: $sku)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("Barcode", text: $barcode)
+                    TextField(L10n.text("ui_barcode_a401f372"), text: $barcode)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("Seriennummer", text: $serialNumber)
+                    TextField(L10n.text("ui_serial_number_760abc3d"), text: $serialNumber)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("Ort, Regal oder Raum", text: $location)
+                    TextField(L10n.text("ui_location_shelf_or_room_5161bf8f"), text: $location)
                     if resource == nil {
-                        Stepper("Menge: \(quantity)", value: $quantity, in: 0 ... 1_000_000)
+                        Stepper(L10n.text("ui_quantity_0_ae0b74e1", quantity), value: $quantity, in: 0 ... 1_000_000)
                     } else {
-                        LabeledContent("Menge", value: "\(quantity)")
+                        LabeledContent(L10n.text("ui_quantity_1bece813"), value: "\(quantity)")
                     }
                 }
                 .disabled(createdResource != nil)
 
-                Section("Weitere Angaben") {
-                    TextField("Tags, mit Komma getrennt", text: $tags)
-                    TextField("Kategorien, mit Komma getrennt", text: $categories)
-                    TextField("Notizen", text: $notes, axis: .vertical)
+                Section(L10n.text("ui_additional_details_66fb159b")) {
+                    TextField(L10n.text("ui_tags_separated_by_commas_49ffb625"), text: $tags)
+                    TextField(L10n.text("ui_categories_separated_by_commas_ae75ab55"), text: $categories)
+                    TextField(L10n.text("ui_notes_7800bd53"), text: $notes, axis: .vertical)
                         .lineLimit(3 ... 10)
                 }
                 .disabled(createdResource != nil)
 
-                Section("Wert und Priorität") {
-                    TextField("Wert", text: $value)
+                Section(L10n.text("ui_value_and_priority_9c9275fa")) {
+                    TextField(L10n.text("ui_value_7e347daa"), text: $value)
                         .keyboardType(.decimalPad)
-                    TextField("Währung (z. B. EUR)", text: $currency)
+                    TextField(L10n.text("ui_currency_e_g_eur_452eecb5"), text: $currency)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
-                    Picker("Priorität", selection: $priority) {
+                    Picker(L10n.text("ui_priority_787e02f4"), selection: $priority) {
                         ForEach(1 ... 5, id: \.self) { value in
                             Text("\(value)").tag(value)
                         }
@@ -304,12 +304,12 @@ struct ResourceFormView: View {
                 }
                 .disabled(createdResource != nil)
 
-                Section("GPS-Position") {
-                    TextField("Breitengrad", text: $gpsLatitude)
+                Section(L10n.text("ui_gps_position_6c51aa33")) {
+                    TextField(L10n.text("ui_latitude_c5049879"), text: $gpsLatitude)
                         .keyboardType(.numbersAndPunctuation)
-                    TextField("Längengrad", text: $gpsLongitude)
+                    TextField(L10n.text("ui_longitude_4c9aacde"), text: $gpsLongitude)
                         .keyboardType(.numbersAndPunctuation)
-                    TextField("Höhe in Metern", text: $gpsAltitude)
+                    TextField(L10n.text("ui_altitude_in_meters_5e8e9876"), text: $gpsAltitude)
                         .keyboardType(.numbersAndPunctuation)
                 }
                 .disabled(createdResource != nil)
@@ -334,11 +334,11 @@ struct ResourceFormView: View {
                     }
                 }
             }
-            .navigationTitle(resource == nil ? "Neuer Eintrag" : "Bearbeiten")
+            .navigationTitle(resource == nil ? L10n.text("ui_new_item_c325efcf") : L10n.text("ui_edit_84e45ee7"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") {
+                    Button(L10n.text("ui_cancel_f7ff1178")) {
                         if createdResource != nil {
                             confirmCloseAfterCreation = true
                         } else {
@@ -347,7 +347,7 @@ struct ResourceFormView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "Speichert …" : "Speichern") { save() }
+                    Button(saving ? L10n.text("ui_saving_4e85ab63") : L10n.text("ui_save_f6b2ff39")) { save() }
                         .disabled(
                             saving || mediaBusy || deleting || (resource == nil && state.canUseAI && !aiDefaultsLoaded) ||
                                 name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -373,22 +373,22 @@ struct ResourceFormView: View {
                     dismiss()
                 }
                 Button(partialCreationRetryButtonTitle) { save() }
-                Button("Weiter bearbeiten", role: .cancel) { }
+                Button(L10n.text("ui_continue_editing_4ec78c78"), role: .cancel) { }
             } message: {
                 Text(closeAfterPartialCreationMessage)
             }
             .confirmationDialog(
-                "„\(name)“ wirklich löschen?",
+                L10n.text("ui_really_delete_0_18a752c1", name),
                 isPresented: $confirmDeletion,
                 titleVisibility: .visible
             ) {
-                Button("Löschen", role: .destructive) { deleteResource() }
-                Button("Abbrechen", role: .cancel) { }
+                Button(L10n.text("ui_delete_6c2d3521"), role: .destructive) { deleteResource() }
+                Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
             } message: {
-                Text("Der Inventargegenstand und seine Medien werden dauerhaft entfernt.")
+                Text(L10n.text("ui_the_inventory_item_and_its_media_will_bb2a7eee"))
             }
             .alert(
-                "Speichern fehlgeschlagen",
+                L10n.text("ui_saving_failed_6ad2ee31"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
@@ -396,7 +396,7 @@ struct ResourceFormView: View {
             ) {
                 Button("OK", role: .cancel) { errorMessage = nil }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }
@@ -404,7 +404,7 @@ struct ResourceFormView: View {
     private var slugEditorSection: some View {
         Section {
             if slugs.isEmpty {
-                Text("Noch kein lesbarer Kurzlink eingerichtet.")
+                Text(L10n.text("ui_no_readable_short_link_has_been_configured_fcb5aa6f"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -413,7 +413,7 @@ struct ResourceFormView: View {
                     Text("/")
                         .font(.body.monospaced())
                         .foregroundStyle(.secondary)
-                    TextField("kurzer-name", text: slugBinding(at: index))
+                    TextField(L10n.text("ui_slug_placeholder"), text: slugBinding(at: index))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     slugMenu(at: index)
@@ -422,13 +422,13 @@ struct ResourceFormView: View {
             Button {
                 slugs.append("")
             } label: {
-                Label("Alias hinzufügen", systemImage: "plus")
+                Label(L10n.text("ui_add_alias_b55ea7b8"), systemImage: "plus")
             }
             .disabled(slugs.count >= 20)
         } header: {
-            Text("Aliase und Links")
+            Text(L10n.text("ui_aliases_and_links_6a298f95"))
         } footer: {
-            Text("Der erste Alias ist der Standardlink. Erlaubt sind Kleinbuchstaben, Zahlen und einzelne Bindestriche.")
+            Text(L10n.text("ui_the_first_alias_is_the_default_link_b68877ad"))
         }
         .disabled(createdResource != nil)
     }
@@ -438,14 +438,14 @@ struct ResourceFormView: View {
             Button {
                 moveSlug(at: index, by: -1)
             } label: {
-                Label("Nach oben", systemImage: "arrow.up")
+                Label(L10n.text("ui_move_up_ed16527a"), systemImage: "arrow.up")
             }
             .disabled(index == 0)
 
             Button {
                 moveSlug(at: index, by: 1)
             } label: {
-                Label("Nach unten", systemImage: "arrow.down")
+                Label(L10n.text("ui_move_down_54245735"), systemImage: "arrow.down")
             }
             .disabled(index == slugs.count - 1)
 
@@ -454,7 +454,7 @@ struct ResourceFormView: View {
             Button(role: .destructive) {
                 slugs.remove(at: index)
             } label: {
-                Label("Entfernen", systemImage: "trash")
+                Label(L10n.text("ui_remove_3828375a"), systemImage: "trash")
             }
         } label: {
             Image(systemName: "ellipsis.circle")
@@ -504,7 +504,7 @@ struct ResourceFormView: View {
 
         if resource != nil, canDeleteResource {
             Section {
-                Button("Inventargegenstand löschen", role: .destructive) {
+                Button(L10n.text("ui_delete_inventory_item_970e0545"), role: .destructive) {
                     confirmDeletion = true
                 }
                 .disabled(saving || mediaBusy || deleting)
@@ -525,11 +525,11 @@ struct ResourceFormView: View {
 
     private func save() {
         guard resource == nil ? state.canCreateInventory : state.canUpdateInventory else {
-            errorMessage = "Dieses Konto hat nur Lesezugriff."
+            errorMessage = L10n.text("ui_this_account_has_read_only_access_dd3a8caa")
             return
         }
         guard let client = state.client else {
-            errorMessage = "Keine Serververbindung eingerichtet."
+            errorMessage = L10n.text("ui_no_server_connection_configured_4a1c3f55")
             return
         }
         let formValues: ValidatedResourceFormValues
@@ -767,7 +767,7 @@ struct ResourceFormView: View {
                 .filter { $0.archivedAt == nil }
                 .sorted { ($0.position, $0.label) < ($1.position, $1.label) }
         } catch {
-            metadataErrorMessage = "Serverdefinierte Typen konnten nicht geladen werden."
+            metadataErrorMessage = L10n.text("ui_could_not_load_server_defined_types_25e8d9b1")
         }
 
         do {
@@ -784,7 +784,7 @@ struct ResourceFormView: View {
             customFieldMetadataLoaded = false
             metadataErrorMessage = [
                 metadataErrorMessage,
-                "Benutzerdefinierte Felder konnten nicht geladen werden.",
+                L10n.text("ui_custom_fields_could_not_be_loaded_0089a3ba"),
             ].compactMap { $0 }.joined(separator: " ")
         }
     }
@@ -793,7 +793,7 @@ struct ResourceFormView: View {
         let normalizedCurrency = normalized(currency).uppercased()
         guard normalizedCurrency.count == 3,
               normalizedCurrency.allSatisfy({ $0.isLetter }) else {
-            throw APIClientError.invalidRequest("Die Währung muss aus drei Buchstaben bestehen.")
+            throw APIClientError.invalidRequest(L10n.text("ui_the_currency_must_consist_of_three_letters_a4ed7fab"))
         }
 
         let valueCents: Int?
@@ -801,18 +801,18 @@ struct ResourceFormView: View {
             valueCents = nil
         } else {
             guard let amount = decimalNumber(value), amount >= 0 else {
-                throw APIClientError.invalidRequest("Der Wert muss eine positive Zahl sein.")
+                throw APIClientError.invalidRequest(L10n.text("ui_the_value_must_be_a_positive_number_442ee4b6"))
             }
             let cents = (amount * 100).rounded()
             guard cents <= 2_000_000_000 else {
-                throw APIClientError.invalidRequest("Der angegebene Wert ist zu groß.")
+                throw APIClientError.invalidRequest(L10n.text("ui_the_specified_value_is_too_large_25e85c75"))
             }
             valueCents = Int(cents)
         }
 
-        let latitude = try coordinate(gpsLatitude, name: "Breitengrad", range: -90 ... 90)
-        let longitude = try coordinate(gpsLongitude, name: "Längengrad", range: -180 ... 180)
-        let altitude = try coordinate(gpsAltitude, name: "Höhe", range: -12_000 ... 100_000)
+        let latitude = try coordinate(gpsLatitude, name: L10n.text("ui_latitude_c5049879"), range: -90 ... 90)
+        let longitude = try coordinate(gpsLongitude, name: L10n.text("ui_longitude_4c9aacde"), range: -180 ... 180)
+        let altitude = try coordinate(gpsAltitude, name: L10n.text("ui_height_a4d8c347"), range: -12_000 ... 100_000)
 
         let fields = try validatedCustomFields()
         return ValidatedResourceFormValues(
@@ -832,17 +832,17 @@ struct ResourceFormView: View {
             normalized($0).lowercased()
         }.filter { !$0.isEmpty }
         guard normalizedSlugs.count <= 20 else {
-            throw APIClientError.invalidRequest("Es sind höchstens 20 Aliase erlaubt.")
+            throw APIClientError.invalidRequest(L10n.text("ui_a_maximum_of_20_aliases_is_allowed_c9f16479"))
         }
         guard Set(normalizedSlugs).count == normalizedSlugs.count else {
-            throw APIClientError.invalidRequest("Jeder Alias darf nur einmal vorkommen.")
+            throw APIClientError.invalidRequest(L10n.text("ui_each_alias_may_only_appear_once_e775cb3b"))
         }
         let pattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
         guard normalizedSlugs.allSatisfy({
             $0.count <= 80 && $0.wholeMatch(of: pattern) != nil
         }) else {
             throw APIClientError.invalidRequest(
-                "Aliase dürfen nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten."
+                L10n.text("ui_aliases_may_only_contain_lowercase_letters_numbers_a1053d45")
             )
         }
         return normalizedSlugs
@@ -935,7 +935,7 @@ struct ResourceFormView: View {
                !normalized(draft).isEmpty,
                decimalNumber(draft) == nil {
                 throw APIClientError.invalidRequest(
-                    "„\(definition.label)“ muss eine Zahl enthalten."
+                    L10n.text("ui_0_must_contain_a_number_d3ce94eb", definition.label)
                 )
             }
 
@@ -946,7 +946,7 @@ struct ResourceFormView: View {
             guard let fieldValue, !isEmpty(fieldValue) else {
                 if definition.required {
                     throw APIClientError.invalidRequest(
-                        "„\(definition.label)“ ist ein Pflichtfeld."
+                        L10n.text("ui_0_is_required_64c4c70e", definition.label)
                     )
                 }
                 continue
@@ -955,12 +955,12 @@ struct ResourceFormView: View {
             if case .number(let number) = fieldValue {
                 if let minimum = definition.minValue, number < minimum {
                     throw APIClientError.invalidRequest(
-                        "„\(definition.label)“ muss mindestens \(minimum) sein."
+                        L10n.text("ui_0_must_be_at_least_1_9317efe4", definition.label, minimum)
                     )
                 }
                 if let maximum = definition.maxValue, number > maximum {
                     throw APIClientError.invalidRequest(
-                        "„\(definition.label)“ darf höchstens \(maximum) sein."
+                        L10n.text("ui_0_must_not_exceed_1_16d63fb7", definition.label, maximum)
                     )
                 }
             }
@@ -985,7 +985,7 @@ struct ResourceFormView: View {
         guard !normalized(value).isEmpty else { return nil }
         guard let parsed = decimalNumber(value), range.contains(parsed) else {
             throw APIClientError.invalidRequest(
-                "\(name) muss zwischen \(range.lowerBound) und \(range.upperBound) liegen."
+                L10n.text("ui_0_must_be_between_1_and_2_5f5786ed", name, range.lowerBound, range.upperBound)
             )
         }
         return parsed
@@ -997,9 +997,9 @@ struct ResourceFormView: View {
 
     private var objectCaptureProcessingDescription: String {
         if state.canUseAI {
-            return "Artikelbild und USDZ-Modell werden hochgeladen. Die gewählten KI-Schritte werden anschließend ausgeführt; mit Bildberechtigung wird ein transparentes Cover erstellt."
+            return L10n.text("ui_the_item_image_and_usdz_model_are_5a3ff58c")
         }
-        return "Artikelbild und USDZ-Modell werden hochgeladen. KI-Erkennung und Freistellung bleiben aus, weil diesem Konto die KI-Berechtigung fehlt."
+        return L10n.text("ui_the_item_image_and_usdz_model_are_372c6d5d")
     }
 
     private var objectCaptureAICostEstimate: AICostRange? {
@@ -1012,28 +1012,28 @@ struct ResourceFormView: View {
 
     private var closeAfterPartialCreationTitle: String {
         uploadedObjectMedia == nil
-            ? "Eintrag ohne Artikelbild und 3D-Modell schließen?"
-            : "Automatische Verarbeitung unvollständig"
+            ? L10n.text("ui_close_item_without_image_and_3d_model_dbc2199a")
+            : L10n.text("ui_automatic_processing_incomplete_17543a9e")
     }
 
     private var partialCreationKeepButtonTitle: String {
         uploadedObjectMedia == nil
-            ? "Eintrag trotzdem behalten"
-            : "Mit Artikelbild und 3D-Modell behalten"
+            ? L10n.text("ui_keep_item_anyway_096e3977")
+            : L10n.text("ui_keep_with_image_and_3d_model_e4893d51")
     }
 
     private var partialCreationRetryButtonTitle: String {
-        uploadedObjectMedia == nil ? "Upload erneut versuchen" : "KI-Verarbeitung erneut versuchen"
+        uploadedObjectMedia == nil ? L10n.text("ui_retry_upload_48c7b5f6") : L10n.text("ui_retry_ai_processing_93bbf996")
     }
 
     private var closeAfterPartialCreationMessage: String {
         if uploadedObjectMedia == nil {
-            return "Der Inventareintrag wurde bereits angelegt, aber Artikelbild und 3D-Modell wurden noch nicht hochgeladen. Du kannst den Upload erneut versuchen oder den Eintrag ohne diese Medien behalten."
+            return L10n.text("ui_the_inventory_item_has_already_been_created_d4b1b91a")
         }
         if state.canUseAI, (!objectAnalysisCompleted || !objectCoverCompleted) {
-            return "Artikelbild und 3D-Modell sind bereits gespeichert. Die KI-Erkennung oder transparente Freistellung ist noch nicht vollständig. Du kannst sie erneut versuchen oder den Eintrag mit den vorhandenen Medien behalten."
+            return L10n.text("ui_the_item_image_and_3d_model_have_899cc894")
         }
-        return "Artikelbild und 3D-Modell sind bereits gespeichert."
+        return L10n.text("ui_the_item_image_and_3d_model_have_4a881ca8")
     }
 
     private var selectableTypes: [InventoryResourceType] {
@@ -1069,10 +1069,10 @@ struct ResourceFormView: View {
 extension InventoryResourceStatus {
     var localizedName: String {
         switch self {
-        case .available: "Verfügbar"
-        case .inUse: "In Benutzung"
-        case .maintenance: "Wartung"
-        case .archived: "Archiviert"
+        case .available: L10n.text("ui_available_3aa55273")
+        case .inUse: L10n.text("ui_in_use_d4800d74")
+        case .maintenance: L10n.text("ui_maintenance_854f69bd")
+        case .archived: L10n.text("ui_archived_e28232fa")
         }
     }
 

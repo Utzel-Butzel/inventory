@@ -13,7 +13,7 @@ struct SpatialItemCaptureView: View {
     @State private var loadedWorldMap: LoadedSpatialWorldMap?
     @State private var loading = true
     @State private var loadingWorldMap = false
-    @State private var trackingMessage = "Gespeicherter Raum wird gesucht …"
+    @State private var trackingMessage = L10n.text("ui_searching_for_saved_room_1fd667e8")
     @State private var trackingReady = false
     @State private var captureRequest = 0
     @State private var capturing = false
@@ -34,7 +34,7 @@ struct SpatialItemCaptureView: View {
         NavigationStack {
             Group {
                 if loading {
-                    ProgressView("Räume werden geladen …")
+                    ProgressView(L10n.text("ui_loading_rooms_51c63085"))
                 } else if let selectedScan,
                           let loadedWorldMap,
                           selectionState.accepts(
@@ -51,15 +51,15 @@ struct SpatialItemCaptureView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(InventoryTheme.canvas)
-            .navigationTitle(selectedScan == nil ? "Raum auswählen" : "Im Raum erfassen")
+            .navigationTitle(selectedScan == nil ? L10n.text("ui_select_room_398c1c30") : L10n.text("ui_capture_in_room_39c22be6"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Schließen") { dismiss() }
+                    Button(L10n.text("ui_close_b808f6e9")) { dismiss() }
                 }
                 if selectedScan != nil {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Bereich wechseln") {
+                        Button(L10n.text("ui_change_area_31ac34f9")) {
                             resetSelection()
                         }
                     }
@@ -67,7 +67,7 @@ struct SpatialItemCaptureView: View {
                 if let loadedWorldMap, loadedWorldMap.candidates.count > 1 {
                     ToolbarItem(placement: .secondaryAction) {
                         Menu {
-                            Button("Automatisch erkennen") {
+                            Button(L10n.text("ui_detect_automatically_74179929")) {
                                 selectManualRoom(nil)
                             }
                             Divider()
@@ -77,7 +77,7 @@ struct SpatialItemCaptureView: View {
                                 }
                             }
                         } label: {
-                            Label("Raum wählen", systemImage: "door.left.hand.open")
+                            Label(L10n.text("ui_choose_room_8cd247b5"), systemImage: "door.left.hand.open")
                         }
                     }
                 }
@@ -113,7 +113,7 @@ struct SpatialItemCaptureView: View {
                 SpatialPhotoOnlyResultView(result: result)
             }
             .alert(
-                "Räumliche Erfassung fehlgeschlagen",
+                L10n.text("ui_spatial_capture_failed_9ba100cb"),
                 isPresented: Binding(
                     get: { errorMessage != nil },
                     set: { if !$0 { errorMessage = nil } }
@@ -121,16 +121,16 @@ struct SpatialItemCaptureView: View {
             ) {
                 Button("OK", role: .cancel) { errorMessage = nil }
             } message: {
-                Text(errorMessage ?? "Unbekannter Fehler")
+                Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
             }
         }
     }
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("Kein 3D-Raum verfügbar", systemImage: "cube.transparent")
+            Label(L10n.text("ui_no_3d_room_available_bd29ea46"), systemImage: "cube.transparent")
         } description: {
-            Text("Scanne zuerst einen Raum im Bereich ‚Räume‘.")
+            Text(L10n.text("ui_first_scan_a_room_in_the_rooms_30a82f1d"))
         }
         .padding(24)
     }
@@ -138,7 +138,7 @@ struct SpatialItemCaptureView: View {
     private var roomSelection: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Wähle eine verbundene Struktur. Nach der AR-Wiedererkennung bestimmt die App beim Durchqueren von Türen automatisch den aktuellen Raum. Einzelne ältere Raumscans bleiben auswählbar.")
+                Text(L10n.text("ui_select_a_connected_structure_after_ar_recognition_38474285"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 4)
@@ -234,7 +234,7 @@ struct SpatialItemCaptureView: View {
                                 case .worldMapUnavailable, .relocalizationFailed, .sessionFailed(_):
                                     arRelocalizationUnavailable = true
                                     trackingReady = false
-                                    trackingMessage = "AR-Ortung nicht verfügbar. Ordne stattdessen ein Foto grob einem Raum zu."
+                                    trackingMessage = L10n.text("ui_ar_tracking_unavailable_use_a_photo_to_5d55415a")
                                 case .imageUnavailable, .placementUnavailable, .structureUnavailable:
                                     errorMessage = error.localizedDescription
                                 }
@@ -271,7 +271,7 @@ struct SpatialItemCaptureView: View {
                 VStack(spacing: 7) {
                     Label(
                         activeRoomScan?.roomName ?? (
-                            worldMap.candidates.count > 1 ? "Raum wird bestimmt" : scan.roomName
+                            worldMap.candidates.count > 1 ? L10n.text("ui_identifying_room_c32d755c") : scan.roomName
                         ),
                         systemImage: activeRoomScan == nil && worldMap.candidates.count > 1
                             ? "location.magnifyingglass"
@@ -307,10 +307,10 @@ struct SpatialItemCaptureView: View {
                         }
                         Text(
                             capturing
-                                ? "Position wird gemessen"
+                                ? L10n.text("ui_measuring_position_683bcaf8")
                                 : trackingReady
-                                    ? "Foto + Position erfassen"
-                                    : "AR-Position nicht verfügbar"
+                                    ? L10n.text("ui_capture_photo_position_a2465413")
+                                    : L10n.text("ui_ar_position_unavailable_215b98a0")
                         )
                     }
                     .font(.headline)
@@ -347,33 +347,33 @@ struct SpatialItemCaptureView: View {
 
     private var photoOnlyControls: some View {
         VStack(spacing: 10) {
-            Label("Grobe Foto-Zuordnung", systemImage: "photo.badge.magnifyingglass")
+            Label(L10n.text("ui_approximate_photo_matching_4e37b70f"), systemImage: "photo.badge.magnifyingglass")
                 .font(.subheadline.weight(.bold))
 
-            Text("Vergleicht ein neues Foto mit gespeicherten Raumansichten. Das Ergebnis ist keine Objektposition.")
+            Text(L10n.text("ui_compares_a_new_photo_with_saved_room_2b21a46f"))
                 .font(.caption)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.82))
 
             switch photoOnlyState {
             case .unavailable:
-                Text("Für diesen Bereich sind nicht genug Referenzbilder verfügbar.")
+                Text(L10n.text("ui_there_are_not_enough_reference_images_for_a298dd42"))
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.72))
             case .indexing:
                 HStack(spacing: 8) {
                     ProgressView().tint(.white)
-                    Text("Referenzbilder werden vorbereitet …")
+                    Text(L10n.text("ui_preparing_reference_images_3aa1f928"))
                 }
                 .font(.caption)
             case .matching:
                 HStack(spacing: 8) {
                     ProgressView().tint(.white)
-                    Text("Foto wird grob zugeordnet …")
+                    Text(L10n.text("ui_matching_photo_approximately_9c2856fb"))
                 }
                 .font(.caption)
             case .ready(let referenceCount):
-                Text("Vergleich mit \(referenceCount) Referenzbildern")
+                Text(L10n.text("ui_comparing_with_0_reference_images_ec783b0c", referenceCount))
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.72))
 
@@ -381,10 +381,10 @@ struct SpatialItemCaptureView: View {
                     Button {
                         arRelocalizationUnavailable = true
                         trackingReady = false
-                        trackingMessage = "Foto wird ohne AR-Position grob zugeordnet."
+                        trackingMessage = L10n.text("ui_photo_is_being_matched_approximately_without_an_ea6b9e9e")
                         showingPhotoOnlyCamera = true
                     } label: {
-                        Label("Aufnehmen", systemImage: "camera.fill")
+                        Label(L10n.text("ui_capture_0d413232"), systemImage: "camera.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .disabled(
@@ -396,7 +396,7 @@ struct SpatialItemCaptureView: View {
                         selection: $photoOnlyPickerItem,
                         matching: .images
                     ) {
-                        Label("Auswählen", systemImage: "photo.on.rectangle")
+                        Label(L10n.text("ui_select_0bf1eddb"), systemImage: "photo.on.rectangle")
                             .frame(maxWidth: .infinity)
                     }
                     .disabled(!photoOnlyState.canMatch)
@@ -406,7 +406,7 @@ struct SpatialItemCaptureView: View {
                 .tint(.white)
 
                 if !photoOnlyState.canMatch {
-                    Text("Für einen belastbaren Vergleich sind mindestens zwei Referenzbilder nötig.")
+                    Text(L10n.text("ui_at_least_two_reference_images_are_needed_2fb5d2f0"))
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.72))
                 }
@@ -427,7 +427,7 @@ struct SpatialItemCaptureView: View {
 
         arRelocalizationUnavailable = true
         trackingReady = false
-        trackingMessage = "Foto wird ohne AR-Position grob zugeordnet."
+        trackingMessage = L10n.text("ui_photo_is_being_matched_approximately_without_an_ea6b9e9e")
         photoOnlyMatchTask?.cancel()
         let generation = context.generation
         photoOnlyMatchTask = Task { @MainActor in
@@ -462,7 +462,7 @@ struct SpatialItemCaptureView: View {
                     scanID: context.scanID,
                     generation: generation
                 ) else { return }
-                errorMessage = "Grobe Foto-Zuordnung: \(error.localizedDescription)"
+                errorMessage = L10n.text("ui_approximate_photo_match_0_cc4fbae8", error.localizedDescription)
             }
         }
     }
@@ -505,7 +505,7 @@ struct SpatialItemCaptureView: View {
                     scanID: context.scanID,
                     generation: generation
                 ) else { return }
-                errorMessage = "Grobe Foto-Zuordnung: \(error.localizedDescription)"
+                errorMessage = L10n.text("ui_approximate_photo_match_0_cc4fbae8", error.localizedDescription)
             }
         }
     }
@@ -532,7 +532,7 @@ struct SpatialItemCaptureView: View {
         }
         let roomName = context.candidates.first {
             $0.scan.id == estimate.roomScanID
-        }?.scan.roomName ?? "Unbekannter Raum"
+        }?.scan.roomName ?? L10n.text("ui_unknown_room_b9083c35")
         return SpatialPhotoOnlyMatchPresentation(
             roomName: roomName,
             estimate: estimate
@@ -680,8 +680,8 @@ struct SpatialItemCaptureView: View {
             )
             arRelocalizationUnavailable = downloadedWorldMap == nil
             trackingMessage = downloadedWorldMap == nil
-                ? "AR-Weltkarte nicht verfügbar. Ordne stattdessen ein Foto grob einem Raum zu."
-                : "Zeige auf bekannte Wände oder Möbel, bis der Raum erkannt ist."
+                ? L10n.text("ui_ar_world_map_unavailable_use_a_photo_6ec896cb")
+                : L10n.text("ui_point_at_familiar_walls_or_furniture_until_26eb1615")
             trackingReady = false
             keyframeIndexTask?.cancel()
             keyframeIndexTask = Task { @MainActor in
@@ -816,16 +816,16 @@ private struct SpatialRoomSelectionEntry: Identifiable {
     var sourceScan: SpatialRoomScanSummary { scans[0] }
     var title: String {
         if scans.count > 1 {
-            return sourceScan.structureName ?? "Verbundene Räume"
+            return sourceScan.structureName ?? L10n.text("ui_connected_rooms_d102e749")
         }
         return sourceScan.roomName
     }
     var subtitle: String {
         if scans.count > 1 {
             let floor = sourceScan.floorIdentifier.map { " · \($0)" } ?? ""
-            return "\(scans.count) Räume\(floor) · automatische Erkennung"
+            return L10n.text("ui_0_rooms_1_automatic_recognition_2c627337", scans.count, floor)
         }
-        return "\(sourceScan.placementCount) Gegenstände · Scan \(sourceScan.revision)"
+        return L10n.text("ui_0_items_scan_1_c7afdc1f", sourceScan.placementCount, sourceScan.revision)
     }
 }
 
@@ -842,7 +842,7 @@ private enum SpatialPhotoOnlyMatchError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noReliableMatch:
-            "Das Foto ähnelt keinem gespeicherten Referenzbild eindeutig genug. Versuche eine markante Ecke oder ein bekanntes Möbelstück."
+            L10n.text("ui_the_photo_does_not_resemble_any_saved_8b8e2033")
         }
     }
 }
@@ -855,12 +855,12 @@ private struct SpatialPhotoOnlyResultView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Label("Grobe Zuordnung", systemImage: "location.magnifyingglass")
+                    Label(L10n.text("ui_approximate_match_1687921f"), systemImage: "location.magnifyingglass")
                         .font(.title2.weight(.bold))
                         .foregroundStyle(InventoryTheme.accent)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Wahrscheinlicher Raum")
+                        Text(L10n.text("ui_likely_room_544b4fa2"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(result.roomName)
@@ -868,15 +868,15 @@ private struct SpatialPhotoOnlyResultView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Pose der gespeicherten Referenzkamera")
+                        Text(L10n.text("ui_saved_reference_camera_pose_3816860a"))
                             .font(.headline)
                         Text(referencePositionText)
                             .font(.body.monospacedDigit())
-                        Text("Ähnlichkeits-Konfidenz \(result.estimate.confidence, format: .percent.precision(.fractionLength(0)))")
+                        Text(L10n.text("ui_similarity_confidence_0_fd6040ef", result.estimate.confidence.formatted(.percent.precision(.fractionLength(0)))))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        DisclosureGroup("Gespeicherte 4×4-Pose") {
+                        DisclosureGroup(L10n.text("ui_saved_4_4_pose_cb9fc53a")) {
                             Text(referenceTransformText)
                                 .font(.caption.monospaced())
                                 .textSelection(.enabled)
@@ -891,7 +891,7 @@ private struct SpatialPhotoOnlyResultView: View {
                     )
 
                     Label {
-                        Text("Diese Pose gehört zum ähnlichsten gespeicherten Schlüsselbild. Sie ist nur eine grobe Ortsreferenz: Die Aufnahme berechnet keine neue präzise 6DoF-Pose und keine Position des Gegenstands. Das Ergebnis wird deshalb nicht als Inventar-Placement gespeichert.")
+                        Text(L10n.text("ui_this_pose_belongs_to_the_most_similar_afa12af3"))
                     } icon: {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
@@ -900,11 +900,11 @@ private struct SpatialPhotoOnlyResultView: View {
                 }
                 .padding(20)
             }
-            .navigationTitle("Foto zuordnen")
+            .navigationTitle(L10n.text("ui_match_photo_7bb03162"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Fertig") { dismiss() }
+                    Button(L10n.text("ui_done_25d52d7e")) { dismiss() }
                 }
             }
         }

@@ -9,6 +9,7 @@ class InventoryApplication : Application() {
     val queue by lazy { UploadQueue(this, store) }
     override fun onCreate() {
         super.onCreate()
-        runCatching { credentials.read() }.getOrNull()?.let { queue.resume(it) }
+        L10n.initialize(this)
+        // AppModel validates the restored session before scheduling new uploads.
     }
 }

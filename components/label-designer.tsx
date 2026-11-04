@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  AlignLeft, AlignCenter, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Keyboard,
+  AlignLeft, AlignCenter, AlignRight, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal, Keyboard,
   Barcode,
   ArrowLeft,
   ArrowRight,
@@ -29,7 +29,6 @@ import {
   Type,
   Undo2,
   Upload,
-  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -66,6 +65,7 @@ import {
   hasVisibleQrImageOverlap,
   labelElementKey,
   MAX_LABEL_ELEMENTS,
+  MIN_LABEL_POSITION,
   type LabelTextElement,
   type LabelElement,
   type LabelSetupDto,
@@ -277,11 +277,10 @@ export function LabelDesigner({
   const [testError, setTestError] = useState<string | null>(null);
   const [testSent, setTestSent] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const dialogRef = useRef<HTMLElement>(null);
+  const editorRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-  const onCloseRef = useRef(onClose);
   const currentValueRef = useRef(value);
   const pastRef = useRef<LabelSetupDraft[]>([]);
   const futureRef = useRef<LabelSetupDraft[]>([]);
@@ -292,6 +291,7 @@ export function LabelDesigner({
     const initial = value.elements.find(element => element.type === "qr") ?? value.elements[0];
     return initial ? labelElementKey(initial) : "";
   });
+  const [coordinateDraft, setCoordinateDraft] = useState<{ element: string; key: CoordinateKey; unit: CoordinateUnit; text: string } | null>(null);
   const [showAddElements, setShowAddElements] = useState(false);
   const [fontSizeUnit, setFontSizeUnit] = useState<"mm" | "pt">("mm");
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -401,10 +401,6 @@ export function LabelDesigner({
   const canUndo = historyState.past > 0;
   const canRedo = historyState.future > 0;
   const gridSpacingPx = gridSizeMm * pixelsPerMm;
-
-  useEffect(() => {
-    onCloseRef.current = () => { if (!testPrintLock.current && !uploadLock.current && !saving) onClose(); };
-  }, [onClose, saving]);
 
   useEffect(() => {
     currentValueRef.current = value;
@@ -526,13 +522,12 @@ export function LabelDesigner({
   );
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
     previouslyFocusedRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.body.style.overflow = "hidden";
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || testPrintLock.current || uploadLock.current || dialogRef.current?.dataset.busy === "true") return;
+      if (!(event.target instanceof Node) || !editorRef.current?.contains(event.target)) return;
+      if (event.defaultPrevented || event.isComposing || testPrintLock.current || uploadLock.current || editorRef.current?.dataset.busy === "true") return;
       const editable = event.target instanceof HTMLElement && (event.target.isContentEditable || !!event.target.closest("input, textarea, select"));
       if ((!editable || (event.target instanceof HTMLElement && event.target.isContentEditable)) && (event.metaKey || event.ctrlKey) && ["z", "y"].includes(event.key.toLowerCase())) {
         event.preventDefault();
@@ -540,41 +535,10 @@ export function LabelDesigner({
         else undoRef.current();
         return;
       }
-      if (event.key === "Escape" && !editable) {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const dialog = dialogRef.current;
-      if (!dialog) return;
-      const focusable = Array.from(
-        dialog.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter((element) => element.getClientRects().length > 0);
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!first || !last) {
-        event.preventDefault();
-        dialog.focus();
-        return;
-      }
-
-      const activeElement = document.activeElement;
-      if (event.shiftKey && (activeElement === first || !dialog.contains(activeElement))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (activeElement === last || !dialog.contains(activeElement))) {
-        event.preventDefault();
-        first.focus();
-      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
       previouslyFocusedRef.current?.focus();
     };
@@ -616,12 +580,12 @@ export function LabelDesigner({
         updateElement(interaction.key, {
           x: clamp(
             snapCoordinate(original.x + deltaX, value.widthMm),
-            0,
+            MIN_LABEL_POSITION,
             maximumX,
           ),
           y: clamp(
             snapCoordinate(original.y + deltaY, value.heightMm),
-            0,
+            MIN_LABEL_POSITION,
             maximumY,
           ),
         }, false);
@@ -632,12 +596,12 @@ export function LabelDesigner({
           ...("autoWidth" in original && original.autoWidth ? {} : { width: clamp(
             snapCoordinate(original.width + deltaX, value.widthMm),
             minimumWidth,
-            100 - original.x,
+            Math.min(100, 100 - original.x),
           ) }),
           height: clamp(
             snapCoordinate(original.height + deltaY, value.heightMm),
             minimumHeight,
-            100 - original.y,
+            Math.min(100, 100 - original.y),
           ),
         }, false);
       }
@@ -684,6 +648,12 @@ export function LabelDesigner({
     if (event.defaultPrevented || event.nativeEvent.isComposing || saving || testPrintLock.current || uploadLock.current || interaction) return;
     const target = event.target as HTMLElement;
     if (target.isContentEditable || target.closest("input, textarea, select, [role='menu']")) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSelectedKey("");
+      canvasRef.current?.focus();
+      return;
+    }
     const mod = event.metaKey || event.ctrlKey;
     if (mod && event.key.toLowerCase() === "d" && selected) {
       event.preventDefault(); duplicateSelected(); canvasRef.current?.focus(); return;
@@ -785,30 +755,28 @@ export function LabelDesigner({
   return (
     <div
       data-label-designer
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-overlay p-3 backdrop-blur-sm sm:p-6"
-      role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !testPrintLock.current && !uploadLock.current && !saving) onClose();
-      }}
+      className="w-full"
     >
       <section
-        ref={dialogRef}
+        ref={editorRef}
         data-busy={saving || testPrinting || uploadingImage}
         onKeyDown={handleEditorKeyDown}
-        role="dialog"
-        aria-modal="true"
         aria-labelledby="label-designer-title"
         tabIndex={-1}
-        className="flex max-h-[94vh] w-full max-w-[1440px] flex-col overflow-hidden rounded-[22px] border border-border bg-surface shadow-2xl"
+        className="flex w-full flex-col overflow-hidden rounded-[22px] border border-border bg-surface shadow-sm xl:h-[calc(100dvh-var(--app-shell-header-height)-76px)] xl:min-h-[640px]"
       >
         <header inert={testPrinting || uploadingImage || saving} className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
           <div>
+            <button ref={closeButtonRef} type="button" onClick={onClose}
+              className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-muted hover:text-foreground">
+              <ArrowLeft size={16} aria-hidden="true" />{t("designer.back")}
+            </button>
             <p className="text-[11px] font-semibold uppercase tracking-[0.17em] text-brand">
               {t("designer.eyebrow")}
             </p>
-            <h2 id="label-designer-title" className="mt-1 text-lg font-semibold tracking-[-0.02em] text-foreground">
+            <h1 id="label-designer-title" className="mt-1 text-lg font-semibold tracking-[-0.02em] text-foreground">
               {value.id ? t("designer.edit") : t("designer.create")}
-            </h2>
+            </h1>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -831,21 +799,11 @@ export function LabelDesigner({
             >
               <Redo2 size={17} aria-hidden="true" />
             </button>
-            <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
-            <button
-              ref={closeButtonRef}
-              type="button"
-              onClick={onClose}
-              aria-label={t("designer.close")}
-              className="grid size-9 place-items-center rounded-xl text-muted hover:bg-surface-hover hover:text-foreground"
-            >
-              <X size={18} aria-hidden="true" />
-            </button>
           </div>
         </header>
 
-        <div inert={testPrinting || uploadingImage || saving} className="grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[250px_minmax(300px,1fr)_320px] lg:overflow-hidden">
-          <aside className="border-b border-border p-5 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+        <div inert={testPrinting || uploadingImage || saving} className="grid min-h-0 flex-1 overflow-y-auto xl:grid-cols-[250px_minmax(300px,1fr)_320px] xl:overflow-hidden">
+          <aside className="border-b border-border p-5 xl:overflow-y-auto xl:border-b-0 xl:border-r">
             <label className="block text-[12px] font-semibold text-muted">
               {t("designer.setupName")}
               <input
@@ -1013,7 +971,7 @@ export function LabelDesigner({
                       <button
                         type="button"
                         aria-pressed={selectedKey === key}
-                        onClick={() => setSelectedKey(key)}
+                        onClick={() => setSelectedKey(current => current === key ? "" : key)}
                         className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
                       >
                         <Icon size={15} className="shrink-0 text-muted" aria-hidden="true" />
@@ -1059,7 +1017,12 @@ export function LabelDesigner({
             </div>
           </aside>
 
-          <main className="relative min-h-[500px] overflow-auto bg-surface-muted p-6 pt-40 subtle-grid sm:pt-28 lg:min-h-0">
+          <div className="relative min-h-[500px] overflow-auto bg-surface-muted p-6 pt-40 subtle-grid sm:pt-28 xl:min-h-0"
+            onPointerDown={event => {
+              if (event.button !== 0 || event.target !== event.currentTarget) return;
+              setSelectedKey("");
+              canvasRef.current?.focus();
+            }}>
             <div className="absolute left-3 right-3 top-3 z-40 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/95 p-2 shadow-sm backdrop-blur">
               <label className="flex min-w-0 items-center gap-2 text-[11px] font-semibold text-muted">
                 <span className="hidden xl:inline">{t("designer.previewScenario")}</span>
@@ -1147,7 +1110,13 @@ export function LabelDesigner({
                 </button>
               </div>
             </div>
-            <div className="flex h-max min-h-full w-max min-w-full items-center justify-center">
+            <div className="flex h-max min-h-full w-max min-w-full items-center justify-center"
+              onPointerDown={event => {
+                // Element drag/resize handles stop propagation; only empty canvas reaches here.
+                if (event.button !== 0) return;
+                setSelectedKey("");
+                canvasRef.current?.focus();
+              }}>
               <div
                 ref={canvasRef}
                 role="application"
@@ -1228,9 +1197,9 @@ export function LabelDesigner({
                 </div>
               </div>
             </div>
-          </main>
+          </div>
 
-          <aside className="border-t border-border p-5 lg:overflow-y-auto lg:border-l lg:border-t-0">
+          <aside className="border-t border-border p-5 xl:overflow-y-auto xl:border-l xl:border-t-0">
             <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
               {t("designer.properties")}
             </p>
@@ -1308,15 +1277,15 @@ export function LabelDesigner({
                       const minimumNormalized =
                         key === "width" || key === "height"
                           ? (0.1 / dimensionMm) * 100
-                          : 0;
+                          : MIN_LABEL_POSITION;
                       const maximumNormalized =
                         key === "x"
                           ? 100 - shown.width
                           : key === "y"
                             ? 100 - shown.height
                             : key === "width"
-                              ? 100 - shown.x
-                              : 100 - shown.y;
+                              ? Math.min(100, 100 - shown.x)
+                              : Math.min(100, 100 - shown.y);
                       return (
                         <label key={key} className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
                           {t(`designer.coordinates.${key}`)} ({coordinateUnit === "mm" ? "mm" : "%"})
@@ -1325,11 +1294,15 @@ export function LabelDesigner({
                             min={displayedCoordinate(key, minimumNormalized)}
                             max={rowLayout && (key === "width" || key === "height") ? displayedCoordinate(key, (key === "width" ? 1000 : value.heightMm - rowLayout.paddingTopMm - rowLayout.paddingBottomMm) / dimensionMm * 100) : displayedCoordinate(key, maximumNormalized)}
                             step={coordinateUnit === "mm" ? "0.1" : "0.01"}
-                            value={displayedCoordinate(key, previewSelected?.[key] ?? selected[key])}
+                            value={coordinateDraft?.element === selectedKey && coordinateDraft.key === key && coordinateDraft.unit === coordinateUnit ? coordinateDraft.text : displayedCoordinate(key, previewSelected?.[key] ?? selected[key])}
+                            onBlur={() => setCoordinateDraft(null)}
+                            onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }}
                             disabled={rowLayout ? key === "x" || key === "y" || key === "width" && hugsRowContent(selected) : key === "width" && "autoWidth" in selected && selected.autoWidth}
                             onChange={(event) => {
-                              const next = Number(event.target.value);
-                              if (!Number.isFinite(next)) return;
+                              const text = event.target.value;
+                              setCoordinateDraft({ element: selectedKey, key, unit: coordinateUnit, text });
+                              const next = Number(text);
+                              if (text === "" || !Number.isFinite(next)) return;
                               const normalized =
                                 coordinateUnit === "mm"
                                   ? (next / dimensionMm) * 100
@@ -1343,8 +1316,8 @@ export function LabelDesigner({
                               const baseNormalized = key === "x" || key === "width"
                                 ? selected[key] + (normalized - (previewSelected?.[key] ?? selected[key])) * previewLayout.widthMm / value.widthMm
                                 : normalized;
-                              const baseMinimum = key === "width" ? 10 / value.widthMm : key === "height" ? 10 / value.heightMm : 0;
-                              const baseMaximum = key === "x" ? 100 - selected.width : key === "y" ? 100 - selected.height : key === "width" ? 100 - selected.x : 100 - selected.y;
+                              const baseMinimum = key === "width" ? 10 / value.widthMm : key === "height" ? 10 / value.heightMm : MIN_LABEL_POSITION;
+                              const baseMaximum = key === "x" ? 100 - selected.width : key === "y" ? 100 - selected.height : key === "width" ? Math.min(100, 100 - selected.x) : Math.min(100, 100 - selected.y);
                               updateElement(labelElementKey(selected), {
                                 [key]: roundCoordinate(
                                   clamp(
@@ -1590,11 +1563,17 @@ export function LabelDesigner({
                           onChange={(spacing, record) => updateElement(labelElementKey(selected), { letterSpacingEm: spacing / 100 }, record)} />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div role="group" aria-label={t("designer.alignment")} className="flex rounded-lg border border-border bg-surface p-0.5">
-                          {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([align, Icon]) => <button key={align} type="button" aria-label={t(`designer.align.${align}`)} title={t(`designer.align.${align}`)} aria-pressed={((selected as TextElement).align ?? 'left') === align} onClick={() => updateElement(labelElementKey(selected), { align })} className={`grid h-8 flex-1 place-items-center rounded-md ${((selected as TextElement).align ?? 'left') === align ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-surface-hover'}`}><Icon size={15} /></button>)}
+                        <div>
+                          <p className="mb-1 text-[11px] font-semibold text-muted">{t("designer.alignment")}</p>
+                          <div role="group" aria-label={t("designer.alignment")} className="flex rounded-lg border border-border bg-surface p-0.5">
+                            {([['left', AlignLeft], ['center', AlignCenter], ['right', AlignRight]] as const).map(([align, Icon]) => <button key={align} type="button" aria-label={t(`designer.align.${align}`)} title={t(`designer.align.${align}`)} aria-pressed={((selected as TextElement).align ?? 'left') === align} onClick={() => updateElement(labelElementKey(selected), { align })} className={`grid h-8 flex-1 place-items-center rounded-md ${((selected as TextElement).align ?? 'left') === align ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-surface-hover'}`}><Icon size={15} /></button>)}
+                          </div>
                         </div>
-                        <div role="group" aria-label={t("designer.verticalAlignment")} className="flex rounded-lg border border-border bg-surface p-0.5">
-                          {([['top', AlignStartVertical], ['middle', AlignCenterVertical], ['bottom', AlignEndVertical]] as const).map(([verticalAlign, Icon]) => <button key={verticalAlign} type="button" aria-label={t(`designer.verticalAlign.${verticalAlign}`)} title={t(`designer.verticalAlign.${verticalAlign}`)} aria-pressed={((selected as TextElement).verticalAlign ?? 'middle') === verticalAlign} onClick={() => updateElement(labelElementKey(selected), { verticalAlign })} className={`grid h-8 flex-1 place-items-center rounded-md ${((selected as TextElement).verticalAlign ?? 'middle') === verticalAlign ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-surface-hover'}`}><Icon size={15} /></button>)}
+                        <div>
+                          <p className="mb-1 text-[11px] font-semibold text-muted">{t("designer.verticalAlignment")}</p>
+                          <div role="group" aria-label={t("designer.verticalAlignment")} className="flex rounded-lg border border-border bg-surface p-0.5">
+                            {([['top', AlignStartHorizontal], ['middle', AlignCenterHorizontal], ['bottom', AlignEndHorizontal]] as const).map(([verticalAlign, Icon]) => <button key={verticalAlign} type="button" aria-label={t(`designer.verticalAlign.${verticalAlign}`)} title={t(`designer.verticalAlign.${verticalAlign}`)} aria-pressed={((selected as TextElement).verticalAlign ?? 'middle') === verticalAlign} onClick={() => updateElement(labelElementKey(selected), { verticalAlign })} className={`grid h-8 flex-1 place-items-center rounded-md ${((selected as TextElement).verticalAlign ?? 'middle') === verticalAlign ? 'bg-brand-soft text-brand' : 'text-muted hover:bg-surface-hover'}`}><Icon size={15} /></button>)}
+                          </div>
                         </div>
                       </div>
                     </div>

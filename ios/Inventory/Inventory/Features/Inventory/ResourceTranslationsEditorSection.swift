@@ -6,7 +6,7 @@ struct ResourceTranslationsEditorSection: View {
     let canTranslateWithAI: Bool
 
     var body: some View {
-        Section("Übersetzungen") {
+        Section(L10n.text("ui_translations_22c9ef6d")) {
             NavigationLink {
                 ResourceTranslationsEditorView(
                     resourceID: resourceID,
@@ -14,9 +14,9 @@ struct ResourceTranslationsEditorSection: View {
                     canTranslateWithAI: canTranslateWithAI
                 )
             } label: {
-                Label("Sprachversionen bearbeiten", systemImage: "character.book.closed")
+                Label(L10n.text("ui_edit_language_versions_ad528330"), systemImage: "character.book.closed")
             }
-            Text("Texte manuell pflegen oder fehlende und veraltete Übersetzungen automatisch erzeugen.")
+            Text(L10n.text("ui_maintain_texts_manually_or_automatically_generate_missing_fe104a1c"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -39,15 +39,15 @@ private struct ResourceTranslationsEditorView: View {
         Form {
             if let overview, !overview.languages.isEmpty {
                 Section {
-                    LabeledContent("Ausgangssprache", value: overview.defaultLanguage.label)
-                    LabeledContent("Inhaltsstand", value: String(overview.contentRevision))
+                    LabeledContent(L10n.text("ui_source_language_892b191e"), value: overview.defaultLanguage.label)
+                    LabeledContent(L10n.text("ui_content_version_c6ddc0cc"), value: String(overview.contentRevision))
                     if canTranslateWithAI {
                         Button {
                             Task { await translate() }
                         } label: {
                             actionLabel(
                                 running: translatingCode == "all",
-                                title: "Fehlende und veraltete Texte übersetzen"
+                                title: L10n.text("ui_translate_missing_and_outdated_texts_800add0b")
                             )
                         }
                         .disabled(translatingCode != nil)
@@ -76,16 +76,16 @@ private struct ResourceTranslationsEditorView: View {
                 Section {
                     HStack {
                         Spacer()
-                        ProgressView("Übersetzungen werden geladen …")
+                        ProgressView(L10n.text("ui_loading_translations_e5ca2d88"))
                         Spacer()
                     }
                 }
             } else {
                 Section {
                     ContentUnavailableView(
-                        "Keine Zielsprachen",
+                        L10n.text("ui_no_target_languages_1da03820"),
                         systemImage: "character.book.closed",
-                        description: Text("Für diese Organisation sind keine weiteren Sprachen eingerichtet.")
+                        description: Text(L10n.text("ui_no_additional_languages_are_configured_for_this_e78ede92"))
                     )
                 }
             }
@@ -97,7 +97,7 @@ private struct ResourceTranslationsEditorView: View {
                 }
             }
         }
-        .navigationTitle("Übersetzungen")
+        .navigationTitle(L10n.text("ui_translations_22c9ef6d"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -107,7 +107,7 @@ private struct ResourceTranslationsEditorView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .disabled(loading)
-                .accessibilityLabel("Übersetzungen neu laden")
+                .accessibilityLabel(L10n.text("ui_reload_translations_d4397759"))
             }
         }
         .task { await load() }
@@ -124,7 +124,7 @@ private struct ResourceTranslationsEditorView: View {
             }
         }
         .alert(
-            "Übersetzungen konnten nicht aktualisiert werden",
+            L10n.text("ui_could_not_update_translations_4f195802"),
             isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -132,7 +132,7 @@ private struct ResourceTranslationsEditorView: View {
         ) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
@@ -182,7 +182,7 @@ private struct ResourceTranslationsEditorView: View {
                 languageCodes: languageCode.map { [$0] },
                 force: force
             )
-            notice = "Die Übersetzung wurde eingeplant."
+            notice = L10n.text("ui_the_translation_has_been_scheduled_5455e3ea")
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -208,8 +208,8 @@ private struct ResourceTranslationsEditorView: View {
                 operations: [operation]
             )
             notice = operation.usesAI
-                ? "Die KI-Übersetzung wurde eingeplant."
-                : "Die Übersetzung wurde gespeichert."
+                ? L10n.text("ui_the_ai_translation_has_been_scheduled_27dfd08d")
+                : L10n.text("ui_the_translation_has_been_saved_09a81885")
         } catch {
             errorMessage = error.localizedDescription
             await load(quiet: true)
@@ -261,7 +261,7 @@ private struct TranslationLanguageSection: View {
                         Spacer()
                         TranslationStatusBadge(status: language.status)
                     }
-                    Text("\(language.currentCount) von \(language.totalCount) Feldern aktuell")
+                    Text(L10n.text("ui_0_of_1_fields_up_to_date_37581b72", language.currentCount, language.totalCount))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -275,8 +275,8 @@ private struct TranslationLanguageSection: View {
                         if translating { ProgressView() }
                         Label(
                             language.status == "current" || language.status == "failed"
-                                ? "Neu erzeugen"
-                                : "Übersetzen",
+                                ? L10n.text("ui_regenerate_68d85d39")
+                                : L10n.text("ui_translate_88f61840"),
                             systemImage: "sparkles"
                         )
                     }
@@ -356,7 +356,7 @@ private struct TranslationFieldEditor: View {
                         await update(.set(fieldKey: field.fieldKey, translatedText: draft))
                     }
                 } label: {
-                    Label("Speichern", systemImage: "checkmark")
+                    Label(L10n.text("ui_save_f6b2ff39"), systemImage: "checkmark")
                 }
                 .disabled(busy || draft == (field.translatedText ?? ""))
 
@@ -364,7 +364,7 @@ private struct TranslationFieldEditor: View {
                     Button {
                         Task { await update(.useAI(fieldKey: field.fieldKey)) }
                     } label: {
-                        Label("KI verwenden", systemImage: "sparkles")
+                        Label(L10n.text("ui_use_ai_e87e8fa0"), systemImage: "sparkles")
                     }
                     .disabled(busy)
                 }
@@ -372,11 +372,11 @@ private struct TranslationFieldEditor: View {
 
             if let suggestion = field.suggestion {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("KI-Vorschlag")
+                    Text(L10n.text("ui_ai_suggestion_ef0c28ac"))
                         .font(.caption.weight(.semibold))
                     Text(suggestion)
                         .font(.caption)
-                    Button("Vorschlag übernehmen") {
+                    Button(L10n.text("ui_accept_suggestion_41ddfc0b")) {
                         Task { await update(.acceptSuggestion(fieldKey: field.fieldKey)) }
                     }
                     .disabled(busy)
@@ -405,13 +405,13 @@ private struct TranslationStatusBadge: View {
 
     private var label: String {
         switch status {
-        case "current": "Aktuell"
-        case "stale": "Veraltet"
-        case "missing": "Fehlt"
-        case "pending": "Wartet"
-        case "processing": "In Arbeit"
-        case "failed": "Fehlgeschlagen"
-        case "needs_review": "Prüfen"
+        case "current": L10n.text("ui_current_f4d865ae")
+        case "stale": L10n.text("ui_stale_d9075b29")
+        case "missing": L10n.text("ui_short_380f98c6")
+        case "pending": L10n.text("ui_waiting_cff72948")
+        case "processing": L10n.text("ui_in_progress_e94e8adc")
+        case "failed": L10n.text("ui_failed_1c47a973")
+        case "needs_review": L10n.text("ui_review_a1ca1357")
         default: status
         }
     }

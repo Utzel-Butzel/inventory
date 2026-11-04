@@ -14,22 +14,22 @@ struct LoansOverviewView: View {
     var body: some View {
         Group {
             if loading && response == nil {
-                ProgressView("Ausleihen werden geladen …")
+                ProgressView(L10n.text("ui_loading_loans_695d710d"))
             } else if response == nil, let errorMessage {
                 ContentUnavailableView {
-                    Label("Ausleihen nicht verfügbar", systemImage: "exclamationmark.triangle")
+                    Label(L10n.text("ui_loans_unavailable_0df7883f"), systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(errorMessage)
                 } actions: {
-                    Button("Erneut versuchen") { Task { await load() } }
+                    Button(L10n.text("ui_retry_948643cb")) { Task { await load() } }
                 }
             } else {
                 loansList
             }
         }
-        .navigationTitle("Ausleihen")
+        .navigationTitle(L10n.text("ui_loans_ca70339f"))
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "Ressource oder Empfänger")
+        .searchable(text: $query, prompt: L10n.text("ui_resource_or_recipient_0b709d42"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if loading {
@@ -40,7 +40,7 @@ struct LoansOverviewView: View {
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
-                    .accessibilityLabel("Aktualisieren")
+                    .accessibilityLabel(L10n.text("ui_refresh_96bf0098"))
                 }
             }
         }
@@ -54,35 +54,35 @@ struct LoansOverviewView: View {
             Button(action.buttonTitle, role: action.buttonRole) {
                 Task { await perform(action) }
             }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         } message: { action in
             Text(action.message)
         }
         .alert(
-            "Ausleihe konnte nicht aktualisiert werden",
+            L10n.text("ui_could_not_update_the_loan_713a3b06"),
             isPresented: Binding(
                 get: { errorMessage != nil && response != nil },
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
             if let retryMutation {
-                Button("Erneut versuchen") { Task { await perform(retryMutation) } }
+                Button(L10n.text("ui_retry_948643cb")) { Task { await perform(retryMutation) } }
             } else {
-                Button("Erneut laden") { Task { await load() } }
+                Button(L10n.text("ui_retry_1b8b908f")) { Task { await load() } }
             }
-            Button("Abbrechen", role: .cancel) {
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) {
                 retryMutation = nil
                 errorMessage = nil
             }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
     private var loansList: some View {
         List {
             Section {
-                Picker("Ansicht", selection: $filter) {
+                Picker(L10n.text("ui_view_a6d6105c"), selection: $filter) {
                     ForEach(LoanFilter.allCases) { option in
                         Label(
                             "\(option.title) (\(count(for: option)))",
@@ -99,7 +99,7 @@ struct LoansOverviewView: View {
             if visibleAssignments.isEmpty {
                 Section {
                     ContentUnavailableView {
-                        Label("Keine Ausleihen gefunden", systemImage: "shippingbox.and.arrow.backward")
+                        Label(L10n.text("ui_no_loans_found_4c92c955"), systemImage: "shippingbox.and.arrow.backward")
                     } description: {
                         Text(emptyDescription)
                     }
@@ -165,7 +165,7 @@ struct LoansOverviewView: View {
                 )
                 if let dueAt = assignment.dueAt {
                     Label(
-                        "Fällig \(dueAt.formatted(date: .abbreviated, time: .shortened))",
+                        L10n.text("ui_due_0_d4df2183", dueAt.formatted(date: .abbreviated, time: .shortened)),
                         systemImage: "clock"
                     )
                     .foregroundStyle(assignment.overdue ? .red : .secondary)
@@ -206,7 +206,7 @@ struct LoansOverviewView: View {
                 Button {
                     requestCompletion(of: assignment, status: .returned)
                 } label: {
-                    Label("Zurückgeben", systemImage: "arrow.uturn.backward.circle")
+                    Label(L10n.text("ui_return_96ee1fd4"), systemImage: "arrow.uturn.backward.circle")
                 }
                 .tint(.green)
                 .disabled(actingID != nil)
@@ -214,7 +214,7 @@ struct LoansOverviewView: View {
                 Button(role: .destructive) {
                     requestCompletion(of: assignment, status: .cancelled)
                 } label: {
-                    Label("Stornieren", systemImage: "xmark.circle")
+                    Label(L10n.text("ui_cancel_81a5f66b"), systemImage: "xmark.circle")
                 }
                 .disabled(actingID != nil)
             }
@@ -230,8 +230,8 @@ struct LoansOverviewView: View {
 
     private var confirmationTitle: String {
         pendingConfirmation?.status == .returned
-            ? "Ausleihe zurückgeben?"
-            : "Reservierung stornieren?"
+            ? L10n.text("ui_return_loan_620ef27e")
+            : L10n.text("ui_cancel_reservation_34dae46c")
     }
 
     private var canManage: Bool {
@@ -265,12 +265,12 @@ struct LoansOverviewView: View {
 
     private var resultCountLabel: String {
         let count = visibleAssignments.count
-        return count == 1 ? "1 Vorgang" : "\(count) Vorgänge"
+        return count == 1 ? L10n.text("ui_1_transaction_a8514963") : L10n.text("ui_transactions_0_d180f8b5", count)
     }
 
     private var emptyDescription: String {
         if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Keine Ausleihe entspricht der aktuellen Suche."
+            return L10n.text("ui_no_loan_matches_the_current_search_7bf45d2e")
         }
         return filter.emptyDescription
     }
@@ -330,18 +330,18 @@ struct LoansOverviewView: View {
     }
 
     private func quantityLabel(_ quantity: Int) -> String {
-        quantity == 1 ? "1 Einheit" : "\(quantity) Einheiten"
+        quantity == 1 ? L10n.text("ui_1_unit_f5489a1b") : L10n.text("ui_units_0_516a0351", quantity)
     }
 
     private func statusTitle(_ assignment: LoanAssignment) -> String {
-        if assignment.overdue { return "Überfällig" }
+        if assignment.overdue { return L10n.text("ui_overdue_a1f573d6") }
         if assignment.kind == .reservation, assignment.status == .active {
-            return "Reserviert"
+            return L10n.text("ui_reserved_10814cd6")
         }
         return switch assignment.status {
-        case .active: "Aktiv"
-        case .returned: "Zurückgegeben"
-        case .cancelled: "Storniert"
+        case .active: L10n.text("ui_active_8163454f")
+        case .returned: L10n.text("ui_returned_48d94b8b")
+        case .cancelled: L10n.text("ui_cancelled_0aa6a1fa")
         }
     }
 
@@ -376,10 +376,10 @@ private enum LoanFilter: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .active: "Aktive Ausleihen"
-        case .overdue: "Überfällig"
-        case .reservations: "Reservierungen"
-        case .history: "Verlauf"
+        case .active: L10n.text("ui_active_loans_d28980eb")
+        case .overdue: L10n.text("ui_overdue_a1f573d6")
+        case .reservations: L10n.text("ui_reservations_ff2232b0")
+        case .history: L10n.text("ui_history_5fd70311")
         }
     }
 
@@ -394,10 +394,10 @@ private enum LoanFilter: String, CaseIterable, Identifiable {
 
     var emptyDescription: String {
         switch self {
-        case .active: "Derzeit ist nichts ausgeliehen."
-        case .overdue: "Keine Rückgabe ist überfällig."
-        case .reservations: "Es gibt keine anstehenden Reservierungen."
-        case .history: "Es sind noch keine abgeschlossenen Ausleihen vorhanden."
+        case .active: L10n.text("ui_nothing_is_currently_on_loan_06645fe5")
+        case .overdue: L10n.text("ui_no_return_is_overdue_6971966e")
+        case .reservations: L10n.text("ui_there_are_no_upcoming_reservations_224e8c59")
+        case .history: L10n.text("ui_there_are_no_completed_loans_yet_f1b89d58")
         }
     }
 
@@ -423,7 +423,7 @@ private struct PendingLoanAction: Sendable {
     let idempotencyKey: UUID
 
     var buttonTitle: String {
-        status == .returned ? "Zurückgeben" : "Stornieren"
+        status == .returned ? L10n.text("ui_return_96ee1fd4") : L10n.text("ui_cancel_81a5f66b")
     }
 
     var buttonRole: ButtonRole? {
@@ -432,8 +432,8 @@ private struct PendingLoanAction: Sendable {
 
     var message: String {
         status == .returned
-            ? "„\(assignment.resource.name)“ wird als zurückgegeben markiert."
-            : "Die Reservierung für „\(assignment.resource.name)“ wird storniert."
+            ? L10n.text("ui_0_will_be_marked_as_returned_6a629e38", assignment.resource.name)
+            : L10n.text("ui_the_reservation_for_0_will_be_cancelled_d7062484", assignment.resource.name)
     }
 }
 
@@ -449,14 +449,14 @@ private struct LoanResourceDestinationView: View {
                 ResourceDetailView(resource: resource)
             } else if let errorMessage {
                 ContentUnavailableView {
-                    Label("Eintrag nicht verfügbar", systemImage: "exclamationmark.triangle")
+                    Label(L10n.text("ui_inventory_item_unavailable_9d3512e1"), systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(errorMessage)
                 } actions: {
-                    Button("Erneut versuchen") { Task { await load() } }
+                    Button(L10n.text("ui_retry_948643cb")) { Task { await load() } }
                 }
             } else {
-                ProgressView("Eintrag wird geladen …")
+                ProgressView(L10n.text("ui_loading_item_b6c8e052"))
             }
         }
         .task(id: state.client?.contextIdentifier) { await load() }

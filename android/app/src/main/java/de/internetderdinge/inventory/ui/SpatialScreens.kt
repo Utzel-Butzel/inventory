@@ -1,5 +1,8 @@
 package de.internetderdinge.inventory.ui
 
+import de.internetderdinge.inventory.L10n
+import de.internetderdinge.inventory.R
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -44,9 +47,9 @@ import kotlin.math.*
     val positioned = filtered.filter { !it.isNull("gpsLatitude") && !it.isNull("gpsLongitude") }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(20.dp)) {
-            Heading("Inventar auf der Karte", "${positioned.size} Einträge mit GPS-Position")
-            TextInput("Name, SKU, Tag oder Ort", query, { query = it })
-            if (positioned.size < filtered.size) Text("${filtered.size - positioned.size} Treffer ohne GPS-Position", style = MaterialTheme.typography.bodySmall)
+            Heading(L10n.text(R.string.ui_inventory_on_the_map_43fb9f01), L10n.text(R.string.ui_items_with_gps_position_0_3d630f99, positioned.size))
+            TextInput(L10n.text(R.string.ui_name_sku_tag_or_location_a7c32941), query, { query = it })
+            if (positioned.size < filtered.size) Text(L10n.text(R.string.ui_results_without_gps_position_0_b68af342, filtered.size - positioned.size), style = MaterialTheme.typography.bodySmall)
             error?.let { Notice(it, true) }; if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         }
         NativeMap(positioned, Modifier.weight(1f)) { navigate("resource/$it") }
@@ -79,7 +82,7 @@ import kotlin.math.*
         if (!ready) return@LaunchedEffect
         m.clear(); ids.clear()
         val points = resources.map { LatLng(it.optDouble("gpsLatitude"), it.optDouble("gpsLongitude")) }
-        resources.zip(points).forEach { (r, position) -> val marker = m.addMarker(MarkerOptions().position(position).title(r.s("name")).snippet("${r.s("location")} · Details öffnen")); ids[marker.id] = r.s("id") }
+        resources.zip(points).forEach { (r, position) -> val marker = m.addMarker(MarkerOptions().position(position).title(r.s("name")).snippet(L10n.text(R.string.ui_0_open_details_2c00671f, r.s("location")))); ids[marker.id] = r.s("id") }
         if (points.size == 1) m.cameraPosition = CameraPosition.Builder().target(points.first()).zoom(15.0).build()
         else if (points.size > 1) m.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(points).build(), 80))
         else m.cameraPosition = CameraPosition.Builder().target(LatLng(51.0, 10.0)).zoom(4.0).build()
@@ -87,12 +90,12 @@ import kotlin.math.*
 }
 @Composable fun RoomsScreen(model: AppModel, api: Api, navigate: (String) -> Unit) {
     Remote(model, api, "room-scans") { data -> Page {
-        Heading("Räume", "Gespeicherte Räume, Etagen und Inventarplätze")
-        if (data.a("scans").length() == 0) Empty("Noch keine Raumscans", "Gespeicherte Scans werden hier angezeigt.")
-        data.a("scans").objects().groupBy { it.s("structureName", "Einzelne Räume") }.forEach { (structure, scans) -> Section(structure) {
-            scans.forEach { scan -> LinkRow(scan.s("roomName"), listOf(scan.s("floorIdentifier"), "${scan.s("placementCount", "0")} Einträge", "Version ${scan.s("revision")}").filter { it.isNotBlank() }.joinToString(" · ")) { navigate("room/${scan.s("id")}") } }
+        Heading(L10n.text(R.string.ui_rooms_c8bb1368), L10n.text(R.string.ui_saved_rooms_floors_and_inventory_positions_cad44ce1))
+        if (data.a("scans").length() == 0) Empty(L10n.text(R.string.ui_no_room_scans_yet_7ca0b389), L10n.text(R.string.ui_saved_scans_are_displayed_here_1f594acf))
+        data.a("scans").objects().groupBy { it.s("structureName", L10n.text(R.string.ui_individual_rooms_35effce6)) }.forEach { (structure, scans) -> Section(structure) {
+            scans.forEach { scan -> LinkRow(scan.s("roomName"), listOf(scan.s("floorIdentifier"), L10n.text(R.string.ui_items_0_66b1c6ff, scan.s("placementCount", "0")), L10n.text(R.string.ui_version_0_9699394c, scan.s("revision"))).filter { it.isNotBlank() }.joinToString(" · ")) { navigate("room/${scan.s("id")}") } }
         } }
-        Notice("Die RoomPlan-Raumerfassung und das Wiederfinden einer gespeicherten ARWorldMap benötigen ein unterstütztes Apple-Gerät. Vorhandene Raumgeometrie und Platzierungen sind hier sichtbar.")
+        Notice(L10n.text(R.string.ui_roomplan_room_capture_and_relocalizing_a_saved_7b753bfb))
     } }
 }
 @Composable fun RoomScreen(model: AppModel, api: Api, id: String, navigate: (String) -> Unit) {
@@ -101,14 +104,14 @@ import kotlin.math.*
         var top by remember { mutableStateOf(false) }
         Page {
             Heading(manifest.o("room").s("name"), manifest.o("scan").s("structureName"))
-            Toggle("Grundriss von oben", top) { top = it }
+            Toggle(L10n.text(R.string.ui_top_down_floor_plan_555db425), top) { top = it }
             RoomCanvas(scene, manifest.a("placements").objects(), top, Modifier.fillMaxWidth().height(380.dp))
-            Text("Mit zwei Fingern zoomen, drehen und verschieben.", style = MaterialTheme.typography.bodySmall)
-            Section("Inventar im Raum") {
+            Text(L10n.text(R.string.ui_use_two_fingers_to_zoom_rotate_and_8a60300b), style = MaterialTheme.typography.bodySmall)
+            Section(L10n.text(R.string.ui_inventory_in_the_room_d3b0bd03)) {
                 manifest.a("placements").objects().forEach { p -> LinkRow(p.o("resource").s("name"), "${p.o("resource").s("location")} · ${(p.optDouble("confidence") * 100).toInt()} %") { navigate("resource/${p.o("resource").s("id")}") } }
-                if (manifest.a("placements").length() == 0) Text("Noch keine Einträge platziert.")
+                if (manifest.a("placements").length() == 0) Text(L10n.text(R.string.ui_no_items_placed_yet_7f2b90d1))
             }
-            Section("Raumansichten") { manifest.o("scan").a("keyframes").objects().forEach { frame -> ResourceImage(api, frame.s("url").ifEmpty { "/api/v1/room-scans/$id/keyframes/${frame.s("id")}" }, Modifier.fillMaxWidth().height(200.dp), "Gespeicherte Raumansicht") } }
+            Section(L10n.text(R.string.ui_room_views_d4480bde)) { manifest.o("scan").a("keyframes").objects().forEach { frame -> ResourceImage(api, frame.s("url").ifEmpty { "/api/v1/room-scans/$id/keyframes/${frame.s("id")}" }, Modifier.fillMaxWidth().height(200.dp), L10n.text(R.string.ui_saved_room_view_3277fd17)) } }
         }
     }
 }

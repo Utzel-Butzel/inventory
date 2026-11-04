@@ -468,7 +468,9 @@ test("keyboard nudging uses physical dimensions and respects every label edge", 
   assert.deepEqual(labelNudge(element, 'ArrowRight', false, 80, 20), { x: 20.125, y: 30 });
   assert.deepEqual(labelNudge(element, 'ArrowUp', true, 80, 20), { x: 20, y: 25 });
   assert.deepEqual(labelNudge({ ...element, x: 80, y: 60 }, 'ArrowRight', true, 80, 20), { x: 80, y: 60 });
-  assert.deepEqual(labelNudge({ ...element, x: 0, y: 0 }, 'ArrowLeft', true, 80, 20), { x: 0, y: 0 });
+  assert.deepEqual(labelNudge({ ...element, x: 0, y: 0 }, 'ArrowLeft', true, 80, 20), { x: -1.25, y: 0 });
+  assert.deepEqual(labelNudge({ ...element, x: -100, y: -10 }, 'ArrowLeft', true, 80, 20), { x: -100, y: -10 });
+  assert.deepEqual(labelNudge({ ...element, x: -5, y: 0 }, 'ArrowUp', false, 80, 20), { x: -5, y: -0.5 });
   assert.equal(labelNudge(element, 'Delete', false, 80, 20), null);
   assert.equal(labelNudge({ ...element, type: 'background' }, 'ArrowRight', false, 80, 20), null);
 });
@@ -536,7 +538,7 @@ test("dynamic length grows and shrinks while QR and image sizes and gaps stay fi
   for (const textWidth of [0, 10, 40, 120]) {
     const result = resolveLabelLayout(dynamicSetup, textWidth);
     const expectedWidth = Math.max(0.1, textWidth);
-    assert.ok(Math.abs(result.widthMm - (40 + expectedWidth)) < 1e-9);
+    assert.ok(Math.abs(result.widthMm - (38 + expectedWidth)) < 1e-9);
     assert.ok(Math.abs(physicalBox(result, "qr").x - 2) < 1e-9);
     assert.ok(Math.abs(physicalBox(result, "qr").width - 16) < 1e-9);
     const text = physicalBox(result, "name");
@@ -545,12 +547,30 @@ test("dynamic length grows and shrinks while QR and image sizes and gaps stay fi
     assert.ok(Math.abs(text.width - expectedWidth) < 1e-9);
     assert.ok(Math.abs(image.x - (22 + expectedWidth)) < 1e-9);
     assert.ok(Math.abs(image.width - 16) < 1e-9);
-    assert.ok(Math.abs(result.widthMm - image.x - image.width - 2) < 1e-9);
+    assert.ok(Math.abs(result.widthMm - image.x - image.width) < 1e-9);
     assert.equal(result.heightMm, 18);
     assert.equal(result.elements[0].width, 100);
     assert.equal(hasVisibleQrImageOverlap(result.elements), false);
   }
   assert.deepEqual(dynamicSetup, original);
+});
+
+test("automatic length hugs the text container without inheriting empty template space", () => {
+  const setup = { ...dynamicSetup, widthMm: 30, elements: [
+    dynamicSetup.elements[0],
+    { type: "name", x: 1 / 30 * 100, y: 3 / 18 * 100, width: 14.62 / 30 * 100,
+      height: 12 / 18 * 100, visible: true, autoWidth: true },
+    { type: "image", x: 90, y: 0, width: 10, height: 100, visible: false },
+  ] };
+  for (const textWidth of [1, 14.62, 146.39]) {
+    const result = resolveLabelLayout(setup, textWidth);
+    assert.ok(Math.abs(result.widthMm - (1 + textWidth)) < 1e-9);
+    assert.ok(Math.abs(physicalBox(result, "name").x - 1) < 1e-9);
+    assert.ok(Math.abs(physicalBox(result, "name").width - textWidth) < 1e-9);
+    assert.equal(result.elements[1].y, setup.elements[1].y);
+    assert.equal(result.elements[1].height, setup.elements[1].height);
+    assert.equal(result.elements[0].width, 100);
+  }
 });
 
 test("fixed and hidden automatic text retain the template dimensions", () => {
@@ -677,4 +697,16 @@ test("print dimensions use the final measured label after fonts settle, with leg
     if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument;
     if (previousAnimationFrame === undefined) delete globalThis.requestAnimationFrame; else globalThis.requestAnimationFrame = previousAnimationFrame;
   }
+});
+
+test("negative label positions survive creation, persistence and updates without allowing negative sizes", () => {
+  const element = { type: "name", x: -5, y: -12.5, width: 80, height: 25, visible: true };
+  const setup = labelSetupCreateSchema.parse({ name: "Edge bleed", widthMm: 62, heightMm: 35, elements: [element] });
+  const restored = JSON.parse(JSON.stringify(setup));
+  assert.deepEqual(labelSetupCreateSchema.parse(restored).elements[0], element);
+  assert.deepEqual(labelSetupPatchSchema.parse({ revision: 1, elements: [element] }).elements[0], element);
+  for (const invalid of [{ x: -100.01 }, { y: -Infinity }, { x: NaN }, { width: -1 }, { height: 0 }, { width: 101 }]) {
+    assert.equal(labelElementsSchema.safeParse([{ ...element, ...invalid }]).success, false);
+  }
+  assert.equal(labelElementsSchema.safeParse([{ ...element, x: -100, y: -100 }]).success, true);
 });

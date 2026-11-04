@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package de.internetderdinge.inventory.ui
 
+import de.internetderdinge.inventory.L10n
+import de.internetderdinge.inventory.R
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -34,7 +37,7 @@ import org.json.JSONObject
     var importing by remember { mutableStateOf("") }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) model.run {
-            require(uris.size <= 12) { "Maximal 12 Dateien pro Feld." }
+            require(uris.size <= 12) { L10n.text(R.string.ui_maximum_12_files_per_field_5bdbe27f) }
             val prepared = mutableListOf<Upload>()
             try { uris.forEach { prepared += Imaging.import(context, it, model.setting("uploadSize", "2200").toInt(), false) } }
             catch (e: Exception) { prepared.forEach { it.file.delete() }; throw e }
@@ -46,7 +49,7 @@ import org.json.JSONObject
     DisposableEffect(Unit) { onDispose { currentFiles.values.flatten().forEach { it.file.delete() } } }
     LaunchedEffect(load) {
         try {
-            require(code.isNotBlank()) { "Bitte zuerst einen Code scannen." }
+            require(code.isNotBlank()) { L10n.text(R.string.ui_please_scan_a_code_first_962b2eaa) }
             val workflow = api.call("stock/scan-workflows").a("workflows").objects().first { it.s("id") == id }
             legacy = workflow.a("actions").length() == 0
             val input = obj("code" to code).apply { codeType?.let { put("codeType", it) } }
@@ -62,15 +65,15 @@ import org.json.JSONObject
     fun preview() = model.run {
         try {
             error = null
-            val configuration = config ?: error("Ablauf wird geladen.")
+            val configuration = config ?: error(L10n.text(R.string.ui_loading_workflow_67d8bba5))
             val inputs = FlowRules.inputs(fields, values)
             val selected = if (legacy) listOf(configuration.o("resource").getString("id")) else targets.values.sorted()
-            require(selected.isNotEmpty()) { "Bitte mindestens ein Produkt auswählen." }
+            require(selected.isNotEmpty()) { L10n.text(R.string.ui_please_select_at_least_one_product_350b11e8) }
             for (f in fields.filter { it.s("type") in listOf("media", "file") }) {
                 val cacheKey = "${selected.first()}#${f.s("key")}"
                 val media = uploaded[cacheKey] ?: files[f.s("key")]?.takeIf { it.isNotEmpty() }?.let { list ->
                     val reply = api.multipart("resources/${selected.first()}/media", list, uploadKeys.getOrPut(cacheKey, ::uuid))
-                    if (reply.status == 202) throw ApiError(202, "Dateien werden verarbeitet.")
+                    if (reply.status == 202) throw ApiError(202, L10n.text(R.string.ui_processing_files_7b91b3a1))
                     JSONArray(reply.json.a("uploaded").objects().map { it.getString("id") }).also { uploaded[cacheKey] = it }
                 }
                 if (media != null) inputs.put(f.s("key"), media) else inputs.remove(f.s("key"))
@@ -91,16 +94,16 @@ import org.json.JSONObject
     val auto = !legacy && config != null && targets.size == 1 && fields.isNotEmpty() && fields.all { f -> f.s("type", "select") in listOf("radio", "select") && f.a("options").objects().any { it.s("value") == values.s(f.s("key")) } } && config.a("actions").objects().any { it.s("type") == "assembly-build" && it.optBoolean("enabled", true) }
     LaunchedEffect(auto, values.toString(), targets.toString()) { if (auto && report == null && !model.busy) { delay(300); preview() } }
     Page {
-        Heading(config?.s("name")?.ifBlank { config.o("workflow").s("name") } ?: "Aktionsablauf", config?.s("identifier") ?: code)
+        Heading(config?.s("name")?.ifBlank { config.o("workflow").s("name") } ?: L10n.text(R.string.ui_workflow_0560f3a1), config?.s("identifier") ?: code)
         error?.let { Notice(it, true) }
-        if (config == null) { if (error == null) CircularProgressIndicator() else OutlinedButton(onClick = { load++ }) { Text("Erneut laden") } }
+        if (config == null) { if (error == null) CircularProgressIndicator() else OutlinedButton(onClick = { load++ }) { Text(L10n.text(R.string.ui_retry_1b8b908f)) } }
         else if (report == null) {
             if (!legacy) config.a("targetGroups").objects().forEach { group ->
                 val key = group.s("resourceId"); val options = group.a("options").objects().map { it.s("id") to it.s("name") }
                 if (config.s("targetSelectionMode") != "all") Toggle(group.s("name"), targets.containsKey(key)) { enabled ->
                     if (!model.busy) targets = if (!enabled) targets - key else (if (config.s("targetSelectionMode") == "radio") emptyMap() else targets) + (key to options.first().first)
                 } else Text(group.s("name"), style = MaterialTheme.typography.titleMedium)
-                if (targets.containsKey(key)) Choice("Produkt / Variante", targets[key].orEmpty(), options) { if (!model.busy) targets = targets + (key to it) }
+                if (targets.containsKey(key)) Choice(L10n.text(R.string.ui_product_variant_dd64dd6d), targets[key].orEmpty(), options) { if (!model.busy) targets = targets + (key to it) }
             }
             if (legacy) Notice("${config.o("resource").s("name")}: ${config.s("quantityBefore")} → ${config.s("quantityAfter")}")
             fields.forEach { f ->
@@ -111,40 +114,40 @@ import org.json.JSONObject
                     "radio" -> { Text(title); FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { f.a("options").objects().forEach { option ->
                         FilterChip(values.s(key) == option.s("value"), { set(option.s("value")) }, label = { Text(option.s("label")) }, leadingIcon = if (option.s("color").matches(Regex("#[0-9a-fA-F]{6}"))) ({ Box(Modifier.size(18.dp).background(Color(android.graphics.Color.parseColor(option.s("color"))), CircleShape)) }) else null)
                     } } }
-                    "select" -> Choice(title, values.s(key), listOf("" to "Bitte auswählen") + f.a("options").objects().map { it.s("value") to it.s("label") }) { set(it) }
-                    "media", "file" -> OutlinedButton(enabled = !model.busy, onClick = { importing = key; picker.launch(if (f.s("type") == "media") arrayOf("image/*") else arrayOf("*/*")) }) { Text("$title: ${files[key]?.size ?: 0} ausgewählt") }
+                    "select" -> Choice(title, values.s(key), listOf("" to L10n.text(R.string.ui_please_select_fd148453)) + f.a("options").objects().map { it.s("value") to it.s("label") }) { set(it) }
+                    "media", "file" -> OutlinedButton(enabled = !model.busy, onClick = { importing = key; picker.launch(if (f.s("type") == "media") arrayOf("image/*") else arrayOf("*/*")) }) { Text(L10n.text(R.string.ui_0_1_selected_3fee04f7, title, files[key]?.size ?: 0)) }
                     "number" -> { var draft by remember(key) { mutableStateOf(values.s(key)) }; TextInput(title, draft, { draft = it; set(it.replace(',', '.').toDoubleOrNull()?.takeIf(Double::isFinite)) }, true) }
                     else -> TextInput(title, values.s(key), { set(it) })
                 }
             }
-            Button(enabled = !model.busy, onClick = ::preview) { Text("Alle Aktionen prüfen") }
+            Button(enabled = !model.busy, onClick = ::preview) { Text(L10n.text(R.string.ui_review_all_actions_4b9427c8)) }
         } else {
-            if (complete) Notice("Alle Aktionen erfolgreich abgeschlossen.")
+            if (complete) Notice(L10n.text(R.string.ui_all_actions_completed_successfully_f435be4a))
             if (!legacy) report!!.a("steps").objects().forEach { step -> ElevatedCard { Column(Modifier.padding(Spacing)) {
                 Text(step.s("label"), style = MaterialTheme.typography.titleMedium)
-                if (step.optBoolean("skipped")) Text("Wird übersprungen") else {
-                    Text(step.s("target")); if (step.has("quantityBefore")) Text("Bestand: ${step.s("quantityBefore")} → ${step.s("quantityAfter")}")
-                    if (step.has("statusAfter")) Text("Status: ${step.s("statusBefore")} → ${step.s("statusAfter")}")
-                    if (step.has("locationAfter")) Text("Standort: ${step.s("locationBefore")} → ${step.s("locationAfter")}")
-                    if (step.s("code").isNotBlank()) Text("Code: ${step.s("code")}")
-                    if (step.s("eventName").isNotBlank()) Text("Ereignis: ${step.s("eventName")}")
+                if (step.optBoolean("skipped")) Text(L10n.text(R.string.ui_skipped_a71273c6)) else {
+                    Text(step.s("target")); if (step.has("quantityBefore")) Text(L10n.text(R.string.ui_stock_0_1_e8afd637, step.s("quantityBefore"), step.s("quantityAfter")))
+                    if (step.has("statusAfter")) Text(L10n.text(R.string.ui_status_0_1_594266fa, step.s("statusBefore"), step.s("statusAfter")))
+                    if (step.has("locationAfter")) Text(L10n.text(R.string.ui_location_0_1_ec3855f5, step.s("locationBefore"), step.s("locationAfter")))
+                    if (step.s("code").isNotBlank()) Text(L10n.text(R.string.ui_code_0_411ad6dd, step.s("code")))
+                    if (step.s("eventName").isNotBlank()) Text(L10n.text(R.string.ui_event_0_afe5e6f8, step.s("eventName")))
                     step.a("components").objects().forEach { c -> Text("${c.s("quantity")} × ${c.s("name")} ${c.a("codes").strings().joinToString()}") }
                     listOf("metadata", "customFields").forEach { group -> step.o(group).keys().forEach { key -> Text("$key: ${step.o(group).s(key)}") } }
                 }
             } } } else Notice("${config.o("resource").s("name")}: ${config.s("quantityBefore")} → ${config.s("quantityAfter")}\n${config.s("statusBefore")} → ${config.s("statusAfter")}")
             if (!complete) {
-                Notice(if (uncertain) "Die Antwort fehlt. Bitte dieselbe Bestätigung erneut senden. Die Angaben bleiben unverändert." else "Alle Schritte werden gemeinsam ausgeführt. Prüfe die Änderungen vor dem Bestätigen.")
+                Notice(if (uncertain) L10n.text(R.string.ui_the_response_is_missing_please_send_the_615fe93b) else L10n.text(R.string.ui_all_steps_run_together_review_the_changes_80d3efd1))
                 Button(enabled = !model.busy && api.session.allows("workflows.manage", "write"), onClick = { model.run {
                     try {
                         val response = model.mutate(api, if (legacy) "stock/scans/execute" else "stock/action-chains/execute", "POST", reviewed!!, true)
                         if (!legacy) report = response; complete = true; uncertain = false
                     } catch (e: ApiError) {
-                        if (e.status == 409 && !e.retryable) { report = null; reviewed = null; uncertain = false; load++; error = "Der Ablauf hat sich geändert. Bitte erneut prüfen." }
+                        if (e.status == 409 && !e.retryable) { report = null; reviewed = null; uncertain = false; load++; error = L10n.text(R.string.ui_the_workflow_has_changed_please_check_again_0ab52c2d) }
                         else { uncertain = e.retryable; error = e.message }
                     } catch (e: Exception) { uncertain = true; error = e.message }
-                } }) { Text(if (uncertain) "Bestätigung erneut senden" else "Alle Änderungen bestätigen") }
-                TextButton(enabled = !model.busy && !uncertain, onClick = { report = null; reviewed = null }) { Text("Angaben ändern") }
-            } else Button(onClick = back) { Text("Nächsten Code scannen") }
+                } }) { Text(if (uncertain) L10n.text(R.string.ui_retry_confirmation_28f2f7ed) else L10n.text(R.string.ui_confirm_all_changes_1d0e068c)) }
+                TextButton(enabled = !model.busy && !uncertain, onClick = { report = null; reviewed = null }) { Text(L10n.text(R.string.ui_edit_details_37e4d9e8)) }
+            } else Button(onClick = back) { Text(L10n.text(R.string.ui_scan_another_code_583eca16)) }
         }
     }
 }

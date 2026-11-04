@@ -1,5 +1,8 @@
 package de.internetderdinge.inventory.data
 
+import de.internetderdinge.inventory.L10n
+import de.internetderdinge.inventory.R
+
 import android.content.Context
 import androidx.work.*
 import kotlinx.coroutines.CancellationException
@@ -70,18 +73,18 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             fun save(status: String, message: String = "") { job.put("status", status).put("error", message); store.saveJob(job) }
             try {
                 val session = Credentials(applicationContext).read()
-                if (session == null || session.context != job.s("context")) { save("paused", "Zum ursprünglichen Konto und Arbeitsbereich wechseln."); return@withContext Result.success() }
+                if (session == null || session.context != job.s("context")) { save("paused", L10n.text(R.string.ui_switch_to_the_original_account_and_workspace_fda6dca9)); return@withContext Result.success() }
                 val api = Api(session)
                 val files = job.a("files").objects().map { item ->
                     val file = File(File(store.files, job.getString("id")), item.getString("file"))
-                    check(file.isFile && UploadQueue.digest(file) == item.getString("sha256")) { "Die gespeicherten Bilder sind unvollständig oder beschädigt." }
+                    check(file.isFile && UploadQueue.digest(file) == item.getString("sha256")) { L10n.text(R.string.ui_the_saved_images_are_incomplete_or_damaged_f378a4e8) }
                     Upload(file, item.getString("name"), item.getString("mime"))
                 }
                 save("running")
                 fun next(stage: Int) { job.put("stage", stage); store.saveJob(job) }
                 // Re-check account before every stage. A request already sent always
                 // retains its immutable original organization header.
-                fun verify() { check(Credentials(applicationContext).read()?.context == session.context) { "Arbeitsbereich gewechselt. Upload pausiert." } }
+                fun verify() { check(Credentials(applicationContext).read()?.context == session.context) { L10n.text(R.string.ui_workspace_changed_upload_paused_38d5d4c2) } }
                 if (job.optInt("stage") == 0) {
                     verify(); val created = api.call("resources", "POST", job.o("resource"), job.o("keys").getString("create"))
                     job.put("resourceId", created.o("resource").getString("id")); next(1)
@@ -89,7 +92,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 val id = job.getString("resourceId")
                 if (job.optInt("stage") == 1) {
                     verify(); val reply = api.multipart("resources/$id/media", files, job.o("keys").getString("media"))
-                    if (reply.status == 202) throw ApiError(202, "Upload wird verarbeitet.", reply.retryAfter)
+                    if (reply.status == 202) throw ApiError(202, L10n.text(R.string.ui_processing_upload_596efdfe), reply.retryAfter)
                     next(2)
                 }
                 if (job.optInt("stage") == 2) {
@@ -109,7 +112,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             catch (e: Exception) {
                 val retry = (e is IOException && (e !is ApiError || e.retryable)) && runAttemptCount < 8
                 val paused = e is ApiError && e.status == 401
-                save(if (retry) "waiting" else if (paused) "paused" else "error", e.message ?: "Upload fehlgeschlagen")
+                save(if (retry) "waiting" else if (paused) "paused" else "error", e.message ?: L10n.text(R.string.ui_upload_failed_4917fab9))
                 if (retry) Result.retry() else Result.success()
             }
         } finally { store.close() }

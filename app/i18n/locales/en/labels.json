@@ -70,6 +70,8 @@
     "description": "Print from this computer using the standard print dialog and installed drivers. Shared printers use Inventory Print Agent on the printer computer. QZ Tray is also available for a directly connected PT-P710BT."
   },
   "designer": {
+    "back": "Back to labels",
+    "notFound": "This template could not be found.",
     "eyebrow": "Label designer",
     "edit": "Edit setup",
     "create": "Create setup",
@@ -264,7 +266,7 @@
     "fontSizeValue": "Font size",
     "letterSpacing": "Letter spacing",
     "shortcuts": "Keyboard shortcuts",
-    "shortcutHelp": "← ↑ ↓ → Move by 0.1 mm · Shift + arrow: 1 mm · Delete / Backspace: delete element · ⌘/Ctrl + D: duplicate · ⌘/Ctrl + Z: undo · ⌘/Ctrl + Shift + Z: redo · ⌘/Ctrl + ] / [: bring to front / send to back. In input fields these keys remain available for text editing.",
+    "shortcutHelp": "Esc: Deselect · ← ↑ ↓ → Move by 0.1 mm · Shift + arrow: 1 mm · Delete / Backspace: delete element · ⌘/Ctrl + D: duplicate · ⌘/Ctrl + Z: undo · ⌘/Ctrl + Shift + Z: redo · ⌘/Ctrl + ] / [: bring to front / send to back. In input fields these keys remain available for text editing.",
     "weights": {
       "100": "Thin",
       "200": "Extra Light",
@@ -284,7 +286,7 @@
     "testPrinting_other": "Sending {{count}} test labels…",
     "resizeElementHeight": "Resize height of {{element}}",
     "autoLengthRightMargin": "Additional right margin",
-    "autoLengthRightMarginHint": "Extra space at the right edge of the label in millimeters. Elements retain their size and position.",
+    "autoLengthRightMarginHint": "Space after the rightmost visible element in millimeters. At 0 mm, the label ends directly at its bounding box.",
     "autoLength": "Fit label length to text",
     "fixedLength": "Fixed length",
     "autoLengthHint": "Choose the text field that controls the length. Elements to its right move with it; QR codes and images keep their size. Manual line breaks are preserved.",
@@ -332,7 +334,7 @@
     },
     "rowCanvas": "Label canvas. Left and right arrow keys reorder elements.",
     "rowInstructions": "Drag or use left/right arrows to reorder. Change height using the handle or dimension field. Auto layout calculates positions.",
-    "rowShortcutHelp": "←/→ Reorder · Delete Remove element · ⌘/Ctrl+D Duplicate · ⌘/Ctrl+Z Undo · ⌘/Ctrl+Shift+Z Redo"
+    "rowShortcutHelp": "Esc: Deselect · ←/→ Reorder · Delete Remove element · ⌘/Ctrl+D Duplicate · ⌘/Ctrl+Z Undo · ⌘/Ctrl+Shift+Z Redo"
   },
   "renderer": {
     "noImage": "No image",

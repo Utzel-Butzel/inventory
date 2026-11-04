@@ -32,9 +32,9 @@ struct ResourceMediaEditorSection: View {
     @State private var mediaPendingDeletion: InventoryMedia?
 
     var body: some View {
-        Section("Medien") {
+        Section(L10n.text("ui_media_0031e362")) {
             if media.isEmpty && pendingUploads.isEmpty {
-                Label("Noch keine Medien vorhanden", systemImage: "photo.on.rectangle")
+                Label(L10n.text("ui_no_media_yet_575b16c3"), systemImage: "photo.on.rectangle")
                     .foregroundStyle(.secondary)
             }
 
@@ -51,26 +51,26 @@ struct ResourceMediaEditorSection: View {
                 maxSelectionCount: max(1, 12 - pendingUploads.count),
                 matching: .images
             ) {
-                Label("Fotos hinzufügen", systemImage: "photo.badge.plus")
+                Label(L10n.text("ui_add_photos_353ca454"), systemImage: "photo.badge.plus")
             }
             .disabled(disabled || busy || pendingUploads.count >= 12)
 
             Button {
                 showFileImporter = true
             } label: {
-                Label("Video, PDF oder USDZ hinzufügen", systemImage: "paperclip")
+                Label(L10n.text("ui_add_video_pdf_or_usdz_1206d650"), systemImage: "paperclip")
             }
             .disabled(disabled || busy || pendingUploads.count >= 12)
 
             if busy {
                 HStack {
                     ProgressView()
-                    Text("Medien werden verarbeitet …")
+                    Text(L10n.text("ui_processing_media_9e97b4b6"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             } else if !pendingUploads.isEmpty {
-                Text("Neue Dateien werden zusammen mit den Änderungen hochgeladen.")
+                Text(L10n.text("ui_new_files_are_uploaded_together_with_the_4729f918"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -86,21 +86,21 @@ struct ResourceMediaEditorSection: View {
             onCompletion: prepareImportedFiles
         )
         .confirmationDialog(
-            "Medium wirklich löschen?",
+            L10n.text("ui_really_delete_media_1fc01f53"),
             isPresented: Binding(
                 get: { mediaPendingDeletion != nil },
                 set: { if !$0 { mediaPendingDeletion = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Löschen", role: .destructive) {
+            Button(L10n.text("ui_delete_6c2d3521"), role: .destructive) {
                 guard let item = mediaPendingDeletion else { return }
                 mediaPendingDeletion = nil
                 Task { await delete(item) }
             }
-            Button("Abbrechen", role: .cancel) { mediaPendingDeletion = nil }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { mediaPendingDeletion = nil }
         } message: {
-            Text("Die Datei wird sofort vom Server entfernt.")
+            Text(L10n.text("ui_the_file_will_be_removed_from_the_097b7e0a"))
         }
     }
 
@@ -116,7 +116,7 @@ struct ResourceMediaEditorSection: View {
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                     if item.id == coverMediaID {
-                        Text("Titelbild")
+                        Text(L10n.text("ui_cover_d9f5152c"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(InventoryTheme.accent)
                     }
@@ -133,14 +133,14 @@ struct ResourceMediaEditorSection: View {
                 Button {
                     Task { await moveMedia(at: index, by: -1) }
                 } label: {
-                    Label("Nach vorn", systemImage: "arrow.up")
+                    Label(L10n.text("ui_move_to_front_da8c6a86"), systemImage: "arrow.up")
                 }
                 .disabled(index == 0)
 
                 Button {
                     Task { await moveMedia(at: index, by: 1) }
                 } label: {
-                    Label("Nach hinten", systemImage: "arrow.down")
+                    Label(L10n.text("ui_send_to_back_7ae2e5c3"), systemImage: "arrow.down")
                 }
                 .disabled(index == media.count - 1)
 
@@ -149,14 +149,14 @@ struct ResourceMediaEditorSection: View {
                 Button(role: .destructive) {
                     mediaPendingDeletion = item
                 } label: {
-                    Label("Löschen", systemImage: "trash")
+                    Label(L10n.text("ui_delete_6c2d3521"), systemImage: "trash")
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.title3)
             }
             .disabled(disabled || busy)
-            .accessibilityLabel("Aktionen für \(item.name)")
+            .accessibilityLabel(L10n.text("ui_actions_for_0_db9da261", item.name))
         }
     }
 
@@ -174,7 +174,7 @@ struct ResourceMediaEditorSection: View {
                 Text(item.file.filename)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                Text("Bereit zum Hochladen")
+                Text(L10n.text("ui_ready_to_upload_db12dff3"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -185,7 +185,7 @@ struct ResourceMediaEditorSection: View {
                 Image(systemName: "xmark.circle.fill")
             }
             .disabled(disabled || busy)
-            .accessibilityLabel("\(item.file.filename) entfernen")
+            .accessibilityLabel(L10n.text("ui_remove_0_41b0bdce", item.file.filename))
         }
     }
 
@@ -225,11 +225,11 @@ struct ResourceMediaEditorSection: View {
 
     private func mediaDescription(_ item: InventoryMedia) -> String {
         let kind: String = switch item.kind {
-        case .image: "Bild"
-        case .video: "Video"
-        case .document: "Dokument"
-        case .model: "3D-Modell"
-        case .unknown: "Datei"
+        case .image: L10n.text("ui_image_375e8403")
+        case .video: L10n.text("ui_video_d534be82")
+        case .document: L10n.text("ui_document_836ae935")
+        case .model: L10n.text("ui_model_3d")
+        case .unknown: L10n.text("ui_file_e9028a56")
         }
         guard let size = item.size else { return kind }
         return "\(kind) · \(size.formatted(.byteCount(style: .file)))"
@@ -268,7 +268,7 @@ struct ResourceMediaEditorSection: View {
                 }
             }
         } catch {
-            reportError("Ein Foto konnte nicht vorbereitet werden: \(error.localizedDescription)")
+            reportError(L10n.text("ui_could_not_prepare_a_photo_0_a7637834", error.localizedDescription))
         }
     }
 
@@ -289,7 +289,7 @@ struct ResourceMediaEditorSection: View {
                         : contentType?.preferredMIMEType ?? "application/octet-stream"
                     guard isSupported(mimeType: mimeType, fileExtension: fileExtension) else {
                         throw APIClientError.invalidUpload(
-                            "Unterstützt werden Bilder, Videos, PDF-Dateien und USDZ-Modelle."
+                            L10n.text("ui_images_videos_pdf_files_and_usdz_models_b5ddd6d6")
                         )
                     }
 

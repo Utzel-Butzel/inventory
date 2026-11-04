@@ -20,8 +20,8 @@ enum StockCountOperation: Equatable, Sendable {
 
     var reason: String {
         switch self {
-        case .receipt: "Fotozählung: Zugang per iOS-App"
-        case .issue: "Fotozählung: Entnahme per iOS-App"
+        case .receipt: L10n.text("ui_photo_count_receipt_via_ios_app_00536e32")
+        case .issue: L10n.text("ui_photo_count_removal_via_ios_app_b0582750")
         }
     }
 }
@@ -55,8 +55,8 @@ final class StockCountViewModel: ObservableObject {
             id: "sam-3",
             provider: "replicate",
             model: "yodagg/sam3-image-seg",
-            label: "SAM 3 · genaue Masken",
-            description: "Genauere Segmentierung; ein Kaltstart kann länger dauern."
+            label: L10n.text("ui_sam_3_precise_masks_1f226402"),
+            description: L10n.text("ui_more_accurate_segmentation_a_cold_start_may_8b39be75")
         ),
     ]
     @Published var selectedCountModelID = "sam-3" {
@@ -257,7 +257,7 @@ final class StockCountViewModel: ObservableObject {
         let count = adjustedCount
         guard result != nil, count > 0, !isBusy else { return }
         if operation == .issue, !allowNegativeStock, count > resource.quantity {
-            errorMessage = "Es können höchstens \(resource.quantity) Einheiten entnommen werden."
+            errorMessage = L10n.text("ui_no_more_than_0_units_can_be_a9740567", resource.quantity)
             return
         }
 
@@ -303,7 +303,7 @@ final class StockCountViewModel: ObservableObject {
 
     private func analyzePreparedPhoto(using client: APIClient) async throws {
         guard let photoURL else {
-            throw APIClientError.invalidUpload("Das Zählfoto fehlt.")
+            throw APIClientError.invalidUpload(L10n.text("ui_the_counting_photo_is_missing_d7564b39"))
         }
         let response = try await client.countObjects(
             in: MediaUploadFile(fileURL: photoURL, filename: "count.jpg"),

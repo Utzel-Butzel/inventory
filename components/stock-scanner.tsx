@@ -991,9 +991,9 @@ export function StockScanner({ canExecute, initialWorkflowId = "" }: StockScanne
                         </h2>
                         <p className="mt-1 text-sm text-success">
                           {result.operation.type === "stock-adjustment"
-                            ? `${result.operation.delta > 0 ? "+" : ""}${result.operation.delta} erfolgreich gebucht.`
+                            ? t("scan.success.stockBooked", { delta: `${result.operation.delta > 0 ? "+" : ""}${result.operation.delta}` })
                             : result.operation.type === "assembly-build"
-                              ? "Baugruppe fertiggestellt und Komponenten ausgebucht."
+                              ? t("scan.success.assemblyCompleted")
                               : result.created === true
                                 ? t("scan.success.created")
                                 : t("scan.success.updated")}
@@ -1022,7 +1022,7 @@ export function StockScanner({ canExecute, initialWorkflowId = "" }: StockScanne
                       ) : (
                         <div className="rounded-xl bg-surface-subtle p-3">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-                            Neuer Bestand
+                            {t("scan.success.newStock")}
                           </p>
                           <div className="mt-1 space-y-1 text-sm font-semibold text-foreground">
                             {result.resources.map((resource) => (
@@ -1264,9 +1264,9 @@ function ReviewForm({
           </div>
           <Badge tone={resolution.unit ? "neutral" : unitUnavailable ? "danger" : "success"}>
             {resolution.workflow.operation.type === "stock-adjustment"
-              ? "Bestandsbuchung"
+              ? t("scan.review.stockBooking")
               : resolution.workflow.operation.type === "assembly-build"
-                ? "Montage abschließen"
+                ? t("scan.review.completeAssembly")
                 : resolution.unit
               ? t("scan.review.existingUnit")
               : unitUnavailable
@@ -1434,14 +1434,14 @@ function ReviewForm({
             ) : (
               <div className="rounded-lg bg-surface/80 p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                  Aktion
+                  {t("scan.review.action")}
                 </p>
                 <p className="mt-2 text-sm font-semibold text-foreground">
                   {resolution.workflow.operation.type === "assembly-build"
-                    ? `${resolution.workflow.operation.quantity} × Baugruppe fertigstellen`
+                    ? t("scan.review.buildQuantity", { quantity: number.format(resolution.workflow.operation.quantity) })
                     : resolution.workflow.operation.type === "stock-adjustment"
-                      ? `${resolution.workflow.operation.delta > 0 ? "+" : ""}${resolution.workflow.operation.delta} buchen`
-                      : "Einheit aktualisieren"}
+                      ? t("scan.review.bookDelta", { delta: `${resolution.workflow.operation.delta > 0 ? "+" : ""}${number.format(resolution.workflow.operation.delta)}` })
+                      : t("scan.review.updateUnit")}
                 </p>
               </div>
             )}

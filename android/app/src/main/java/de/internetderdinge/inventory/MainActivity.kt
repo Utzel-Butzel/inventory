@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package de.internetderdinge.inventory
 
+import de.internetderdinge.inventory.L10n
+import de.internetderdinge.inventory.R
+
 import android.content.Intent
 import android.os.Bundle
 import android.os.Build
@@ -30,11 +33,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState); enableEdgeToEdge(); handleIntent(intent)
         setContent { InventoryTheme { InventoryRoot(model) } }
     }
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handleIntent(intent) }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleIntent(intent) }
     private fun handleIntent(intent: Intent?) {
+        if (intent?.data?.scheme == BrowserSignIn.SCHEME) {
+            val callback = intent.data.toString()
+            intent.data = null
+            model.handleBrowserCallback(callback)
+            return
+        }
         intent?.data?.takeIf { it.scheme == "inventory" }?.toString()?.let { value ->
             val link = InventoryLink.parse(value)
-            if (link != null) model.pendingLink = link else model.message = "Dieser Inventarlink ist ungültig."
+            if (link != null) model.pendingLink = link else model.message = L10n.text(R.string.ui_this_inventory_link_is_invalid_c2b61cdd)
         }
     }
 }
@@ -51,12 +60,34 @@ class MainActivity : ComponentActivity() {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(model.message) { model.message?.let { snackbar.showSnackbar(it); model.message = null } }
     val api = model.api
+    if (model.pendingBrowser != null) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { model.cancelBrowserSignIn() }) {
+            Surface(shape = MaterialTheme.shapes.large) {
+                Column(Modifier.padding(24.dp)) {
+                    Text(L10n.text(R.string.ui_browser_sign_in_pending))
+                    TextButton(onClick = { model.cancelBrowserSignIn() }, enabled = !model.busy) { Text(L10n.text(R.string.ui_cancel_f7ff1178)) }
+                }
+            }
+        }
+    }
     if (model.loading) { Surface(Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { CircularProgressIndicator() } }; return }
+    if (api == null && model.recoveryError != null) {
+        Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+            Column(Modifier.padding(padding).padding(24.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                Text(L10n.text(R.string.ui_connection_unavailable), style = MaterialTheme.typography.headlineSmall)
+                Text(model.recoveryError.orEmpty())
+                Button(onClick = { model.restoreSession() }, enabled = !model.busy) { Text(L10n.text(R.string.ui_retry_session)) }
+                if (!model.credentialLoadFailed) AccountSwitcher(model) { model.showLoginAfterRecovery() }
+            }
+        }
+        return
+    }
     if (api == null) {
         Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding -> Box(Modifier.padding(padding)) { LoginScreen(model) } }
         return
     }
-    key(api.session.context) {
+    // A successful reconnect to the same account also returns from the login form.
+    key(api.session.context, model.connectionRevision) {
         val imageContext = LocalContext.current
         val imageLoader = remember { coil.ImageLoader.Builder(imageContext).okHttpClient(Api.client).diskCache(null).build() }
         DisposableEffect(imageLoader) { onDispose { imageLoader.shutdown() } }
@@ -70,18 +101,19 @@ class MainActivity : ComponentActivity() {
         LaunchedEffect(model.pendingLink) { model.pendingLink?.let { link ->
             model.pendingLink = null
             if (link.matches(api.session)) navigate(if (link.unitId == null) "resource/${link.resourceId}" else "stock/${link.resourceId}?unit=${link.unitId}")
-            else model.message = "Dieser Link gehört zu einem anderen Server oder Arbeitsbereich. Bitte zuerst das passende Konto auswählen und den Link erneut öffnen."
+            else model.message = L10n.text(R.string.ui_this_link_belongs_to_another_server_or_242a142c)
         } }
-        val destinations = listOf(Triple("inventory", "Inventar", Icons.Outlined.Inventory2), Triple("map", "Karte", Icons.Outlined.Map)) +
-            (if (api.session.allows("spatial.read")) listOf(Triple("rooms", "Räume", Icons.Outlined.ViewInAr)) else emptyList()) +
-            listOf(Triple("settings", "Mehr", Icons.Outlined.MoreHoriz))
+        val destinations = listOf(Triple("inventory", L10n.text(R.string.ui_inventory_d602900f), Icons.Outlined.Inventory2), Triple("map", L10n.text(R.string.ui_map_36a8c499), Icons.Outlined.Map)) +
+            (if (api.session.allows("spatial.read")) listOf(Triple("rooms", L10n.text(R.string.ui_rooms_c8bb1368), Icons.Outlined.ViewInAr)) else emptyList()) +
+            listOf(Triple("settings", L10n.text(R.string.ui_more_80dc77bc), Icons.Outlined.MoreHoriz))
         BoxWithConstraints {
             val rail = maxWidth >= 840.dp
             Scaffold(snackbarHost = { SnackbarHost(snackbar) }, topBar = {
                 TopAppBar(title = { Text(if (history.isEmpty()) "Inventory" else screenTitle(route)) }, navigationIcon = {
-                    if (history.isNotEmpty()) IconButton(onClick = { back() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Zurück") }
+                    if (history.isNotEmpty()) IconButton(onClick = { back() }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, L10n.text(R.string.ui_previous_548611ce)) }
                 }, actions = {
-                    if (route == "inventory") IconButton(onClick = { navigate("notifications") }) { Icon(Icons.Outlined.Notifications, "Benachrichtigungen") }
+                    if (route == "inventory") AccountSwitcher(model) { navigate("login") }
+                    if (route == "inventory") IconButton(onClick = { navigate("notifications") }) { Icon(Icons.Outlined.Notifications, L10n.text(R.string.ui_notifications_f7205df4)) }
                     if (model.busy) CircularProgressIndicator(Modifier.padding(12.dp).size(22.dp), strokeWidth = 2.dp)
                 })
             }, bottomBar = {
@@ -93,6 +125,7 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.weight(1f)) {
                     val id = route.substringAfter('/', "")
                     when (route.substringBefore('/')) {
+                        "login" -> LoginScreen(model)
                         "inventory" -> InventoryScreen(model, api, ::navigate)
                         "resource" -> ResourceScreen(model, api, id, ::navigate, ::back)
                         "edit" -> ResourceEditor(model, api, id.ifEmpty { null }, ::back)
@@ -128,4 +161,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-private fun screenTitle(route: String): String = mapOf("resource" to "Details", "edit" to "Bearbeiten", "new" to "Neuer Eintrag", "stock" to "Bestand", "assignments" to "Ausleihe & Zuweisung", "family" to "Varianten", "relations" to "Beziehungen", "bom" to "Stückliste", "translations" to "Übersetzungen", "ai" to "KI-Werkzeuge", "media" to "Medien", "camera" to "Kamera", "flow" to "Aktionsablauf", "room" to "Raum", "loans" to "Ausleihen", "requests" to "Anfragen", "request" to "Anfrage", "new-request" to "Neue Anfrage", "notifications" to "Benachrichtigungen", "notification-settings" to "Benachrichtigungen", "jobs" to "Uploads & Vorgänge", "references" to "Arbeitsbereich", "ai-settings" to "KI-Vorgaben")[route.substringBefore('/')] ?: "Inventory"
+private fun screenTitle(route: String): String = mapOf("resource" to L10n.text(R.string.ui_details_45989de4), "edit" to L10n.text(R.string.ui_edit_84e45ee7), "new" to L10n.text(R.string.ui_new_item_c325efcf), "stock" to L10n.text(R.string.ui_stock_82cb99ec), "assignments" to L10n.text(R.string.ui_loans_assignments_931054aa), "family" to L10n.text(R.string.ui_variants_741cba75), "relations" to L10n.text(R.string.ui_relationships_80a6bf24), "bom" to L10n.text(R.string.ui_bill_of_materials_2a456394), "translations" to L10n.text(R.string.ui_translations_22c9ef6d), "ai" to L10n.text(R.string.ui_ai_tools_ac717458), "media" to L10n.text(R.string.ui_media_0031e362), "camera" to L10n.text(R.string.ui_camera_32edeecd), "flow" to L10n.text(R.string.ui_workflow_0560f3a1), "room" to L10n.text(R.string.ui_room_d2fc5e58), "loans" to L10n.text(R.string.ui_loans_ca70339f), "requests" to L10n.text(R.string.ui_requests_5dfb5bcd), "request" to L10n.text(R.string.ui_request_d131ffca), "new-request" to L10n.text(R.string.ui_new_request_d6b3176f), "notifications" to L10n.text(R.string.ui_notifications_f7205df4), "notification-settings" to L10n.text(R.string.ui_notifications_f7205df4), "jobs" to L10n.text(R.string.ui_uploads_operations_5c8e7a6f), "references" to L10n.text(R.string.ui_workspace_6a85b576), "ai-settings" to L10n.text(R.string.ui_ai_defaults_dec724c7))[route.substringBefore('/')] ?: "Inventory"

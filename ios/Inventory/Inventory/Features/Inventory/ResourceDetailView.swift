@@ -68,11 +68,11 @@ struct ResourceDetailView: View {
                 .foregroundStyle(current.isFavorite == true ? .yellow : .primary)
                 .disabled(updatingFavorite)
                 .accessibilityLabel(
-                    current.isFavorite == true ? "Favorit entfernen" : "Als Favorit markieren"
+                    current.isFavorite == true ? L10n.text("ui_remove_favorite_634fa3a6") : L10n.text("ui_mark_as_favorite_247d1676")
                 )
 
                 if canUpdateCurrentResource {
-                    Button("Bearbeiten") { showEditor = true }
+                    Button(L10n.text("ui_edit_84e45ee7")) { showEditor = true }
                 }
             }
         }
@@ -121,34 +121,34 @@ struct ResourceDetailView: View {
             ObjectModelPreviewSheet(model: model)
         }
         .confirmationDialog(
-            "Eine Einheit aus dem Bestand entnehmen?",
+            L10n.text("ui_remove_one_unit_from_stock_4d9b2a45"),
             isPresented: $confirmIssue,
             titleVisibility: .visible
         ) {
-            Button("1 Einheit entnehmen", role: .destructive) {
-                book(delta: -1, type: "issue", reason: "Entnahme per iOS-App")
+            Button(L10n.text("ui_remove_1_unit_b985f993"), role: .destructive) {
+                book(delta: -1, type: "issue", reason: L10n.text("ui_removal_via_ios_app_bb546f6a"))
             }
-            Button("Abbrechen", role: .cancel) { }
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) { }
         }
         .alert(
-            "Aktion fehlgeschlagen",
+            L10n.text("ui_action_failed_3a20cc65"),
             isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
             if pendingStockAction != nil {
-                Button("Erneut versuchen") { retryPendingStockAction() }
+                Button(L10n.text("ui_retry_948643cb")) { retryPendingStockAction() }
             }
-            Button("Abbrechen", role: .cancel) {
+            Button(L10n.text("ui_cancel_f7ff1178"), role: .cancel) {
                 pendingStockAction = nil
                 errorMessage = nil
             }
         } message: {
-            Text(errorMessage ?? "Unbekannter Fehler")
+            Text(errorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
         .alert(
-            "3D-Modell konnte nicht geöffnet werden",
+            L10n.text("ui_could_not_open_3d_model_44f1ecf0"),
             isPresented: Binding(
                 get: { modelErrorMessage != nil },
                 set: { if !$0 { modelErrorMessage = nil } }
@@ -156,7 +156,7 @@ struct ResourceDetailView: View {
         ) {
             Button("OK", role: .cancel) { modelErrorMessage = nil }
         } message: {
-            Text(modelErrorMessage ?? "Unbekannter Fehler")
+            Text(modelErrorMessage ?? L10n.text("ui_unknown_error_617580f0"))
         }
     }
 
@@ -200,13 +200,13 @@ struct ResourceDetailView: View {
                 LabeledContent("SKU", value: sku)
             }
             if let barcode = current.barcode {
-                LabeledContent("Barcode", value: barcode)
+                LabeledContent(L10n.text("ui_barcode_a401f372"), value: barcode)
             }
             if let serial = current.serialNumber {
-                LabeledContent("Seriennummer", value: serial)
+                LabeledContent(L10n.text("ui_serial_number_760abc3d"), value: serial)
             }
             if let location = current.location {
-                LabeledContent("Ort", value: location)
+                LabeledContent(L10n.text("ui_place_30fb2591"), value: location)
             }
         }
         .inventoryCard()
@@ -215,7 +215,7 @@ struct ResourceDetailView: View {
     private var stockCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Bestand", systemImage: "shippingbox.fill").font(.headline)
+                Label(L10n.text("ui_stock_82cb99ec"), systemImage: "shippingbox.fill").font(.headline)
                 Spacer()
                 Text("\(current.quantity)")
                     .font(.title2.monospacedDigit().bold())
@@ -225,16 +225,16 @@ struct ResourceDetailView: View {
                     Button {
                         confirmIssue = true
                     } label: {
-                        Label("Entnehmen", systemImage: "minus.circle.fill")
+                        Label(L10n.text("ui_take_out_bf32d5ff"), systemImage: "minus.circle.fill")
                             .frame(maxWidth: .infinity, minHeight: 42)
                     }
                     .buttonStyle(.bordered)
                     .disabled(booking || (current.quantity <= 0 && !state.allowsNegativeStock))
 
                     Button {
-                        book(delta: 1, type: "receipt", reason: "Zugang per iOS-App")
+                        book(delta: 1, type: "receipt", reason: L10n.text("ui_receipt_via_ios_app_bca45b94"))
                     } label: {
-                        Label("Zugang", systemImage: "plus.circle.fill")
+                        Label(L10n.text("ui_stock_in_5184cdf3"), systemImage: "plus.circle.fill")
                             .frame(maxWidth: .infinity, minHeight: 42)
                     }
                     .buttonStyle(.borderedProminent)
@@ -245,7 +245,7 @@ struct ResourceDetailView: View {
                 Button {
                     showStockManagement = true
                 } label: {
-                    Label("Bestand verwalten", systemImage: "slider.horizontal.3")
+                    Label(L10n.text("ui_manage_stock_0826c917"), systemImage: "slider.horizontal.3")
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
@@ -257,7 +257,7 @@ struct ResourceDetailView: View {
                 Button {
                     showStockCounter = true
                 } label: {
-                    Label("Teile per Foto zählen", systemImage: "camera.viewfinder")
+                    Label(L10n.text("ui_count_parts_from_a_photo_4f287f55"), systemImage: "camera.viewfinder")
                         .frame(maxWidth: .infinity, minHeight: 42)
                 }
                 .buttonStyle(.bordered)
@@ -267,7 +267,7 @@ struct ResourceDetailView: View {
 
             if canManageCurrentStock && !canUseAIForCurrentResource {
                 Label(
-                    "Die Fotozählung benötigt die KI-Berechtigung für dieses Konto.",
+                    L10n.text("ui_photo_counting_requires_ai_permission_for_this_b8f545ed"),
                     systemImage: "lock.fill"
                 )
                 .font(.caption)
@@ -280,7 +280,7 @@ struct ResourceDetailView: View {
 
     private var descriptionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Beschreibung").font(.headline)
+            Text(L10n.text("ui_description_e9262f00")).font(.headline)
             MarkdownContentView(
                 markdown: current.description,
                 client: state.client,
@@ -293,9 +293,9 @@ struct ResourceDetailView: View {
 
     private var assignmentsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Ausleihen & Zuweisungen", systemImage: "person.crop.circle.badge.clock")
+            Label(L10n.text("ui_loans_assignments_0da80775"), systemImage: "person.crop.circle.badge.clock")
                 .font(.headline)
-            Text("Empfänger, Reservierungen und Rückgaben für diesen Eintrag verwalten.")
+            Text(L10n.text("ui_manage_recipients_reservations_and_returns_for_this_cecf7009"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             NavigationLink {
@@ -305,7 +305,7 @@ struct ResourceDetailView: View {
                     onInventoryChanged: { Task { await refresh() } }
                 )
             } label: {
-                Label("Nutzung verwalten", systemImage: "arrow.right.circle.fill")
+                Label(L10n.text("ui_manage_assignments_f15ec590"), systemImage: "arrow.right.circle.fill")
                     .frame(maxWidth: .infinity, minHeight: 42)
             }
             .buttonStyle(.borderedProminent)
@@ -318,7 +318,7 @@ struct ResourceDetailView: View {
     private var mediaSection: some View {
         if let client = state.client, !imageMedia.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Bilder").font(.headline)
+                Text(L10n.text("ui_images_214feaf1")).font(.headline)
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 10) {
                         ForEach(imageMedia) { media in
@@ -333,7 +333,7 @@ struct ResourceDetailView: View {
 
         if !objectModels.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Label("3D-Objektscan", systemImage: "cube.transparent.fill")
+                Label(L10n.text("ui_object_scan_3d"), systemImage: "cube.transparent.fill")
                     .font(.headline)
                 ForEach(objectModels) { media in
                     objectModelCard(media)
@@ -371,7 +371,7 @@ struct ResourceDetailView: View {
                 Text(media.name)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
-                Text(media.size.map { $0.formatted(.byteCount(style: .file)) } ?? "USDZ-Modell")
+                Text(media.size.map { $0.formatted(.byteCount(style: .file)) } ?? L10n.text("ui_usdz_model_32aa0910"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -382,20 +382,20 @@ struct ResourceDetailView: View {
                 if modelDownloadID == media.id {
                     ProgressView().controlSize(.small)
                 } else {
-                    Label("Öffnen", systemImage: "arkit")
+                    Label(L10n.text("ui_open_bc385a30"), systemImage: "arkit")
                         .labelStyle(.iconOnly)
                 }
             }
             .buttonStyle(.bordered)
             .disabled(modelDownloadID != nil || state.client == nil)
-            .accessibilityLabel("3D-Modell öffnen")
+            .accessibilityLabel(L10n.text("ui_open_3d_model_fc823dc0"))
         }
     }
 
     private var tagsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !current.categories.isEmpty {
-                Text("Kategorien").font(.headline)
+                Text(L10n.text("ui_categories_055b8f9b")).font(.headline)
                 FlowLayout(spacing: 7) {
                     ForEach(current.categories, id: \.name) { category in
                         Text(category.name)
@@ -407,7 +407,7 @@ struct ResourceDetailView: View {
                 }
             }
             if !current.tags.isEmpty {
-                Text("Tags").font(.headline)
+                Text(L10n.text("ui_tags_1331275b")).font(.headline)
                 FlowLayout(spacing: 7) {
                     ForEach(current.tags, id: \.self) { tag in
                         Text(tag)
@@ -445,26 +445,26 @@ struct ResourceDetailView: View {
 
     private var additionalDetailsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Weitere Angaben").font(.headline)
+            Text(L10n.text("ui_additional_details_66fb159b")).font(.headline)
             if let valueCents = current.valueCents {
                 LabeledContent(
-                    "Wert",
+                    L10n.text("ui_value_7e347daa"),
                     value: (Double(valueCents) / 100).formatted(
                         .currency(code: current.currency)
                     )
                 )
             }
             if current.priority != 3 {
-                LabeledContent("Priorität", value: "\(current.priority)")
+                LabeledContent(L10n.text("ui_priority_787e02f4"), value: "\(current.priority)")
             }
             if let latitude = current.gpsLatitude {
-                LabeledContent("Breitengrad", value: latitude.formatted())
+                LabeledContent(L10n.text("ui_latitude_c5049879"), value: latitude.formatted())
             }
             if let longitude = current.gpsLongitude {
-                LabeledContent("Längengrad", value: longitude.formatted())
+                LabeledContent(L10n.text("ui_longitude_4c9aacde"), value: longitude.formatted())
             }
             if let altitude = current.gpsAltitude {
-                LabeledContent("Höhe", value: "\(altitude.formatted()) m")
+                LabeledContent(L10n.text("ui_height_a4d8c347"), value: "\(altitude.formatted()) m")
             }
             if !current.notes.isEmpty {
                 Divider()
@@ -478,7 +478,7 @@ struct ResourceDetailView: View {
 
     private var customFieldsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Benutzerdefinierte Felder").font(.headline)
+            Text(L10n.text("ui_custom_fields_30214611")).font(.headline)
             ForEach((current.customFields ?? [:]).keys.sorted(), id: \.self) { key in
                 if let value = current.customFields?[key] {
                     LabeledContent(customFieldLabel(for: key), value: display(value))
@@ -490,13 +490,13 @@ struct ResourceDetailView: View {
 
     private var structureCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Struktur")
+            Text(L10n.text("ui_structure_22650066"))
                 .font(.headline)
                 .padding(.bottom, 6)
 
             structureLink(
-                title: "Varianten",
-                subtitle: "Produktfamilie und Varianten verwalten",
+                title: L10n.text("ui_variants_741cba75"),
+                subtitle: L10n.text("ui_manage_product_family_and_variants_2e3cb31a"),
                 systemImage: "square.stack.3d.up"
             ) {
                 ResourceFamilyView(
@@ -507,8 +507,8 @@ struct ResourceDetailView: View {
             }
             Divider().padding(.leading, 42)
             structureLink(
-                title: "Beziehungen",
-                subtitle: "Verknüpfte Inventareinträge anzeigen",
+                title: L10n.text("ui_relationships_80a6bf24"),
+                subtitle: L10n.text("ui_show_linked_inventory_items_b84f82b8"),
                 systemImage: "link"
             ) {
                 ResourceRelationsView(
@@ -518,8 +518,8 @@ struct ResourceDetailView: View {
             }
             Divider().padding(.leading, 42)
             structureLink(
-                title: "Stückliste",
-                subtitle: "Komponenten und baubare Menge verwalten",
+                title: L10n.text("ui_bill_of_materials_2a456394"),
+                subtitle: L10n.text("ui_manage_components_and_buildable_quantity_c733ca9c"),
                 systemImage: "list.bullet.rectangle"
             ) {
                 BillOfMaterialsView(
@@ -567,7 +567,7 @@ struct ResourceDetailView: View {
         switch value {
         case .string(let value): value
         case .number(let value): value.formatted()
-        case .boolean(let value): value ? "Ja" : "Nein"
+        case .boolean(let value): value ? L10n.text("ui_yes_cde9e58a") : L10n.text("ui_no_90ebc1bd")
         case .strings(let values): values.joined(separator: ", ")
         }
     }

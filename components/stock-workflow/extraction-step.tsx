@@ -442,7 +442,7 @@ export function WorkflowExtractionStep({
                   </label>
                 )}
                 <label className={labelClass}>
-                  Bezeichnung
+                  {t("workflows.steps.extract.fieldLabel")}
                   <input
                     value={field.label}
                     onChange={(event) =>
@@ -458,7 +458,7 @@ export function WorkflowExtractionStep({
                   />
                 </label>
                 <label className={labelClass}>
-                  Extraktion
+                  {t("workflows.steps.extract.extraction")}
                   <select
                     value={field.extraction.mode}
                     onChange={(event) =>
@@ -469,18 +469,18 @@ export function WorkflowExtractionStep({
                     className={inputClass}
                     disabled={!editable}
                   >
-                    <option value="url-query">URL-Parameter</option>
-                    <option value="regex">Regulärer Ausdruck</option>
-                    <option value="prefix">Präfix entfernen</option>
-                    <option value="full">Vollständiger Wert</option>
+                    <option value="url-query">{t("workflows.steps.extract.modes.url-query")}</option>
+                    <option value="regex">{t("workflows.steps.extract.modes.regex")}</option>
+                    <option value="prefix">{t("workflows.steps.extract.modes.prefix")}</option>
+                    <option value="full">{t("workflows.steps.extract.modes.full")}</option>
                   </select>
                 </label>
                 <label className={labelClass}>
                   {field.extraction.mode === "prefix"
-                    ? "Präfix"
+                    ? t("workflows.steps.extract.prefix")
                     : field.extraction.mode === "regex"
-                      ? "Regex"
-                      : "Parameter"}
+                      ? t("workflows.steps.extract.regexPattern")
+                      : t("workflows.steps.extract.queryParameter")}
                   <input
                     value={
                       field.extraction.mode === "prefix"
@@ -528,7 +528,7 @@ export function WorkflowExtractionStep({
                         extractedFields: current.extractedFields.filter((item) => item.uid !== field.uid),
                       }))
                     }
-                    aria-label="QR-Feld entfernen"
+                    aria-label={t("workflows.steps.extract.removeField")}
                   >
                     <Trash2 className="size-3.5" />
                   </button>
@@ -536,7 +536,7 @@ export function WorkflowExtractionStep({
                 {field.extraction.mode === "regex" ? (
                   <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[100px_140px_auto] lg:col-span-5">
                     <label className={labelClass}>
-                      Flags
+                      {t("workflows.steps.extract.regexFlags")}
                       <input
                         value={field.extraction.flags}
                         onChange={(event) =>
@@ -549,7 +549,7 @@ export function WorkflowExtractionStep({
                       />
                     </label>
                     <label className={labelClass}>
-                      Capture Group
+                      {t("workflows.steps.extract.regexGroup")}
                       <input
                         value={field.extraction.group}
                         onChange={(event) =>

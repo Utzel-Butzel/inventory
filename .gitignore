@@ -59,7 +59,8 @@ yarn-error.log*
 /vendor/bundle/
 /fastlane/report.xml
 /fastlane/Preview.html
-/fastlane/screenshots/
+/fastlane/screenshots/*
+!/fastlane/screenshots/ios/
 /fastlane/test_output/
 
 # persistent local uploads
@@ -67,3 +68,10 @@ yarn-error.log*
 **/__pycache__/
 /data/uploads/*
 !/data/uploads/.gitkeep
+
+# Mobile release signing and local store credentials
+*.jks
+*.keystore
+/android/keystore.properties
+/fastlane/google-play-key.json
+/build/android/

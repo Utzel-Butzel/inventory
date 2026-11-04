@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { migrateInventoryRows, parseInventorySystem, parseMigrationCsv } from "@/lib/inventory-migration";
 
 import type { NewResource } from "@/db/schema";
 import { requirePermission } from "@/lib/api-auth";
@@ -426,6 +427,13 @@ export async function POST(request: Request) {
   const authorization = await requirePermission(request, "inventory.import");
   if (authorization.response) return authorization.response;
 
+  const url = new URL(request.url);
+  const system = parseInventorySystem(url.searchParams.get("system"));
+  const currency = (url.searchParams.get("currency") ?? "EUR").toUpperCase();
+  if (!system || !/^[A-Z]{3}$/.test(currency)) {
+    return Response.json({ error: "Invalid inventory system or currency." }, { status: 400 });
+  }
+
   const idempotency = readIdempotencyKey(request);
   if (idempotency.error) return idempotency.error;
   if (!idempotency.key) {
@@ -492,12 +500,14 @@ export async function POST(request: Request) {
 
   let csvRows: CsvRow[];
   try {
-    csvRows = parseCsv(text);
+    csvRows = system === "open-inventory"
+      ? parseCsv(text)
+      : migrateInventoryRows(parseMigrationCsv(text), system, currency).rows;
   } catch (error) {
     return Response.json(
       {
         error:
-          error instanceof CsvSyntaxError ? error.message : "Unable to parse CSV.",
+          error instanceof Error ? error.message : "Unable to parse CSV.",
       },
       { status: 400 },
     );
@@ -561,6 +571,7 @@ export async function POST(request: Request) {
   const batchHash = hashIdempotentPayload({
     actor: authorization.identity.subject,
     csv: text,
+    ...(system === "open-inventory" ? {} : { system, currency }),
   });
   const results: ImportResult[] = [];
 

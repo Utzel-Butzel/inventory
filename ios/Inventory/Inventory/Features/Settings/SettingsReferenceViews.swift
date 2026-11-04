@@ -10,63 +10,63 @@ struct RuntimeSettingsView: View {
     var body: some View {
         List {
             if let status {
-                Section("Dienste") {
+                Section(L10n.text("ui_services_a6f5acc6")) {
                     SettingsStatusRow(
-                        title: "Dateispeicher",
+                        title: L10n.text("ui_file_storage_96e9a252"),
                         detail: "\(status.storage.provider.capitalized)-Anbieter",
                         systemImage: status.storage.provider == "local" ? "internaldrive.fill" : "cloud.fill",
                         available: status.storage.configured
                     )
                     SettingsStatusRow(
-                        title: "KI-Analyse",
-                        detail: "Metadaten und Bilderkennung",
+                        title: L10n.text("ui_ai_analysis_5684fb9f"),
+                        detail: L10n.text("ui_metadata_and_image_recognition_88d6218b"),
                         systemImage: "sparkles",
                         available: status.ai.analysis
                     )
                     SettingsStatusRow(
-                        title: "Bildgenerierung",
+                        title: L10n.text("ui_image_generation_fe55be15"),
                         detail: "\(status.ai.imageProvider.capitalized)-Anbieter",
                         systemImage: "photo.badge.plus",
                         available: status.ai.imageGeneration
                     )
                 }
 
-                Section("Anmeldung") {
+                Section(L10n.text("ui_authentication_32ddf6ae")) {
                     SettingsStatusRow(
-                        title: "Passwort-Anmeldung",
-                        detail: "Lokale Benutzerkonten",
+                        title: L10n.text("ui_password_sign_in_d542866d"),
+                        detail: L10n.text("ui_local_user_accounts_3354b7e2"),
                         systemImage: "key.fill",
                         available: status.auth.password
                     )
                     SettingsStatusRow(
                         title: "Auth0",
-                        detail: "Externer Identitätsanbieter",
+                        detail: L10n.text("ui_external_identity_provider_76eba2a0"),
                         systemImage: "person.badge.shield.checkmark.fill",
                         available: status.auth.auth0
                     )
                     ForEach((status.auth.providers ?? []).filter { $0.id != "auth0" }) { provider in
                         SettingsStatusRow(
                             title: provider.name,
-                            detail: "Externer Identitätsanbieter",
+                            detail: L10n.text("ui_external_identity_provider_76eba2a0"),
                             systemImage: "person.badge.shield.checkmark.fill",
                             available: true
                         )
                     }
                 }
             } else if loading {
-                SettingsLoadingRow(text: "Systemstatus wird geladen …")
+                SettingsLoadingRow(text: L10n.text("ui_loading_system_status_c18de017"))
             } else {
-                SettingsErrorRow(message: errorMessage ?? "Der Systemstatus ist nicht verfügbar.")
+                SettingsErrorRow(message: errorMessage ?? L10n.text("ui_system_status_is_unavailable_6dfcc08d"))
             }
 
             Section {
-                Text("Diese Angaben werden von der Serverkonfiguration bestimmt und sind in der App schreibgeschützt.")
+                Text(L10n.text("ui_these_details_are_determined_by_the_server_eda7a873"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Systemstatus")
+        .navigationTitle(L10n.text("ui_system_status_8d5cb1ee"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: client?.contextIdentifier) {
             await load()
@@ -81,7 +81,7 @@ struct RuntimeSettingsView: View {
         guard let client else {
             status = nil
             loading = false
-            errorMessage = "Es besteht keine Verbindung zum Server."
+            errorMessage = L10n.text("ui_there_is_no_connection_to_the_server_b10e907a")
             return
         }
 
@@ -109,12 +109,12 @@ struct PermissionsSettingsView: View {
     var body: some View {
         List {
             if let capabilities {
-                Section("Identität") {
-                    LabeledContent("Name", value: capabilities.name)
-                    LabeledContent("Rolle", value: roleLabel)
+                Section(L10n.text("ui_identity_09841f4a")) {
+                    LabeledContent(L10n.text("ui_name_dcd1d522"), value: capabilities.name)
+                    LabeledContent(L10n.text("ui_role_0038a9cf"), value: roleLabel)
                 }
 
-                Section("Berechtigungen") {
+                Section(L10n.text("ui_permissions_036b749f")) {
                     ForEach(orderedScopes, id: \.self) { scope in
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
@@ -129,19 +129,19 @@ struct PermissionsSettingsView: View {
                     }
                 }
             } else if loading {
-                SettingsLoadingRow(text: "Berechtigungen werden geladen …")
+                SettingsLoadingRow(text: L10n.text("ui_loading_permissions_0646e881"))
             } else {
-                SettingsErrorRow(message: errorMessage ?? "Die Berechtigungen sind nicht verfügbar.")
+                SettingsErrorRow(message: errorMessage ?? L10n.text("ui_permissions_are_unavailable_7cab1d18"))
             }
 
             Section {
-                Text("Die App zeigt die vom Server gewährten Rechte. Rollen und Zugänge werden in der Webverwaltung geändert.")
+                Text(L10n.text("ui_the_app_shows_permissions_granted_by_the_c8042c25"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Berechtigungen")
+        .navigationTitle(L10n.text("ui_permissions_036b749f"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: client?.contextIdentifier) {
             await load()
@@ -153,11 +153,11 @@ struct PermissionsSettingsView: View {
 
     private var roleLabel: String {
         switch runtime?.user.role {
-        case "admin": "Administrator"
-        case "editor": "Bearbeiten"
-        case "viewer": "Nur lesen"
+        case "admin": L10n.text("ui_administrator_e7d3e769")
+        case "editor": L10n.text("ui_edit_84e45ee7")
+        case "viewer": L10n.text("ui_read_only_bba5cbd1")
         case .some(let role): role.capitalized
-        case nil: "API-Token"
+        case nil: L10n.text("ui_api_token_5efaaeee")
         }
     }
 
@@ -173,7 +173,7 @@ struct PermissionsSettingsView: View {
             capabilities = nil
             runtime = nil
             loading = false
-            errorMessage = "Es besteht keine Verbindung zum Server."
+            errorMessage = L10n.text("ui_there_is_no_connection_to_the_server_b10e907a")
             return
         }
 
@@ -198,19 +198,19 @@ struct PermissionsSettingsView: View {
 
     private func scopeTitle(_ scope: String) -> String {
         switch scope {
-        case "read": "Lesen"
-        case "write": "Bearbeiten"
-        case "ai": "KI-Funktionen"
+        case "read": L10n.text("ui_read_dca8f649")
+        case "write": L10n.text("ui_edit_84e45ee7")
+        case "ai": L10n.text("ui_ai_features_c946a780")
         default: scope
         }
     }
 
     private func scopeDescription(_ scope: String) -> String {
         switch scope {
-        case "read": "Inventar, Medien und Statistiken ansehen"
-        case "write": "Inventar, Bestand und Uploads ändern"
-        case "ai": "Analyse und Bildgenerierung verwenden"
-        default: "Vom Server gewährte Berechtigung"
+        case "read": L10n.text("ui_view_inventory_media_and_statistics_47b808dd")
+        case "write": L10n.text("ui_change_inventory_stock_and_uploads_6b4b752c")
+        case "ai": L10n.text("ui_use_analysis_and_image_generation_9be07733")
+        default: L10n.text("ui_permission_granted_by_the_server_f61a7724")
         }
     }
 
@@ -246,7 +246,7 @@ private struct SettingsStatusRow: View {
             Spacer()
 
             Label(
-                available ? "Bereit" : "Nicht eingerichtet",
+                available ? L10n.text("ui_ready_8d4d4830") : L10n.text("ui_not_configured_2fed0df5"),
                 systemImage: available ? "checkmark.circle.fill" : "minus.circle"
             )
             .font(.caption)
@@ -293,7 +293,7 @@ struct InventoryTypesSettingsView: View {
     var body: some View {
         List {
             if !types.isEmpty {
-                Section("Aktive Typen") {
+                Section(L10n.text("ui_active_types_92f2b518")) {
                     ForEach(types) { type in
                         NavigationLink {
                             InventoryTypeSettingsDetailView(type: type)
@@ -303,24 +303,24 @@ struct InventoryTypesSettingsView: View {
                     }
                 }
             } else if loading {
-                SettingsLoadingRow(text: "Inventartypen werden geladen …")
+                SettingsLoadingRow(text: L10n.text("ui_loading_inventory_types_9d43dc6d"))
             } else if let errorMessage {
                 SettingsErrorRow(message: errorMessage)
             } else {
                 Section {
-                    Label("Keine Inventartypen vorhanden", systemImage: "shippingbox")
+                    Label(L10n.text("ui_no_inventory_types_available_d9d75448"), systemImage: "shippingbox")
                         .foregroundStyle(.secondary)
                 }
             }
 
             Section {
-                Text("Inventartypen legen fest, welche Gegenstände als Räume, Container, Geräte oder andere Strukturen verwendet werden können. Änderungen erfolgen in der Webverwaltung.")
+                Text(L10n.text("ui_inventory_types_define_which_items_can_be_2b874411"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Inventartypen")
+        .navigationTitle(L10n.text("ui_inventory_types_d81903f7"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: client?.contextIdentifier) {
             await load()
@@ -335,7 +335,7 @@ struct InventoryTypesSettingsView: View {
         guard let client else {
             types = []
             loading = false
-            errorMessage = "Es besteht keine Verbindung zum Server."
+            errorMessage = L10n.text("ui_there_is_no_connection_to_the_server_b10e907a")
             return
         }
 
@@ -376,7 +376,7 @@ private struct InventoryTypeSettingsRow: View {
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                     if type.canContain {
-                        Text("Container")
+                        Text(L10n.text("ui_container_0c7823e8"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
@@ -392,7 +392,7 @@ private struct InventoryTypeSettingsDetailView: View {
 
     var body: some View {
         List {
-            Section("Typ") {
+            Section(L10n.text("ui_type_1b024183")) {
                 HStack {
                     Circle()
                         .fill(settingsColor(type.color))
@@ -400,26 +400,26 @@ private struct InventoryTypeSettingsDetailView: View {
                     Text(type.label)
                     Spacer()
                     if type.isSystem {
-                        Text("System")
+                        Text(L10n.text("ui_system_6725e7bb"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
                 }
-                LabeledContent("API-Schlüssel", value: type.key)
+                LabeledContent(L10n.text("ui_api_key_de526edf"), value: type.key)
                 if !type.description.isEmpty {
                     Text(type.description)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("Struktur") {
-                LabeledContent("Kann Inhalte enthalten") {
+            Section(L10n.text("ui_structure_22650066")) {
+                LabeledContent(L10n.text("ui_can_contain_items_2fbf4eac")) {
                     SettingsBooleanValue(value: type.canContain)
                 }
-                LabeledContent("Automatisch aus Karte") {
+                LabeledContent(L10n.text("ui_automatically_from_map_b9613ded")) {
                     SettingsBooleanValue(value: type.spatialContainment)
                 }
-                LabeledContent("Sortierung", value: "\(type.position)")
+                LabeledContent(L10n.text("ui_sort_order_59ff9eb1"), value: "\(type.position)")
             }
         }
         .listStyle(.insetGrouped)
@@ -439,16 +439,16 @@ struct CustomFieldsSettingsView: View {
     var body: some View {
         List {
             Section {
-                Picker("Bereich", selection: $selectedEntity) {
-                    Text("Inventar").tag(CustomFieldEntityType.inventory)
-                    Text("Bestandseinheiten").tag(CustomFieldEntityType.stockUnit)
+                Picker(L10n.text("ui_scope_14d5fc54"), selection: $selectedEntity) {
+                    Text(L10n.text("ui_inventory_d602900f")).tag(CustomFieldEntityType.inventory)
+                    Text(L10n.text("ui_stock_units_f2f3b419")).tag(CustomFieldEntityType.stockUnit)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
             }
 
             if !visibleDefinitions.isEmpty {
-                Section("Felder") {
+                Section(L10n.text("ui_fields_b26f0b11")) {
                     ForEach(visibleDefinitions) { definition in
                         NavigationLink {
                             CustomFieldSettingsDetailView(definition: definition)
@@ -458,15 +458,15 @@ struct CustomFieldsSettingsView: View {
                     }
                 }
             } else if loading {
-                SettingsLoadingRow(text: "Benutzerdefinierte Felder werden geladen …")
+                SettingsLoadingRow(text: L10n.text("ui_loading_custom_fields_2b0960ae"))
             } else if let errorMessage {
                 SettingsErrorRow(message: errorMessage)
             } else {
                 Section {
                     Label(
                         selectedEntity == .inventory
-                            ? "Keine zusätzlichen Inventarfelder"
-                            : "Keine zusätzlichen Felder für Bestandseinheiten",
+                            ? L10n.text("ui_no_additional_inventory_fields_8d380066")
+                            : L10n.text("ui_no_additional_stock_unit_fields_2a95c9f5"),
                         systemImage: "text.badge.plus"
                     )
                     .foregroundStyle(.secondary)
@@ -474,13 +474,13 @@ struct CustomFieldsSettingsView: View {
             }
 
             Section {
-                Text("Felddefinitionen und ihre Zielgruppen sind in der App schreibgeschützt. Änderungen erfolgen in der Webverwaltung.")
+                Text(L10n.text("ui_field_definitions_and_their_target_groups_are_2424101a"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Eigene Felder")
+        .navigationTitle(L10n.text("ui_custom_fields_ad9feea0"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: client?.contextIdentifier) {
             await load()
@@ -505,7 +505,7 @@ struct CustomFieldsSettingsView: View {
         guard let client else {
             definitions = []
             loading = false
-            errorMessage = "Es besteht keine Verbindung zum Server."
+            errorMessage = L10n.text("ui_there_is_no_connection_to_the_server_b10e907a")
             return
         }
 
@@ -531,7 +531,7 @@ private struct CustomFieldSettingsRow: View {
                 HStack(spacing: 6) {
                     Text(definition.label)
                     if definition.required {
-                        Text("Pflicht")
+                        Text(L10n.text("ui_required_6a047fec"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.orange)
                     }
@@ -551,47 +551,47 @@ private struct CustomFieldSettingsDetailView: View {
 
     var body: some View {
         List {
-            Section("Feld") {
-                LabeledContent("API-Schlüssel", value: definition.key)
-                LabeledContent("Feldtyp", value: definition.fieldType.localizedTitle)
-                LabeledContent("Pflichtfeld") {
+            Section(L10n.text("ui_field_1dbe99d0")) {
+                LabeledContent(L10n.text("ui_api_key_de526edf"), value: definition.key)
+                LabeledContent(L10n.text("ui_field_type_7bc04652"), value: definition.fieldType.localizedTitle)
+                LabeledContent(L10n.text("ui_required_field_f5fd476d")) {
                     SettingsBooleanValue(value: definition.required)
                 }
-                LabeledContent("Sortierung", value: "\(definition.position)")
+                LabeledContent(L10n.text("ui_sort_order_59ff9eb1"), value: "\(definition.position)")
                 if !definition.description.isEmpty {
-                    LabeledContent("Beschreibung") {
+                    LabeledContent(L10n.text("ui_description_e9262f00")) {
                         Text(definition.description)
                             .multilineTextAlignment(.trailing)
                             .foregroundStyle(.secondary)
                     }
                 }
                 if !definition.placeholder.isEmpty {
-                    LabeledContent("Platzhalter", value: definition.placeholder)
+                    LabeledContent(L10n.text("ui_placeholder_71b40529"), value: definition.placeholder)
                 }
             }
 
             if definition.fieldType == .number {
-                Section("Zahlenbereich") {
+                Section(L10n.text("ui_number_range_7ce367f3")) {
                     if let minimum = definition.minValue {
-                        LabeledContent("Minimum", value: formattedNumber(minimum))
+                        LabeledContent(L10n.text("ui_minimum_735beee2"), value: formattedNumber(minimum))
                     }
                     if let maximum = definition.maxValue {
-                        LabeledContent("Maximum", value: formattedNumber(maximum))
+                        LabeledContent(L10n.text("ui_maximum_66c9ab17"), value: formattedNumber(maximum))
                     }
                     if let step = definition.step {
-                        LabeledContent("Schrittweite", value: formattedNumber(step))
+                        LabeledContent(L10n.text("ui_step_size_0d1486f0"), value: formattedNumber(step))
                     }
                     if definition.minValue == nil,
                        definition.maxValue == nil,
                        definition.step == nil {
-                        Text("Keine Einschränkungen")
+                        Text(L10n.text("ui_no_restrictions_b6305eb6"))
                             .foregroundStyle(.secondary)
                     }
                 }
             }
 
             if !definition.options.isEmpty {
-                Section("Auswahloptionen") {
+                Section(L10n.text("ui_selection_options_d6d60efe")) {
                     ForEach(definition.options) { option in
                         HStack(spacing: 10) {
                             Circle()
@@ -607,16 +607,16 @@ private struct CustomFieldSettingsDetailView: View {
                 }
             }
 
-            Section("Gültig für") {
-                LabeledContent("Inventartypen") {
+            Section(L10n.text("ui_applies_to_ce7db2e0")) {
+                LabeledContent(L10n.text("ui_inventory_types_d81903f7")) {
                     Text(definition.resourceTypes.isEmpty
-                         ? "Alle"
+                         ? L10n.text("ui_all_3801a35c")
                          : definition.resourceTypes.joined(separator: ", "))
                         .multilineTextAlignment(.trailing)
                 }
-                LabeledContent("Kategorien") {
+                LabeledContent(L10n.text("ui_categories_055b8f9b")) {
                     Text(definition.categories.isEmpty
-                         ? "Alle"
+                         ? L10n.text("ui_all_3801a35c")
                          : definition.categories.joined(separator: ", "))
                         .multilineTextAlignment(.trailing)
                 }
@@ -636,7 +636,7 @@ private struct SettingsBooleanValue: View {
     let value: Bool
 
     var body: some View {
-        Label(value ? "Ja" : "Nein", systemImage: value ? "checkmark.circle.fill" : "minus.circle")
+        Label(value ? L10n.text("ui_yes_cde9e58a") : L10n.text("ui_no_90ebc1bd"), systemImage: value ? "checkmark.circle.fill" : "minus.circle")
             .labelStyle(.titleAndIcon)
             .foregroundStyle(value ? .green : .secondary)
     }
@@ -645,16 +645,16 @@ private struct SettingsBooleanValue: View {
 private extension CustomFieldValueType {
     var localizedTitle: String {
         switch self {
-        case .text: "Text"
-        case .textarea: "Langer Text"
-        case .number: "Zahl"
-        case .boolean: "Ja / Nein"
-        case .date: "Datum"
-        case .datetime: "Datum und Uhrzeit"
-        case .select: "Auswahl"
-        case .multiSelect: "Mehrfachauswahl"
-        case .reference: "Referenz"
-        case .email: "E-Mail-Adresse"
+        case .text: L10n.text("ui_text_71988c4d")
+        case .textarea: L10n.text("ui_long_text_9aa0d7b3")
+        case .number: L10n.text("ui_number_654eb4c0")
+        case .boolean: L10n.text("ui_yes_no_0b90ccd2")
+        case .date: L10n.text("ui_date_9135882d")
+        case .datetime: L10n.text("ui_date_and_time_5e69bd74")
+        case .select: L10n.text("ui_selection_e8b7adc3")
+        case .multiSelect: L10n.text("ui_multiple_selection_1d8a827e")
+        case .reference: L10n.text("ui_reference_e1311398")
+        case .email: L10n.text("ui_email_address_c2f9765a")
         case .url: "URL"
         }
     }
@@ -699,28 +699,28 @@ struct InventoryAISettingsView: View {
             if let errorMessage {
                 Section {
                     Text(errorMessage).foregroundStyle(.red)
-                    Button("Neu laden") { Task { await load() } }
+                    Button(L10n.text("ui_reload_55786148")) { Task { await load() } }
                 }
             }
             if let notice { Text(notice).foregroundStyle(.secondary) }
             if let value = draft {
                 Section {
-                    TextField("Analysemodell", text: setting(\.analysisModel, fallback: value.inventorySettings.analysisModel))
+                    TextField(L10n.text("ui_analysis_model_86ad01de"), text: setting(\.analysisModel, fallback: value.inventorySettings.analysisModel))
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("Recherchemodell", text: setting(\.researchModel, fallback: value.inventorySettings.researchModel))
+                    TextField(L10n.text("ui_research_model_c37a96b0"), text: setting(\.researchModel, fallback: value.inventorySettings.researchModel))
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    TextField("Ausgabesprache", text: setting(\.language, fallback: value.inventorySettings.language))
-                    Stepper("Maximal \(value.inventorySettings.maximumImages) Fotos", value: setting(\.maximumImages, fallback: value.inventorySettings.maximumImages), in: 1...3)
-                    Toggle("Fotos standardmäßig analysieren", isOn: setting(\.autoAnalyze, fallback: value.inventorySettings.autoAnalyze))
-                    Toggle("Standardmäßig recherchieren", isOn: setting(\.autoResearch, fallback: value.inventorySettings.autoResearch))
-                    Toggle("Vorhandene Texte überschreiben", isOn: setting(\.overwrite, fallback: value.inventorySettings.overwrite))
-                } header: { Text("Analyse und Recherche") } footer: {
-                    Text("Gilt für App und Webapp in dieser Organisation. Recherche läuft nach der Fotoanalyse und verursacht zusätzliche KI-Kosten. Modell-IDs müssen auf dem Server verfügbar sein; das Recherchemodell muss Websuche und strukturierte Antworten unterstützen.")
+                    TextField(L10n.text("ui_output_language_25cecf38"), text: setting(\.language, fallback: value.inventorySettings.language))
+                    Stepper(L10n.text("ui_maximum_photos_0_e0b765cf", value.inventorySettings.maximumImages), value: setting(\.maximumImages, fallback: value.inventorySettings.maximumImages), in: 1...3)
+                    Toggle(L10n.text("ui_analyze_photos_by_default_9d1bf9b9"), isOn: setting(\.autoAnalyze, fallback: value.inventorySettings.autoAnalyze))
+                    Toggle(L10n.text("ui_research_by_default_47c424dc"), isOn: setting(\.autoResearch, fallback: value.inventorySettings.autoResearch))
+                    Toggle(L10n.text("ui_overwrite_existing_text_e3d8f4dd"), isOn: setting(\.overwrite, fallback: value.inventorySettings.overwrite))
+                } header: { Text(L10n.text("ui_analysis_and_research_50c89e4e")) } footer: {
+                    Text(L10n.text("ui_applies_to_the_app_and_web_app_43f1b858"))
                 }
                 .disabled(saving || !state.canManageAISettings)
                 ForEach(["analysis", "research"], id: \.self) { kind in
-                    Section(kind == "analysis" ? "Analyse-Textvorlage" : "Recherche-Textvorlage") {
-                        Picker("Standardvorlage", selection: Binding(get: { draft?.collection.defaults[kind] ?? "" }, set: { draft?.collection.defaults[kind] = $0 })) {
+                    Section(kind == "analysis" ? L10n.text("ui_analysis_text_template_92adb059") : L10n.text("ui_research_text_template_67674c65")) {
+                        Picker(L10n.text("ui_default_template_0a1ea7b0"), selection: Binding(get: { draft?.collection.defaults[kind] ?? "" }, set: { draft?.collection.defaults[kind] = $0 })) {
                             ForEach(value.collection.templates.filter { $0.kind == kind }) { template in
                                 Text(template.name).tag(template.id)
                             }
@@ -728,32 +728,32 @@ struct InventoryAISettingsView: View {
                         if let id = value.collection.defaults[kind], let index = value.collection.templates.firstIndex(where: { $0.id == id }) {
                             TextEditor(text: Binding(get: { draft?.collection.templates[index].prompt ?? "" }, set: { draft?.collection.templates[index].prompt = $0 }))
                                 .frame(minHeight: 240)
-                            Text("Platzhalter: {{language}}, {{allowedTypes}}, {{name}}, {{description}}, {{type}}, {{tags}}, {{categories}}, {{sku}}, {{barcode}}, {{serialNumber}}. Eigene lokale App-Prompts haben Vorrang.")
+                            Text(L10n.text("ui_placeholders_language_allowedtypes_name_description_type_tags_52b70aec"))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }.disabled(saving || !state.canManageAISettings)
                 }
                 if state.canManageAISettings {
-                    Button(saving ? "Wird gespeichert …" : "Für die Organisation speichern") {
+                    Button(saving ? L10n.text("ui_saving_a8060ba6") : L10n.text("ui_save_for_organization_9e34b108")) {
                         Task {
                             guard let draft else { return }
                             saving = true
                             errorMessage = nil
                             do {
                                 self.draft = try await state.saveInventoryAISettings(draft)
-                                notice = "KI-Vorgaben gespeichert."
+                                notice = L10n.text("ui_ai_defaults_saved_a2619fe2")
                             } catch { errorMessage = error.localizedDescription }
                             saving = false
                         }
                     }.disabled(saving || !valid(value))
                 } else {
-                    Text("Zum Ändern ist die Berechtigung zur Rollenverwaltung erforderlich.").font(.caption)
+                    Text(L10n.text("ui_role_management_permission_is_required_to_make_63e9c3fa")).font(.caption)
                 }
             } else if errorMessage == nil {
-                ProgressView("KI-Vorgaben laden …")
+                ProgressView(L10n.text("ui_loading_ai_defaults_a47a3af1"))
             }
         }
-        .navigationTitle("KI-Vorgaben")
+        .navigationTitle(L10n.text("ui_ai_defaults_dec724c7"))
         .task(id: state.organizationContextIdentifier) { draft = nil; await load() }
     }
 

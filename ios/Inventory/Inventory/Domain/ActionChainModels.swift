@@ -30,7 +30,7 @@ public indirect enum ActionChainJSON: Codable, Equatable, Sendable {
         switch self {
         case .string(let v): return v
         case .number(let v): return v.formatted()
-        case .bool(let v): return v ? "Ja" : "Nein"
+        case .bool(let v): return v ? L10n.text("ui_yes_cde9e58a") : L10n.text("ui_no_90ebc1bd")
         case .null: return "—"
         case .array(let v): return v.map(\.display).joined(separator: ", ")
         case .object(let v): return v.keys.sorted().map { "\($0): \(v[$0]!.display)" }.joined(separator: ", ")

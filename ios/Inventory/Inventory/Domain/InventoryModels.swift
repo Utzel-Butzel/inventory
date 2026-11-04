@@ -107,6 +107,19 @@ public enum InventoryMediaKind: String, Codable, CaseIterable, Sendable {
 public enum InventoryMediaSource: String, Codable, CaseIterable, Sendable {
     case upload
     case ai
+    case demoImagegen = "demo-imagegen"
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        self = Self(rawValue: value) ?? .unknown
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 public struct InventoryResourceCategory: Codable, Hashable, Sendable {
@@ -140,7 +153,7 @@ public enum CustomFieldValue: Codable, Equatable, Sendable {
                 CustomFieldValue.self,
                 DecodingError.Context(
                     codingPath: decoder.codingPath,
-                    debugDescription: "Unsupported custom-field value."
+                    debugDescription: L10n.text("ui_unsupported_custom_field_value_12c73e1c")
                 )
             )
         }

@@ -15,7 +15,7 @@ struct InventoryLinkView: View {
         Group {
             if !state.isConfigured || !serverMatches {
                 VStack(spacing: 0) {
-                    Text("Melde dich am Server dieses Labels an. Der Eintrag wird danach geöffnet.")
+                    Text(L10n.text("ui_sign_in_to_this_label_s_server_a702e7ad"))
                         .font(.callout)
                         .padding()
                     SettingsView(onboarding: true, initialServer: link.serverURL?.absoluteString)
@@ -23,9 +23,9 @@ struct InventoryLinkView: View {
             } else if !link.matches(organization: state.activeOrganization) {
                 NavigationStack {
                     VStack(spacing: 16) {
-                        Text("Dieses Label gehört zur Organisation \(link.organization ?? "").")
+                        Text(L10n.text("ui_this_label_belongs_to_organization_0_9e9ee47b", link.organization ?? ""))
                         ForEach(state.organizations.filter { link.matches(organization: $0) }) { organization in
-                            Button("Zu \(organization.name) wechseln") {
+                            Button(L10n.text("ui_switch_to_0_9f038d19", organization.name)) {
                                 Task {
                                     do { try await state.switchOrganization(to: organization.id) }
                                     catch { errorMessage = error.localizedDescription }
@@ -33,9 +33,9 @@ struct InventoryLinkView: View {
                             }
                             .disabled(state.isSwitchingOrganization)
                         }
-                        Text(errorMessage ?? "Wähle die passende Organisation. Falls sie fehlt, prüfe den Zugriff deines Kontos.")
+                        Text(errorMessage ?? L10n.text("ui_select_the_matching_organization_if_it_is_cfc1ee35"))
                             .foregroundStyle(.secondary)
-                        Button("Schließen") { dismiss() }
+                        Button(L10n.text("ui_close_b808f6e9")) { dismiss() }
                     }
                     .padding()
                 }
@@ -72,15 +72,15 @@ struct InventoryLinkView: View {
                     ResourceDetailView(resource: resource)
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
-                                Button("Schließen") { dismiss() }
+                                Button(L10n.text("ui_close_b808f6e9")) { dismiss() }
                             }
                         }
                 }
             }
         } else if let errorMessage {
-            ContentUnavailableView("Eintrag nicht verfügbar", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
+            ContentUnavailableView(L10n.text("ui_inventory_item_unavailable_9d3512e1"), systemImage: "exclamationmark.triangle", description: Text(errorMessage))
         } else {
-            ProgressView("Eintrag wird geöffnet …")
+            ProgressView(L10n.text("ui_opening_item_b8088698"))
         }
     }
 }

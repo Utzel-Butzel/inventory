@@ -138,6 +138,41 @@ poll/receipt cycle; it can print a queued job and is not a dry run.
 P-touch queues must support raw pass-through; see [P-touch setup](ptouch-printing.md).
 Do not send PDFs to the dedicated P-touch RAW queue.
 
+### PT-P710BT over Bluetooth on macOS
+
+Inventory can send its existing 180 × 360 dpi raster data over the printer's
+Bluetooth Classic SPP service using `macos_ptouch_bluetooth.m`. This is a custom
+transport, outside Brother's officially supported USB desktop workflow. A 24 mm
+single-label print was physically verified on macOS 26.6.2 on 2026-11-04.
+
+Pair the printer with macOS first. Build the helper using Xcode command-line tools:
+
+```sh
+clang -fobjc-arc -fblocks -framework Foundation -framework IOBluetooth \
+  scripts/print-agent/macos_ptouch_bluetooth.m -o inventory-ptouch-bluetooth
+```
+
+Install it in the agent's private directory and add `bluetoothAddress` (the
+printer's actual Bluetooth address) and `bluetoothHelper` (the executable's
+absolute path) to the local P-touch configuration. The existing `printer` value
+remains the stable journal/queue identity; Bluetooth jobs bypass CUPS. Remove
+both Bluetooth fields to return to the existing USB queue. Restart the agent
+after changing configuration, preserving its state directory and credentials.
+
+The helper discovers the SPP channel, checks tape width and printer errors, sends
+each job once, and waits for printer completion notifications. It only accepts
+Inventory's high-resolution raster grammar. Failed or timed-out transfers retain
+the agent's existing uncertain-outcome behavior and never retry printing. Large
+batches may exceed the bounded transport timeout; check physical output before
+resubmitting. Multiple-page Bluetooth output still needs a physical batch test.
+
+For a status-only connection test (no printing), run the helper with
+`DEVICE_ADDRESS status`. Grant macOS Bluetooth access if prompted. The printer
+must be on, in range, and available to this Mac. Test from the installed launchd
+context too, since background processes can have different Bluetooth permissions.
+Run `python3 tests/print-agent-test.py` and
+`node --experimental-strip-types --test tests/macos-ptouch-bluetooth.test.mjs`.
+
 ### Windows
 
 Install Python 3.10+ and a current [SumatraPDF](https://www.sumatrapdfreader.org/)
@@ -254,3 +289,11 @@ Elements plus vertical padding must fit the fixed label height. Printing rejects
 invalid heights and labels longer than 1000 mm; printer-specific limits still
 apply. Apply migration `0077_label_auto_layout.sql` with `npm run db:migrate`
 before using this version. Existing templates continue in free layout.
+
+### Negative element positions
+
+In free layout, X and Y can be negative (down to −100% of the label dimension),
+including when entered in millimetres, dragged, or moved with arrow keys.
+Elements can bleed beyond the left/top edge; the label clips them in preview
+and print. Width and height remain positive, and the existing right/bottom
+bounds still apply. Automatic row layout continues to calculate its positions.

@@ -1,0 +1,1 @@
+Inventar erfassen, Bestände buchen und Ausleihen verwalten – am eigenen Server.
