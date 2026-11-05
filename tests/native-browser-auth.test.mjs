@@ -161,6 +161,10 @@ test("browser SSO handoff uses real atomic PostgreSQL grants", { skip: !database
     const flow = await start(); await authorize(flow);
     assert.equal((await complete(flow, { csrf: nativeSecret() })).status, 403);
     assert.equal((await complete(flow, {}, { origin: "https://evil.test" })).status, 403);
+    assert.equal((await complete(flow, {}, { origin: "null" })).status, 403);
+    const missingOrigin = request("complete", form(flow), { form: true });
+    missingOrigin.headers.delete("origin");
+    assert.equal((await routes.complete.POST(missingOrigin)).status, 403);
     assert.equal((await complete(flow, { userId: randomUUID() })).status, 403);
     assert.equal((await complete(flow, { organizationId: randomUUID() })).status, 403);
     assert.equal((await tokens()).length, 0);
@@ -238,7 +242,9 @@ test("browser SSO handoff uses real atomic PostgreSQL grants", { skip: !database
     const html = await response.text();
     assert.ok(!html.includes("<img"));
     assert.ok(html.includes("&lt;img"));
-    assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+    // HTML form POSTs inherit this policy: no-referrer would turn Origin into
+    // "null" and make the same-origin confirmation fail in Safari/WebKit.
+    assert.equal(response.headers.get("referrer-policy"), "same-origin");
     assert.ok(response.headers.get("content-security-policy").includes("frame-ancestors 'none'"));
   });
   await t.test("password login shares the same user-bound token policy", async () => {

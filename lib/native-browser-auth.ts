@@ -152,7 +152,13 @@ export async function authorizeNativeBrowserLogin(request: Request) {
 <form method="post" action="${basePath}/complete"><input type="hidden" name="requestId" value="${escapeHTML(id)}"><input type="hidden" name="csrf" value="${escapeHTML(binding!)}"><input type="hidden" name="organizationId" value="${escapeHTML(identity.organizationId)}"><input type="hidden" name="userId" value="${escapeHTML(identity.userId)}">
 <button type="submit" name="decision" value="allow">${text("allow")}</button><button type="submit" name="decision" value="deny">${text("cancel")}</button></form>
 <p><small>${text("hint")}</small></p></main></body></html>`;
-  return new Response(html, { headers: { ...responseHeaders, "Content-Type": "text/html; charset=utf-8" } });
+  return new Response(html, { headers: {
+    ...responseHeaders,
+    // HTML form POSTs under no-referrer send Origin: null. Preserve the origin
+    // for our same-origin CSRF check while withholding referrers off-site.
+    "Referrer-Policy": "same-origin",
+    "Content-Type": "text/html; charset=utf-8",
+  } });
 }
 
 export async function completeNativeBrowserLogin(request: Request) {
