@@ -29,8 +29,15 @@ function Invoke-SpoolCommands($commands,$initial) {
             $good=$true
             foreach($ref in $command.refs){
                 $current=Read-SpoolSnapshot
-                if(!$initial.ContainsKey($ref) -or !$current.mapping.ContainsKey($ref)){$good=$false;continue}
-                try {Remove-PrintJob -PrinterName $config.printer -ID $current.mapping[$ref].ID -ErrorAction Stop} catch {$good=$false}
+                if(!$initial.ContainsKey($ref) -or !$current.mapping.ContainsKey($ref)){$record.reason='identity_missing';$good=$false;continue}
+                try {Remove-PrintJob -PrinterName $config.printer -ID $current.mapping[$ref].ID -ErrorAction Stop} catch {
+                    # The CIM print provider can deny LOCAL SERVICE even for its own jobs.
+                    # Use the same spooler API as printing, with unchanged process rights
+                    # and a second document identity check before requesting deletion.
+                    if(![InventoryRawPrinter]::Cancel($config.printer,[int]$current.mapping[$ref].ID,[string]$current.mapping[$ref].DocumentName)){
+                        $record.reason='native_cancel_failed';$good=$false
+                    }
+                }
             }
             if($good){$record.result='done'}
             Save-Json $path $record
