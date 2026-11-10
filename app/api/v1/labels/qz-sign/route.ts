@@ -1,3 +1,4 @@
+import { checkPrintMutation, printFailure } from "@/lib/shared-label-printing";
 import { hasQzSigningConfig, readQzSigningMaterial } from "@/lib/qz-signing-config";
 import { requireSessionPermission } from "@/lib/api-auth";
 import { isAllowedQzRequest, QZ_MAX_REQUEST_BYTES } from "@/lib/qz-signing-policy";
@@ -23,7 +24,17 @@ export async function POST(request: Request) {
   } catch {
     return new Response("Invalid request.", { status: 400 });
   }
-  if (!payload || typeof payload.request !== "string" || !isAllowedQzRequest(payload.request)) {
+  let manageQueue = false;
+  try {
+    const call = typeof payload?.request === "string" ? JSON.parse(payload.request).call : "";
+    if (["printers.startListening","printers.getStatus","printers.stopListening","printers.clearQueue"].includes(call)) {
+      const admin = await requireSessionPermission(request, "tokens.manage");
+      if (admin.response) return admin.response;
+      checkPrintMutation(request, admin.identity);
+      manageQueue = true;
+    }
+  } catch(error) { return printFailure(error); }
+  if (!payload || typeof payload.request !== "string" || !isAllowedQzRequest(payload.request, Date.now(), manageQueue)) {
     return new Response("Only PT-P710BT label printing is allowed.", { status: 403 });
   }
   try {

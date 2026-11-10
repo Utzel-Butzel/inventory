@@ -7,7 +7,7 @@ import { readyLabelDimensions } from "@/lib/label-print-dimensions";
 
 let connection: Promise<typeof import("qz-tray")> | undefined;
 
-async function connectQz() {
+export async function connectQz() {
   if (!connection) {
     connection = (async () => {
       const qz = (await import("qz-tray")).default;

@@ -31,5 +31,5 @@ export const labelWorkspaceMutationSchema = z.discriminatedUnion("action", [
 export type SavedLabel = z.infer<typeof savedLabelSchema>;
 export type LabelPreferences = z.infer<typeof labelPreferencesSchema>;
 export type LabelWorkspaceMutation = z.infer<typeof labelWorkspaceMutationSchema>;
-export type LabelWorkspace = { revision: number; labels: SavedLabel[]; preferences: LabelPreferences };
+export type LabelWorkspace = { preferenceScope?: string; revision: number; labels: SavedLabel[]; preferences: LabelPreferences };
 export const LABEL_WORKSPACE_LIMIT = 24 * 1024 * 1024;

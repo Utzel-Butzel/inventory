@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PrinterTelemetry } from "@/lib/printer-status";
 import { labelDocumentSchema, LABEL_DOCUMENT_LIMIT } from "@/lib/label-document";
 import {
   combinePtouchLabels,
@@ -49,14 +50,22 @@ export type SharedPrinter = {
   tape: PtouchTape;
   online: boolean;
   enabled: boolean;
+  telemetry?: PrinterTelemetry | null;
+  checkedAt?: string | null;
+  lastSeenAt?: string | null;
+  agentVersion?: number;
 };
 export type SharedPrintJob = {
   id: string;
   printerId: string;
+  printerName?: string;
   count: number;
   status: string;
   createdAt: string;
   spoolJobId: number | null;
+  cancelRequestedAt?: string | null;
+  cancelResult?: string | null;
+  canCancel?: boolean;
 };
 
 /** Only our fixed raster grammar is accepted. No embedded printer commands,

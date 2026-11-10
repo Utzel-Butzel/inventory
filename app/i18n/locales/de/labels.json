@@ -6,7 +6,7 @@
   "header": {
     "eyebrow": "Etiketten",
     "title": "Etiketten drucken",
-    "description": "Artikel auswählen, Etiketten anpassen und direkt oder später drucken."
+    "description": "Artikel auswählen, Etiketten anpassen und direkt oder später drucken. Die Druckliste ist im Konto gespeichert; das Druckziel gilt für diesen Browser."
   },
   "print": {
     "preparing": "Etiketten werden vorbereitet…",
@@ -433,15 +433,15 @@
     "error": "Etikett konnte nicht aktualisiert werden: {{detail}}"
   },
   "shared": {
-    "destination": "Freigegebener Drucker",
-    "printer": "Freigegebener Drucker",
+    "destination": "Drucker über Rechner (Büro / Mac)",
+    "printer": "Druckziel",
     "loading": "Drucker werden geladen…",
     "empty": "Noch kein gemeinsamer Drucker eingerichtet",
     "choose": "Bitte einen freigegebenen Drucker auswählen.",
-    "online": "Print Agent verbunden",
-    "offline": "Print Agent offline",
+    "online": "Rechner verbunden",
+    "offline": "Rechner offline",
     "help": "Der Print Agent am Drucker-Rechner übernimmt die Ausgabe. Auf diesem Gerät ist kein Druckertreiber nötig.",
-    "offlineHelp": "Der Print Agent ist nicht verbunden. Neue Aufträge warten höchstens 10 Minuten und verfallen danach.",
+    "offlineHelp": "Der Rechner ist nicht erreichbar. Prüfe, ob er eingeschaltet ist und der Print Agent läuft. Es wird nicht automatisch auf einen anderen Drucker gewechselt.",
     "sent": "Auftrag an die gemeinsame Druckwarteschlange übergeben. Den Fortschritt siehst du unten.",
     "jobs": "Deine letzten Druckaufträge",
     "job_one": "1 Etikett",
@@ -456,7 +456,8 @@
       "failed": "Fehlgeschlagen",
       "uncertain": "Ausgabe unklar – am Drucker prüfen",
       "cancelled": "Abgebrochen",
-      "expired": "Abgelaufen"
+      "expired": "Abgelaufen",
+      "completed": "Am Drucker abgeschlossen"
     },
     "setup": "Gemeinsamen Drucker einrichten",
     "setupHelp": "Drucker freigeben, Konfiguration herunterladen und den Inventory Print Agent auf dem Rechner beim Drucker einrichten. Ein Agent kann mehrere freigegebene Drucker bedienen.",
@@ -469,13 +470,59 @@
     "queueName": "Name im Betriebssystem",
     "location": "Standort",
     "maxWidth": "Max. Papierbreite (mm)",
-    "maxHeight": "Max. Papierhöhe (mm)"
+    "maxHeight": "Max. Papierhöhe (mm)",
+    "connection": "Drucker und Verbindung",
+    "device": "Druckerstatus",
+    "deviceUnknown": "Gerätename noch nicht gemeldet",
+    "check": "Erneut prüfen",
+    "checking": "Prüfung anfordern…",
+    "checkedAt": "Gerät zuletzt geprüft: {{time}}",
+    "neverChecked": "Gerät noch nicht geprüft",
+    "detectedTape": "{{tape}} mm Band vom Drucker gemeldet",
+    "configuredTape": "{{tape}} mm Band eingestellt · nicht am Gerät bestätigt",
+    "upgradeHelp": "Dieser Rechner nutzt einen älteren Print Agent. Für Gerätestatus und Abbruch nach der Übernahme den Agent auf Version 2 aktualisieren.",
+    "unknownHelp": "Der Rechner ist erreichbar, die Druckbereitschaft ist nicht bestätigt. Eine installierte Druckwarteschlange bestätigt keine Bluetooth-Verbindung.",
+    "devicePreference": "Das Druckziel wird nur in diesem Browser für dein Konto gespeichert. Büro und Mac können unterschiedliche Ziele verwenden.",
+    "localCancelHelp": "Beim Browserdruck oder QZ Tray laufende Aufträge im Druckdialog bzw. in der Druckwarteschlange dieses Rechners abbrechen.",
+    "printAt_one": "1 Etikett → {{name}}",
+    "printAt_other": "{{count}} Etiketten → {{name}}",
+    "macBluetooth": "Bluetooth direkt an einem Mac",
+    "bluetoothAddress": "Bluetooth-Adresse des PT-P710BT",
+    "bluetoothSetup": "Eine eigene Registrierung für den Mac verwenden. Die Konfiguration mit dem macOS-Installer installieren; dieser trägt den Pfad zum Bluetooth-Helfer ein. Der Mac benötigt Internet.",
+    "cancelRequested": "Abbruch angefordert · warte auf Rechner",
+    "cancelling": "Abbruch anfordern…",
+    "cancelHelp": "Wartende Aufträge werden entfernt. Bei laufenden Aufträgen wird die Übertragung bzw. der Auftrag in der lokalen Warteschlange gestoppt. Bereits übertragene Etiketten können noch ausgegeben werden.",
+    "legacyCancelHelp": "Dieser Auftrag wurde von einem älteren Agent übernommen. Bitte direkt in der Druckwarteschlange am Rechner abbrechen.",
+    "deviceState": {
+      "ready": "Druckbereit",
+      "busy": "Beschäftigt",
+      "unreachable": "Nicht erreichbar",
+      "error": "Drucker / Warteschlange prüfen",
+      "unknown": "Druckbereitschaft unbekannt",
+      "offline": "Rechner offline"
+    },
+    "transport": {
+      "bluetooth": "Bluetooth vor Ort",
+      "system": "System-Druckwarteschlange"
+    },
+    "cancelResult": {
+      "cancelled": "Vor der Übertragung abgebrochen.",
+      "stopped": "Stopp an die Druckwarteschlange gesendet. Bereits gedruckte oder gepufferte Etiketten prüfen.",
+      "uncertain": "Abbruch / Ausgabe nicht sicher bestätigt. Bitte am Drucker und in der Warteschlange prüfen.",
+      "too_late": "Der Druck war bereits abgeschlossen.",
+      "unsupported": "Dieser Druckweg unterstützt keinen nachträglichen Abbruch."
+    },
+    "downloadAgent": "Print Agent für Mac / Windows herunterladen",
+    "installHelp": "Archiv entpacken und config.json danebenlegen. Auf dem Mac im entpackten Ordner ausführen: python3 install_macos.py --config config.json --name paperlesspaper. Windows: Anleitung im Archiv. Jeder Rechner braucht eine eigene Registrierung. Updates erst nach Abschluss laufender Aufträge installieren.",
+    "checkRequested": "Prüfung angefordert. Das Ergebnis erscheint, sobald der Rechner antwortet.",
+    "lastSeen": "Letztes Lebenszeichen des Rechners: {{time}}",
+    "localDeviceName": "Lokaler Gerätename"
   },
   "workspace": {
     "busy": "Bitte warten, bis die Druckliste geladen oder gespeichert wurde.",
     "loading": "Druckliste wird geladen…",
     "saving": "Wird gespeichert…",
-    "saved": "Einstellungen und vorbereitete Etiketten sind in deinem Konto gespeichert.",
+    "saved": "Gespeichert",
     "unsaved": "Einstellungen noch nicht gespeichert.",
     "reload": "Neu laden",
     "retry": "Speichern wiederholen",
@@ -527,5 +574,55 @@
     "remoteSameSize": "Für einen Remote-Auftrag ein einheitliches Papierformat verwenden. Unterschiedliche Etiketten auf einen Bogen setzen oder getrennt senden.",
     "ptouchFit": "Die Etikettenmaße passen nicht zum bedruckbaren Bereich des gewählten P-touch-Bandes.",
     "prepareError": "Druckvorbereitung fehlgeschlagen: {{detail}}"
+  },
+  "spool": {
+    "title": "Druckwarteschlange am Rechner",
+    "remote": "Remote · {{name}}",
+    "local": "Dieser Computer · QZ · {{name}}",
+    "remoteHelp": "Zeigt die Betriebssystem-Warteschlange einschließlich Aufträgen aus anderen Programmen. Entfernt werden nur die hier ausgewählten Aufträge.",
+    "qzHelp": "QZ zeigt gemeldete Auftragsereignisse, keine garantiert vollständige Warteschlange. Ein leerer Verlauf bedeutet nicht, dass die Warteschlange leer ist. Zum Abbrechen ist QZ Tray 2.2.4 oder neuer erforderlich.",
+    "stale": "Keine aktuelle Verbindung zum Agenten",
+    "unsupported": "Keine Systemwarteschlange verfügbar. Agent aktualisieren und Betriebssystemrechte prüfen. Direktes Bluetooth verwendet keine Systemwarteschlange.",
+    "current": "Warteschlange aktuell",
+    "connect": "QZ-Warteschlange verbinden",
+    "listening": "QZ-Statusverbindung aktiv",
+    "connecting": "QZ-Verbindung wird hergestellt …",
+    "sent": "Abbruch an QZ übergeben. Bereits gedruckte oder an den Drucker übertragene Daten lassen sich nicht zurückholen.",
+    "untitled": "Ohne Titel",
+    "empty": "Keine wartenden Aufträge",
+    "clearShown": "Angezeigte Aufträge entfernen",
+    "clear": "Gesamte QZ-Warteschlange leeren",
+    "confirmTitle": "Druckaufträge wirklich abbrechen?",
+    "confirmHelp": "Das betrifft möglicherweise Dokumente anderer Personen oder Programme. Bereits übertragene Seiten können weitergedruckt werden.",
+    "count": "Ausgewählte Aufträge: {{count}}",
+    "all": "Alle Aufträge dieser QZ-Warteschlange – auch solche, die hier nicht angezeigt werden.",
+    "confirm": "Jetzt abbrechen",
+    "back": "Zurück",
+    "command": {
+      "queued": "Abbruch wartet auf den Agenten.",
+      "claimed": "Agent bearbeitet den Abbruch.",
+      "done": "Löschbefehle vom Betriebssystem angenommen. Bereits übertragene Seiten können weitergedruckt werden.",
+      "uncertain": "Abbruch nicht vollständig bestätigt. Warteschlange erneut prüfen.",
+      "expired": "Agent hat den Abbruch nicht rechtzeitig abgeholt. Bitte erneut versuchen."
+    },
+    "unavailable": "Systemwarteschlange nicht verfügbar"
+  },
+  "helpLabel": "Weitere Informationen",
+  "route": {
+    "browser": {
+      "title": "Browser / PDF",
+      "subtitle": "Druckdialog dieses Geräts",
+      "help": "Öffnet den Druckdialog dieses Browsers. Dort wählst du einen Drucker oder speicherst als PDF."
+    },
+    "ptouch": {
+      "title": "P-touch lokal",
+      "subtitle": "An diesem Computer · QZ Tray",
+      "help": "Druckt direkt auf einen PT-P710BT, der an diesem Computer als Systemdrucker eingerichtet ist. QZ Tray muss hier laufen. Für natives Bluetooth auf dem Mac wähle „Über Rechner“ und deinen Mac-Agenten."
+    },
+    "shared": {
+      "title": "Über Rechner",
+      "subtitle": "Büro-PC oder Mac · Print Agent",
+      "help": "Sendet den Auftrag an den ausgewählten Rechner. Dort muss der Print Agent laufen. Im Büro wählst du den Büro-PC, unterwegs den Agenten auf deinem Mac – auch für natives Bluetooth."
+    }
   }
 }

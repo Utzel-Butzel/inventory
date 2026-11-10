@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const auth = await requireSessionPermission(request, "labels.read");
   if (auth.response) return auth.response;
   const rows = await db.execute(
-    sql`SELECT id,name,kind,location,max_width_mm,max_height_mm,tape_width,enabled,last_seen_at>now()-interval '45 seconds' AS online FROM label_printers WHERE organization_id=${auth.identity.organizationId} AND enabled=true ORDER BY name`,
+    sql`SELECT id,name,kind,location,max_width_mm,max_height_mm,tape_width,enabled,agent_version,agent_status,status_checked_at,last_seen_at,last_seen_at>now()-interval '45 seconds' AS online FROM label_printers WHERE organization_id=${auth.identity.organizationId} AND enabled=true ORDER BY name`,
   );
   return Response.json(
     {
@@ -26,6 +26,8 @@ export async function GET(request: Request) {
         tape: Number(p.tape_width),
         enabled: p.enabled,
         online: !!p.online,
+        telemetry: p.agent_status ?? null, checkedAt: p.status_checked_at ?? null,
+        lastSeenAt: p.last_seen_at ?? null, agentVersion: Number(p.agent_version),
       })),
     },
     { headers: { "Cache-Control": "no-store" } },

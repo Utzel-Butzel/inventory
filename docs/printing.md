@@ -215,6 +215,83 @@ label sizes on a sheet or submit separate jobs. The browser/PDF preview retains
 the prepared list because opening a dialog does not prove that paper was printed.
 The existing direct P-touch flow clears its list after accepted submission.
 
+## Office PC and portable Mac destinations
+
+Apply migration `0081_printer_status_and_cancellation.sql`, deploy the server,
+then update the agents. Older agents continue printing but expose only their
+heartbeat and cannot stop jobs after claiming them.
+
+Register **Büro Dresden · über Büro-PC** and **Mac · Bluetooth vor Ort** as separate
+printer entries with separate credentials. Use the Windows RAW queue on the
+Bluetooth SPP port for the office destination. For the Mac, select P-touch and
+**Bluetooth directly on a Mac** during setup and enter the paired printer's
+Bluetooth address. Download the agent archive and the new `config.json` from the
+same Inventory website. Do not copy the office token onto the Mac.
+
+Extract the archive, place `config.json` alongside the files, and on macOS run:
+
+```sh
+python3 install_macos.py --config config.json --name paperlesspaper
+```
+
+Python 3.10+ and Xcode command-line tools are required. The installer compiles the
+Bluetooth helper and replaces the configuration's helper-path placeholder. It
+installs a private per-user LaunchAgent and starts it, which can consume queued
+jobs. Use a distinct installation name for each website. It preserves journals
+and refuses updates when a pending journal exists. Allow macOS Bluetooth access
+for the installed process if prompted. Do not run two agents for one registration.
+The physical Bluetooth connection is local; this queue-based workflow still
+requires internet on the Mac. Disconnect the office Bluetooth connection before
+using the same physical printer with the Mac. Per-device locks prevent the Mac's
+own registered queues from probing during another local Bluetooth transfer.
+
+Print destinations are remembered in this browser, separately for each user and
+organization. A new browser starts with the system print dialog instead of
+inheriting a destination from another computer. Prepared labels still sync through
+the account. The print button names the selected destination. There is no automatic
+failover. Previously selected account-wide destinations are not silently migrated.
+
+The status panel separates the computer heartbeat from a device observation:
+
+- **Ready** requires a fresh device status response, not a queue listing.
+- The macOS Bluetooth transport reports device name, loaded tape and error state.
+- Windows/CUPS queue discovery can report queue problems, but otherwise reports
+  **readiness unknown**. A healthy queue does not prove Bluetooth reachability.
+- Device observations expire after 45 seconds independently of the heartbeat.
+  **Check again** requests a new probe, coalesced to once per ten seconds.
+- New submissions are rejected when the computer is offline or a fresh observation
+  reports unreachable/error or a different loaded tape. An idempotent retry of an
+  already accepted job still returns the existing receipt.
+
+### Cancelling jobs
+
+Your recent jobs remain visible with their destination and an **Abort** action.
+A queued job is removed atomically. For a version 2 agent, cancellation after claim
+is checked before a one-time dispatch authorization and during transmission. A
+lost start authorization response never causes an automatic print retry.
+
+For Bluetooth, stopping terminates the transport process; bytes already received
+by the printer may still print. A confirmed device completion is shown separately
+from spool acceptance. For CUPS/Windows, submitted jobs with a durable local spool
+receipt can be stopped for ten minutes. The agent uses only that local receipt's
+queue and job ID and checks the OS job title against the Inventory job UUID;
+reused spool IDs cannot target an unrelated document. The server cannot supply
+arbitrary spool destinations. Windows
+uses [SetJob / JOB_CONTROL_DELETE](https://learn.microsoft.com/en-us/windows/win32/printdocs/setjob),
+CUPS uses [cancel destination-id](https://www.cups.org/doc/man-cancel.html).
+
+The UI shows **Cancellation requested** until the agent responds. Only jobs stopped
+before dispatch are shown as cleanly cancelled. Stopping a spool job or transfer
+requires inspecting any already printed or buffered labels; it is not proof of
+zero output. Ambiguous cancellation results and lost receipts never repeat the
+physical stop/print operation automatically. Expired, unacknowledged cancellation
+requests become uncertain. A cancellation never affects another user's jobs.
+
+For browser-dialog/QZ printing, use the operating system's print queue. Those
+local jobs have no shared server-side job identity. Windows PDF printing through
+Sumatra can stop its active process, but cannot reliably cancel an already
+submitted spool job without a spool ID.
+
 ## Status and retry behavior
 
 - **Queued**: waiting for the agent. Can be cancelled; expires after 10 minutes.
@@ -297,3 +374,14 @@ including when entered in millimetres, dragged, or moved with arrow keys.
 Elements can bleed beyond the left/top edge; the label clips them in preview
 and print. Width and height remain positive, and the existing right/bottom
 bounds still apply. Automatic row layout continues to calculate its positions.
+
+
+### Operating system queue administration
+
+The label page separates Inventory job history from the computer's OS queue. Queue administration requires `tokens.manage`, since document titles and owners from other applications may be visible.
+
+- Local QZ: explicitly connect the selected PT-P710BT queue to receive job events. QZ events are not a complete queue enumeration. Individual reported jobs or the entire named queue can be cancelled after confirmation. Queue clearing requires QZ Tray 2.2.4 or later. Completed events remain history; a successful API call does not prove physical cancellation.
+- Remote: updated Python and PowerShell agents report the configured Windows/CUPS queue. Cancel one job or remove the displayed snapshot after confirmation. No blanket purge is used remotely: later arrivals are preserved. References include the job ID, title, owner and submission time; agents recheck them before deletion. Durable command receipts prevent replay after a lost response or restart.
+- Snapshots expire after 45 seconds, commands after 60 seconds. Unknown/unavailable queues disable administration. OS permissions may prevent enumerating or deleting other users' jobs. Direct native Bluetooth has no OS spool queue; use Inventory job cancellation for that transport.
+
+Apply migrations `0081` and `0082` before deploying these routes. Reinstall/update the agent bundle; Python installations require `spool_queue.py` alongside the agent, and the Windows PowerShell agent requires `spool-queue.ps1`. Existing agents continue printing but cannot provide this queue view. No incoming ports on the office PC are needed; the agent polls the server over HTTPS.

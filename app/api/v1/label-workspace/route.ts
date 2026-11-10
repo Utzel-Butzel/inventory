@@ -1,6 +1,6 @@
 import { requireSessionPermission } from "@/lib/api-auth";
 import { boundedPrintJson } from "@/lib/shared-label-print-contract";
-import { checkPrintMutation, printFailure } from "@/lib/shared-label-printing";
+import { checkPrintMutation, printFailure, printHash } from "@/lib/shared-label-printing";
 import { LABEL_WORKSPACE_LIMIT, labelWorkspaceMutationSchema } from "@/lib/label-workspace-contract";
 import { readLabelWorkspace, updateLabelWorkspace } from "@/lib/label-workspace";
 export const runtime = "nodejs";
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   if (auth.response) return auth.response;
   if (!auth.identity.userId) return Response.json({ error: "User session required." }, { status: 403 });
   try {
-    return Response.json(await readLabelWorkspace(auth.identity.organizationId, auth.identity.userId), { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ ...await readLabelWorkspace(auth.identity.organizationId, auth.identity.userId), preferenceScope: printHash(`${auth.identity.organizationId}:${auth.identity.userId}`) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return printFailure(error); }
 }
 export async function PATCH(request: Request) {

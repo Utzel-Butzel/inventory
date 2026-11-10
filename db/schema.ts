@@ -5029,6 +5029,12 @@ export const labelPrinters = pgTable("label_printers", {
   enabled: boolean("enabled").notNull().default(true),
   tapeWidth: doublePrecision("tape_width").notNull().default(24),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  agentVersion: integer("agent_version").notNull().default(1),
+  agentStatus: jsonb("agent_status"),
+  statusCheckedAt: timestamp("status_checked_at", { withTimezone: true }),
+  statusRequestedAt: timestamp("status_requested_at", { withTimezone: true }),
+  spoolSnapshot: jsonb("spool_snapshot"),
+  spoolCheckedAt: timestamp("spool_checked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export const labelPrintJobs = pgTable("label_print_jobs", {
@@ -5044,6 +5050,10 @@ export const labelPrintJobs = pgTable("label_print_jobs", {
   payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
   status: varchar("status", { length: 16 }).notNull().default("queued"),
   claimId: uuid("claim_id"),
+  dispatchStartedAt: timestamp("dispatch_started_at", { withTimezone: true }),
+  cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+  cancelResult: varchar("cancel_result", { length: 24 }),
+  cancellable: boolean("cancellable").notNull().default(false),
   spoolJobId: integer("spool_job_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull().default(sql`now() + interval '10 minutes'`),
@@ -5054,3 +5064,13 @@ export const labelPrintJobs = pgTable("label_print_jobs", {
   index("label_print_jobs_org_idx").on(table.organizationId, table.createdAt),
   uniqueIndex("label_print_jobs_claim_idx").on(table.printerId, table.claimId).where(sql`${table.claimId} IS NOT NULL`),
 ]);
+
+export const labelSpoolCommands = pgTable("label_spool_commands", {
+  id: uuid("id").primaryKey(),
+  printerId: uuid("printer_id").notNull().references(() => labelPrinters.id, { onDelete: "cascade" }),
+  refs: jsonb("refs").notNull(),
+  createdBy: text("created_by").notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("queued"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull().default(sql`now() + interval '60 seconds'`),
+});

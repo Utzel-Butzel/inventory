@@ -23,6 +23,7 @@ foreach($sid in @('S-1-5-18','S-1-5-19','S-1-5-32-544')) {
     $acl.AddAccessRule($rule)
 }
 Set-Acl -LiteralPath $target -AclObject $acl
+Copy-Item -LiteralPath (Join-Path $Source 'spool-queue.ps1') -Destination $target -Force
 Copy-Item -LiteralPath (Join-Path $Source 'InventoryPrintAgent.ps1') -Destination $target -Force
 Copy-Item -LiteralPath (Join-Path $Source 'config.json') -Destination $target -Force
 $config=Get-Content -LiteralPath (Join-Path $target 'config.json') -Raw | ConvertFrom-Json

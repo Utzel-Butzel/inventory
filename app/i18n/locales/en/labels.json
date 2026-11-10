@@ -6,7 +6,7 @@
   "header": {
     "eyebrow": "Label studio",
     "title": "Print labels that scan.",
-    "description": "Choose items, customize labels and print now or later."
+    "description": "Select items, customize labels and print now or later. Your print list is saved to your account; the destination is specific to this browser."
   },
   "print": {
     "preparing": "Preparing labels…",
@@ -433,15 +433,15 @@
     "error": "Could not update label: {{detail}}"
   },
   "shared": {
-    "destination": "Shared printer",
-    "printer": "Shared printer",
+    "destination": "Printer via computer (office / Mac)",
+    "printer": "Print destination",
     "loading": "Loading printers…",
     "empty": "No shared printer configured yet",
     "choose": "Select a shared printer.",
-    "online": "Print Agent connected",
-    "offline": "Print Agent offline",
+    "online": "Computer connected",
+    "offline": "Computer offline",
     "help": "Print Agent on the printer computer handles output. This device needs no printer driver.",
-    "offlineHelp": "The print agent is disconnected. New jobs wait for up to 10 minutes and then expire.",
+    "offlineHelp": "The computer is unreachable. Check that it is awake and the print agent is running. Printing never switches to another destination automatically.",
     "sent": "Submitted to the shared print queue. Track progress below.",
     "jobs": "Your recent print jobs",
     "job_one": "1 label",
@@ -456,7 +456,8 @@
       "failed": "Failed",
       "uncertain": "Output uncertain – check printer",
       "cancelled": "Cancelled",
-      "expired": "Expired"
+      "expired": "Expired",
+      "completed": "Completed by printer"
     },
     "setup": "Set up shared printer",
     "setupHelp": "Register the printer, download its configuration and set up Inventory Print Agent on the computer connected to the printer. One agent can serve several shared printers.",
@@ -469,13 +470,59 @@
     "queueName": "Operating system queue name",
     "location": "Location",
     "maxWidth": "Max. paper width (mm)",
-    "maxHeight": "Max. paper height (mm)"
+    "maxHeight": "Max. paper height (mm)",
+    "connection": "Printer and connection",
+    "device": "Printer status",
+    "deviceUnknown": "Device name not reported yet",
+    "check": "Check again",
+    "checking": "Requesting check…",
+    "checkedAt": "Device last checked: {{time}}",
+    "neverChecked": "Device not checked yet",
+    "detectedTape": "{{tape}} mm tape reported by printer",
+    "configuredTape": "{{tape}} mm tape configured · not verified on device",
+    "upgradeHelp": "This computer uses an older print agent. Update to version 2 for device status and cancellation after dispatch.",
+    "unknownHelp": "The computer is reachable but printer readiness is unconfirmed. An installed print queue does not verify a Bluetooth connection.",
+    "devicePreference": "The destination is saved only in this browser for your account. Your office computer and Mac can use different destinations.",
+    "localCancelHelp": "For browser printing or QZ Tray, cancel running jobs in the print dialog or this computer’s print queue.",
+    "printAt_one": "1 label → {{name}}",
+    "printAt_other": "{{count}} labels → {{name}}",
+    "macBluetooth": "Bluetooth directly on a Mac",
+    "bluetoothAddress": "PT-P710BT Bluetooth address",
+    "bluetoothSetup": "Use a separate registration for the Mac. Install the configuration with the macOS installer, which sets the Bluetooth helper path. The Mac requires internet.",
+    "cancelRequested": "Cancellation requested · waiting for computer",
+    "cancelling": "Requesting cancellation…",
+    "cancelHelp": "Waiting jobs are removed. For running jobs the transfer or local spool job is stopped. Labels already transferred to the printer may still print.",
+    "legacyCancelHelp": "An older agent has claimed this job. Cancel it in the print queue on that computer.",
+    "deviceState": {
+      "ready": "Ready to print",
+      "busy": "Busy",
+      "unreachable": "Unreachable",
+      "error": "Check printer / queue",
+      "unknown": "Readiness unknown",
+      "offline": "Computer offline"
+    },
+    "transport": {
+      "bluetooth": "Bluetooth at this computer",
+      "system": "System print queue"
+    },
+    "cancelResult": {
+      "cancelled": "Cancelled before transfer.",
+      "stopped": "Stop sent to the print queue. Check for already printed or buffered labels.",
+      "uncertain": "Cancellation / output could not be confirmed. Check the printer and local queue.",
+      "too_late": "Printing had already completed.",
+      "unsupported": "This print path does not support cancellation after submission."
+    },
+    "downloadAgent": "Download print agent for Mac / Windows",
+    "installHelp": "Extract the archive and put config.json beside the files. On Mac, run in that folder: python3 install_macos.py --config config.json --name paperlesspaper. On Windows, follow the included guide. Register each computer separately. Install updates after running jobs finish.",
+    "checkRequested": "Check requested. The result will appear when the computer responds.",
+    "lastSeen": "Computer last seen: {{time}}",
+    "localDeviceName": "Local device name"
   },
   "workspace": {
     "busy": "Wait until the print list has loaded or saved.",
     "loading": "Loading print list…",
     "saving": "Saving…",
-    "saved": "Preferences and prepared labels are saved to your account.",
+    "saved": "Saved",
     "unsaved": "Preferences have not been saved yet.",
     "reload": "Reload",
     "retry": "Retry saving",
@@ -527,5 +574,55 @@
     "remoteSameSize": "Remote jobs require a single paper size. Place mixed labels on a sheet or send separate jobs.",
     "ptouchFit": "The label dimensions do not fit the printable area of the selected P-touch tape.",
     "prepareError": "Unable to prepare printing: {{detail}}"
+  },
+  "spool": {
+    "title": "Computer print queue",
+    "remote": "Remote · {{name}}",
+    "local": "This computer · QZ · {{name}}",
+    "remoteHelp": "Shows the operating system queue, including jobs from other applications. Only the selected jobs are removed.",
+    "qzHelp": "QZ shows reported job events, not a guaranteed complete queue. An empty history does not mean the queue is empty. Cancellation requires QZ Tray 2.2.4 or later.",
+    "stale": "No current agent connection",
+    "unsupported": "System queue unavailable. Update the agent and check operating system permissions. Direct Bluetooth does not use a system queue.",
+    "current": "Queue up to date",
+    "connect": "Connect QZ queue",
+    "listening": "QZ status connection active",
+    "connecting": "Connecting to QZ …",
+    "sent": "Cancellation sent to QZ. Data already printed or transferred to the printer cannot be recalled.",
+    "untitled": "Untitled",
+    "empty": "No queued jobs",
+    "clearShown": "Remove displayed jobs",
+    "clear": "Clear entire QZ queue",
+    "confirmTitle": "Cancel print jobs?",
+    "confirmHelp": "This may affect documents from other people or applications. Pages already transferred may continue printing.",
+    "count": "Selected jobs: {{count}}",
+    "all": "All jobs in this QZ queue, including jobs not displayed here.",
+    "confirm": "Cancel jobs now",
+    "back": "Back",
+    "command": {
+      "queued": "Cancellation waiting for agent.",
+      "claimed": "Agent processing cancellation.",
+      "done": "Operating system accepted removal commands. Pages already transferred may continue printing.",
+      "uncertain": "Cancellation not fully confirmed. Check the queue again.",
+      "expired": "Agent did not collect cancellation in time. Please try again."
+    },
+    "unavailable": "System queue unavailable"
+  },
+  "helpLabel": "More information",
+  "route": {
+    "browser": {
+      "title": "Browser / PDF",
+      "subtitle": "This device’s print dialog",
+      "help": "Opens this browser’s print dialog. Choose a printer or save as PDF there."
+    },
+    "ptouch": {
+      "title": "Local P-touch",
+      "subtitle": "On this computer · QZ Tray",
+      "help": "Prints directly to a PT-P710BT configured as a system printer on this computer. QZ Tray must be running here. For native Bluetooth on a Mac, choose “Via computer” and your Mac agent."
+    },
+    "shared": {
+      "title": "Via computer",
+      "subtitle": "Office PC or Mac · Print Agent",
+      "help": "Sends the job to the selected computer, which must be running the Print Agent. Select the office PC at work or your Mac agent on the go, including for native Bluetooth."
+    }
   }
 }

@@ -71,3 +71,24 @@ test("body limit applies without content length and to misleading headers", asyn
     { a: 1 },
   );
 });
+
+import { effectivePrinterState, printerTelemetrySchema } from '../lib/printer-status.ts';
+import { devicePrintPreferenceKey, devicePrintPreferencesSchema } from '../lib/label-device-preferences.ts';
+test('a heartbeat never substitutes for a fresh printer observation', () => {
+  const now=Date.now();
+  const status=printerTelemetrySchema.parse({host:'Mac',transport:'bluetooth',device:'PT-P710BT',state:'ready',tape:24,detail:'none',cancellation:'transfer'});
+  assert.equal(effectivePrinterState(true,status,new Date(now-2000).toISOString(),now),'ready');
+  assert.equal(effectivePrinterState(true,status,new Date(now-46000).toISOString(),now),'unknown');
+  assert.equal(effectivePrinterState(false,status,new Date(now).toISOString(),now),'offline');
+  assert.equal(effectivePrinterState(true,null,null,now),'unknown');
+  assert.equal(effectivePrinterState(true,status,'bad date',now),'unknown');
+  assert.equal(printerTelemetrySchema.safeParse({...status,command:'shell'}).success,false);
+});
+test('browser destinations are isolated by account/organization scope and validated', () => {
+  assert.notEqual(devicePrintPreferenceKey('account-a-org-a'),devicePrintPreferenceKey('account-a-org-b'));
+  assert.notEqual(devicePrintPreferenceKey('account-a-org-a'),devicePrintPreferenceKey('account-b-org-a'));
+  const prefs={printTarget:'shared',printer:'',sharedPrinter:crypto.randomUUID(),tape:24};
+  assert.equal(devicePrintPreferencesSchema.safeParse(prefs).success,true);
+  assert.equal(devicePrintPreferencesSchema.safeParse({...prefs,tape:99}).success,false);
+  assert.equal(devicePrintPreferencesSchema.safeParse({...prefs,sharedPrinter:'another-host'}).success,false);
+});

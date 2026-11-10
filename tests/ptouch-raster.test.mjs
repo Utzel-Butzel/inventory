@@ -256,3 +256,15 @@ test("inverted product photos retain the original optimization and reverse only 
     }
   }
 });
+
+
+test("QZ queue signing requires management scope and a single named P-touch queue", () => {
+  const now = Date.now();
+  const request = (call, params) => JSON.stringify({call, params, timestamp: now});
+  const valid = request("printers.clearQueue", {printerName:"Brother PT-P710BT",jobId:12});
+  assert.equal(isAllowedQzRequest(valid,now),false);
+  assert.equal(isAllowedQzRequest(valid,now,true),true);
+  for (const params of [{}, {printerName:"Unrelated printer"}, {printerName:"PT-P710BT",jobId:-1}, {printerName:"PT-P710BT",command:"purge"}]) assert.equal(isAllowedQzRequest(request("printers.clearQueue",params),now,true),false);
+  assert.equal(isAllowedQzRequest(request("printers.startListening",{printerNames:["PT-P710BT"]}),now,true),true);
+  for(const params of [{printerNames:[null]}, {printerNames:[]}, {printerNames:["PT-P710BT"],jobData:true}]) assert.equal(isAllowedQzRequest(request("printers.startListening",params),now,true),false);
+});

@@ -4,6 +4,7 @@ import { layoutLabelPages } from "@/lib/label-document";
 import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { effectivePrinterState, printerTelemetrySchema } from "@/lib/printer-status";
 import type { RequestIdentity } from "@/lib/api-auth";
 import {
   PrintBodyError,
@@ -38,10 +39,14 @@ export const printFailure = (error: unknown) =>
 export const jobDto = (row: Record<string, unknown>) => ({
   id: row.id,
   printerId: row.printer_id,
+  printerName: row.printer_name,
   count: row.label_count,
   status: row.status,
   createdAt: row.created_at,
   spoolJobId: row.spool_job_id ?? null,
+  cancelRequestedAt: row.cancel_requested_at ?? null,
+  cancelResult: row.cancel_result ?? null,
+  canCancel: !row.cancel_requested_at && (row.status === "queued" || (row.cancellable === true && (row.status === "claimed" || (row.status === "submitted" && row.spool_job_id != null && Date.now() - new Date(String(row.created_at)).getTime() < 600_000)))),
 });
 export function checkPrintMutation(
   request: Request,
@@ -120,6 +125,12 @@ export async function enqueueSharedPrint(
         throw new PrintFailure("Print request ID already used.", 409);
       return jobDto(existing);
     }
+    const observation = printerTelemetrySchema.safeParse(printer.agent_status);
+    const deviceState = effectivePrinterState(!!printer.last_seen_at && Date.now() - new Date(String(printer.last_seen_at)).getTime() < 45_000, observation.success ? observation.data : null, printer.status_checked_at ? String(printer.status_checked_at) : null);
+    if (["offline", "unreachable", "error"].includes(deviceState))
+      throw new PrintFailure("Printer is not reachable. Check the selected computer and printer before submitting.", 409);
+    if (observation.success && observation.data.tape != null && ["ready", "busy"].includes(deviceState) && "tape" in input && input.tape !== observation.data.tape)
+      throw new PrintFailure("The tape reported by the printer does not match the label.", 409);
     await tx.execute(
       sql`UPDATE label_print_jobs SET status='expired',payload=NULL,finished_at=now() WHERE printer_id=${input.printerId} AND status='queued' AND expires_at<now()`,
     );
@@ -148,10 +159,10 @@ export async function agentPrinter(request: Request) {
   if (!printer) throw new PrintFailure("Unauthorized", 401);
   return printer;
 }
-export async function claimSharedPrint(printerId: string, claimId: string) {
+export async function claimSharedPrint(printerId: string, claimId: string, version = 1) {
   return db.transaction(async (tx) => {
     const [printer] = await tx.execute(
-      sql`UPDATE label_printers SET last_seen_at=now() WHERE id=${printerId} AND enabled=true RETURNING id`,
+      sql`UPDATE label_printers SET last_seen_at=now(),agent_version=${version},agent_status=CASE WHEN ${version}=1 THEN NULL ELSE agent_status END WHERE id=${printerId} AND enabled=true RETURNING id`,
     );
     if (!printer) throw new PrintFailure("Printer disabled.", 403);
     await tx.execute(
@@ -159,7 +170,7 @@ export async function claimSharedPrint(printerId: string, claimId: string) {
     );
     // Never reissue a job after dispatch. A crash may have happened after printing.
     await tx.execute(
-      sql`UPDATE label_print_jobs SET status='uncertain',payload=NULL,finished_at=now() WHERE printer_id=${printerId} AND status='claimed' AND claimed_at<now()-interval '5 minutes'`,
+      sql`UPDATE label_print_jobs SET status='uncertain',cancel_result=CASE WHEN cancel_requested_at IS NOT NULL THEN 'uncertain' ELSE cancel_result END,payload=NULL,finished_at=now() WHERE printer_id=${printerId} AND status='claimed' AND claimed_at<now()-interval '5 minutes'`,
     );
     await tx.execute(
       sql`DELETE FROM label_print_jobs WHERE printer_id=${printerId} AND created_at<now()-interval '7 days' AND status NOT IN ('queued','claimed')`,
@@ -185,8 +196,40 @@ export async function claimSharedPrint(printerId: string, claimId: string) {
     );
     if (!next) return null;
     const [job] = await tx.execute(
-      sql`UPDATE label_print_jobs SET status='claimed',claim_id=${claimId},claimed_at=now() WHERE id=${next.id} RETURNING *`,
+      sql`UPDATE label_print_jobs SET status='claimed',claim_id=${claimId},claimed_at=now(),cancellable=${version >= 2} WHERE id=${next.id} RETURNING *`,
     );
     return { id: job.id, data: job.payload, sha256: job.payload_hash, format: job.format, pageWidthMm: job.page_width_mm, pageHeightMm: job.page_height_mm };
+  });
+}
+
+export async function cancelSharedPrint(identity: RequestIdentity, id: string) {
+  const [row] = await db.execute(sql`UPDATE label_print_jobs SET
+    status=CASE WHEN status='queued' THEN 'cancelled' ELSE status END,
+    payload=CASE WHEN status='queued' THEN NULL ELSE payload END,
+    finished_at=CASE WHEN status='queued' THEN now() ELSE finished_at END,
+    cancel_requested_at=COALESCE(cancel_requested_at,now()),
+    cancel_result=CASE WHEN status='queued' THEN 'cancelled' ELSE cancel_result END
+    WHERE id=${id} AND organization_id=${identity.organizationId} AND created_by=${identity.subject}
+      AND (status='queued' OR (cancellable=true AND (status='claimed' OR (status='submitted' AND spool_job_id IS NOT NULL AND created_at>now()-interval '10 minutes'))) OR cancel_requested_at IS NOT NULL)
+    RETURNING *`);
+  if (!row) throw new PrintFailure("This job cannot be stopped remotely or was not found.", 409);
+  return jobDto(row);
+}
+
+/** Serialize the last pre-print check with cancellation; never authorize a second start. */
+export async function controlSharedPrint(printerId: string, id: string, claimId: string, action: "check" | "start") {
+  return db.transaction(async tx => {
+    const [job] = await tx.execute(sql`SELECT * FROM label_print_jobs WHERE id=${id} AND printer_id=${printerId} AND claim_id=${claimId} FOR UPDATE`);
+    if (!job) throw new PrintFailure("Claim not found.", 404);
+    if (job.cancel_requested_at && !job.dispatch_started_at && job.status === "claimed") {
+      await tx.execute(sql`UPDATE label_print_jobs SET status='cancelled',cancel_result='cancelled',payload=NULL,finished_at=now() WHERE id=${id}`);
+      return { cancel: true, mayPrint: false, status: "cancelled" };
+    }
+    let mayPrint = false;
+    if (action === "start" && job.status === "claimed" && !job.cancel_requested_at && !job.dispatch_started_at) {
+      await tx.execute(sql`UPDATE label_print_jobs SET dispatch_started_at=now() WHERE id=${id}`);
+      mayPrint = true;
+    }
+    return { cancel: !!job.cancel_requested_at, mayPrint, status: job.status };
   });
 }

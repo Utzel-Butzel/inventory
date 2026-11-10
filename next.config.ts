@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   // PDFKit resolves its bundled font metrics relative to its Node module.
   serverExternalPackages: ["pdfkit"],
   outputFileTracingIncludes: {
+    "/api/v1/label-printers/agent": ["./scripts/print-agent/{spool_queue.py,spool-queue.ps1,inventory_print_agent.py,macos_ptouch_bluetooth.m,install_macos.py,InventoryPrintAgent.ps1,Install-InventoryPrintAgent.ps1,Install-SystemPrintAgent.ps1,README.md}"],
     "/api/v1/**/handovers": ["./node_modules/pdfkit/js/data/**/*"],
     "/api/v1/ai/count/3d": ["./services/bulk-3d/{run_job,worker,geometry}.py"],
   },
