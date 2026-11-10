@@ -42,7 +42,7 @@ if ($ValidateJournal) {
     exit 0
 }
 function Request-Agent($path, $body) {
-    Invoke-RestMethod -Uri ($config.server.TrimEnd('/') + '/api/v1/label-print-agent/' + $path) -Method Post -Headers @{Authorization=('Bearer ' + $config.token)} -ContentType 'application/json' -Body ($body | ConvertTo-Json -Compress) -TimeoutSec 25
+    Invoke-RestMethod -Uri ($config.server.TrimEnd('/') + '/api/v1/label-print-agent/' + $path) -Method Post -Headers @{Authorization=('Bearer ' + $config.token)} -ContentType 'application/json' -Body ($body | ConvertTo-Json -Depth 10 -Compress) -TimeoutSec 25
 }
 Add-Type -TypeDefinition @'
 using System;
