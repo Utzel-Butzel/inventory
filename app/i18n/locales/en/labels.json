@@ -452,7 +452,7 @@
     "status": {
       "queued": "Waiting for Print Agent",
       "claimed": "Sending to printer",
-      "submitted": "Submitted to printer",
+      "submitted": "Sent to system queue",
       "failed": "Failed",
       "uncertain": "Output uncertain – check printer",
       "cancelled": "Cancelled",
@@ -601,11 +601,23 @@
     "command": {
       "queued": "Cancellation waiting for agent.",
       "claimed": "Agent processing cancellation.",
-      "done": "Operating system accepted removal commands. Pages already transferred may continue printing.",
-      "uncertain": "Cancellation not fully confirmed. Check the queue again.",
+      "done": "Command accepted by the OS. Check the job status.",
+      "uncertain": "Execution not confirmed. Check the current job status.",
       "expired": "Agent did not collect cancellation in time. Please try again."
     },
-    "unavailable": "System queue unavailable"
+    "unavailable": "System queue unavailable",
+    "actions": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "restart": "Restart",
+      "repair": "Repair print connection"
+    },
+    "help": {
+      "pause": "Pauses this Windows job. Labels already sent may still print.",
+      "resume": "Resumes the paused job. Turn on the printer first.",
+      "restart": "Restarts this job from the beginning. Labels already printed may be duplicated. Turn on the printer first.",
+      "repair": "Restarts the Windows print service. All printers on this PC are briefly interrupted. Saved jobs remain and may resume printing. Turn on the printer first."
+    }
   },
   "helpLabel": "More information",
   "route": {

@@ -7,7 +7,7 @@ import { fetchJson } from "@/lib/client-types";
 import { connectQz } from "@/lib/qz-label-printer";
 import type { SpoolSnapshot } from "@/lib/spool-queue-contract";
 
-type QueueState = { snapshot: SpoolSnapshot | null; fresh: boolean; checkedAt: string | null; commands: { id: string; status: string }[] };
+type QueueState = { snapshot: SpoolSnapshot | null; fresh: boolean; checkedAt: string | null; commands: { id: string; status: string; action?: string }[] };
 let listenerWork: Promise<unknown> = Promise.resolve();
 function serializeListener(work: () => Promise<unknown>) {
   const next = listenerWork.catch(() => {}).then(work);
@@ -22,7 +22,7 @@ export function PrinterSpoolQueue({ remoteId, name }: { remoteId?: string; name:
   const [watch, setWatch] = useState(false);
   const [connected, setConnected] = useState(false);
   const [events, setEvents] = useState<{ id: number; title: string; status: string }[]>([]);
-  const [confirmation, setConfirmation] = useState<{ refs?: string[]; jobId?: number } | null>(null);
+  const [confirmation, setConfirmation] = useState<{ refs?: string[]; jobId?: number; action?: "pause" | "resume" | "restart" | "repair" } | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!remoteId) return;
@@ -81,7 +81,7 @@ export function PrinterSpoolQueue({ remoteId, name }: { remoteId?: string; name:
     setBusy(true); setError(""); setMessage("");
     try {
       if (remoteId) {
-        const command = await fetchJson<{ id: string; status: string }>("/api/v1/label-printers/spool", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ printerId: remoteId, refs: confirmation.refs }) });
+        const command = await fetchJson<{ id: string; status: string }>("/api/v1/label-printers/spool", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ printerId: remoteId, refs: confirmation.refs, action: confirmation.action ?? "cancel" }) });
         setState(old => old ? { ...old, commands: [command, ...old.commands] } : old);
       } else {
         const qz = await connectQz();
@@ -101,11 +101,12 @@ export function PrinterSpoolQueue({ remoteId, name }: { remoteId?: string; name:
     {error ? <p role="alert" className="mt-2 text-sm text-warning">{error}</p> : null}
     {message ? <p role="status" className="mt-2 text-sm">{message}</p> : null}
     <ul className="mt-2 max-h-80 overflow-y-auto">
-      {remoteId ? state?.snapshot?.jobs.map(job => <li key={job.ref} className="flex items-center justify-between gap-3 border-b border-border py-2 text-xs"><span>#{job.id} · {job.title || t("spool.untitled")} · {job.owner} · {job.state}</span><Button size="sm" variant="secondary" disabled={!available || busy} onClick={() => setConfirmation({ refs: [job.ref] })}>{t("shared.cancel")}</Button></li>) : events.map(job => <li key={job.id} className="flex items-center justify-between gap-3 border-b border-border py-2 text-xs"><span>#{job.id} · {job.title || t("spool.untitled")} · {job.status}</span><Button size="sm" variant="secondary" disabled={!available || busy || ["COMPLETE", "DELETED", "DELETING", "CANCELED", "ABORTED", "SENT"].includes(job.status)} onClick={() => setConfirmation({ jobId: job.id })}>{t("shared.cancel")}</Button></li>)}
+      {remoteId ? state?.snapshot?.jobs.map(job => <li key={job.ref} className="flex items-center justify-between gap-3 border-b border-border py-2 text-xs"><span>#{job.id} · {job.title || t("spool.untitled")} · {job.owner} · {job.state}</span><div className="flex flex-wrap gap-2">{(["pause", "resume", "restart"] as const).filter(action => state.snapshot?.actions?.includes(action) && (action === "pause" ? !/Paused/i.test(job.state) : action === "resume" ? /Paused/i.test(job.state) : /Error|Offline|Blocked|Retained/i.test(job.state))).map(action => <Button key={action} size="sm" variant="secondary" disabled={!available || busy} onClick={() => setConfirmation({ refs: [job.ref], action })}>{t(`spool.actions.${action}`)}</Button>)}<Button size="sm" variant="secondary" disabled={!available || busy} onClick={() => setConfirmation({ refs: [job.ref] })}>{t("shared.cancel")}</Button></div></li>) : events.map(job => <li key={job.id} className="flex items-center justify-between gap-3 border-b border-border py-2 text-xs"><span>#{job.id} · {job.title || t("spool.untitled")} · {job.status}</span><Button size="sm" variant="secondary" disabled={!available || busy || ["COMPLETE", "DELETED", "DELETING", "CANCELED", "ABORTED", "SENT"].includes(job.status)} onClick={() => setConfirmation({ jobId: job.id })}>{t("shared.cancel")}</Button></li>)}
     </ul>
     {remoteId && available && !state?.snapshot?.jobs.length ? <p className="mt-2 text-xs">{t("spool.empty")}</p> : null}
+    {remoteId && state?.snapshot?.actions?.includes("repair") ? <Button className="mt-3 mr-2" size="sm" variant="secondary" disabled={!available || busy} onClick={() => setConfirmation({ refs: [], action: "repair" })}>{t("spool.actions.repair")}</Button> : null}
     <Button className="mt-3" size="sm" variant="secondary" disabled={!available || busy || (!!remoteId && !state?.snapshot?.jobs.length)} onClick={() => setConfirmation(remoteId ? { refs: state?.snapshot?.jobs.map(job => job.ref) } : {})}>{t(remoteId ? "spool.clearShown" : "spool.clear")}</Button>
-    {confirmation ? <div role="alertdialog" aria-label={t("spool.confirmTitle")} className="mt-3 rounded-lg border border-warning p-3 text-sm"><p className="font-medium">{t("spool.confirmTitle")} · {name}</p><p className="mt-2">{t("spool.confirmHelp")}</p><p className="mt-1">{confirmation.refs ? t("spool.count", { count: confirmation.refs.length }) : confirmation.jobId ? `#${confirmation.jobId}` : t("spool.all")}</p><div className="mt-3 flex gap-2"><Button size="sm" disabled={!available || busy} onClick={() => void cancel()}>{t("spool.confirm")}</Button><Button size="sm" variant="secondary" disabled={busy} onClick={() => setConfirmation(null)}>{t("spool.back")}</Button></div></div> : null}
-    {state?.commands.slice(0, 3).map(command => <p key={command.id} role="status" className="mt-2 text-xs">{t(`spool.command.${command.status}`)}</p>)}
+    {confirmation ? <div role="alertdialog" aria-label={t(confirmation?.action ? `spool.actions.${confirmation.action}` : "spool.confirmTitle")} className="mt-3 rounded-lg border border-warning p-3 text-sm"><p className="font-medium">{t(confirmation?.action ? `spool.actions.${confirmation.action}` : "spool.confirmTitle")} · {name}</p><p className="mt-2">{t(confirmation.action ? `spool.help.${confirmation.action}` : "spool.confirmHelp")}</p><p className="mt-1">{confirmation.refs ? t("spool.count", { count: confirmation.refs.length }) : confirmation.jobId ? `#${confirmation.jobId}` : t("spool.all")}</p><div className="mt-3 flex gap-2"><Button size="sm" disabled={!available || busy} onClick={() => void cancel()}>{t(confirmation.action ? `spool.actions.${confirmation.action}` : "spool.confirm")}</Button><Button size="sm" variant="secondary" disabled={busy} onClick={() => setConfirmation(null)}>{t("spool.back")}</Button></div></div> : null}
+    {state?.commands.slice(0, 3).map(command => <p key={command.id} role="status" className="mt-2 text-xs">{command.action && command.action !== "cancel" ? `${t(`spool.actions.${command.action}`)}: ` : ""}{t(`spool.command.${command.status}`)}</p>)}
   </section>;
 }

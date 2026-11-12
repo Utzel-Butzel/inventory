@@ -452,7 +452,7 @@
     "status": {
       "queued": "Wartet auf Print Agent",
       "claimed": "Wird an Drucker übergeben",
-      "submitted": "An Drucker übergeben",
+      "submitted": "An System-Warteschlange übergeben",
       "failed": "Fehlgeschlagen",
       "uncertain": "Ausgabe unklar – am Drucker prüfen",
       "cancelled": "Abgebrochen",
@@ -601,11 +601,23 @@
     "command": {
       "queued": "Abbruch wartet auf den Agenten.",
       "claimed": "Agent bearbeitet den Abbruch.",
-      "done": "Löschbefehle vom Betriebssystem angenommen. Bereits übertragene Seiten können weitergedruckt werden.",
-      "uncertain": "Abbruch nicht vollständig bestätigt. Warteschlange erneut prüfen.",
+      "done": "Befehl von Windows angenommen. Druckstatus unten prüfen.",
+      "uncertain": "Ausführung nicht bestätigt. Aktuellen Auftragsstatus prüfen.",
       "expired": "Agent hat den Abbruch nicht rechtzeitig abgeholt. Bitte erneut versuchen."
     },
-    "unavailable": "Systemwarteschlange nicht verfügbar"
+    "unavailable": "Systemwarteschlange nicht verfügbar",
+    "actions": {
+      "pause": "Pausieren",
+      "resume": "Fortsetzen",
+      "restart": "Neu starten",
+      "repair": "Druckverbindung reparieren"
+    },
+    "help": {
+      "pause": "Hält diesen Auftrag in Windows an. Bereits übertragene Etiketten können noch gedruckt werden.",
+      "resume": "Setzt den pausierten Auftrag fort. Schalte den Drucker vorher ein.",
+      "restart": "Startet diesen Auftrag von vorn. Bereits gedruckte Etiketten können doppelt erscheinen. Schalte den Drucker vorher ein.",
+      "repair": "Startet den Windows-Druckdienst am Büro-PC neu. Alle Drucker dieses PCs werden kurz unterbrochen. Gespeicherte Aufträge bleiben erhalten und können danach weiterdrucken. Schalte den Drucker zuerst ein."
+    }
   },
   "helpLabel": "Weitere Informationen",
   "route": {

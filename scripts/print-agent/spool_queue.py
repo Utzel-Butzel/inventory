@@ -70,7 +70,9 @@ def process_commands(config,directory,commands,mapping,save_state):
                 if ref not in mapping or ref not in current:
                     good=False
                     continue
-                try: remove_job(config,current[ref])
+                try:
+                    if command.get('action', 'cancel') != 'cancel': raise RuntimeError('Unsupported operation')
+                    remove_job(config,current[ref])
                 except Exception: good=False
             journal[key]['result']='done' if good else 'uncertain'
             save_state(path,journal)

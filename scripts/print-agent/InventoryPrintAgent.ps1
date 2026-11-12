@@ -69,7 +69,9 @@ public static class InventoryRawPrinter {
         [MarshalAs(UnmanagedType.LPWStr)] public string document;
     }
     [DllImport("winspool.drv", EntryPoint="GetJobW", SetLastError=true)] static extern bool GetJob(IntPtr printer,int id,int level,IntPtr info,int size,out int needed);
-    public static bool Cancel(string name,int id,string expectedTitle) {
+    public static bool Cancel(string name,int id,string expectedTitle) { return Control(name,id,expectedTitle,5); }
+    public static bool Control(string name,int id,string expectedTitle,int command) {
+        if(command!=1 && command!=2 && command!=3 && command!=5) return false;
         IntPtr printer, buffer=IntPtr.Zero;
         if(id<=0 || !OpenPrinter(name,out printer,IntPtr.Zero)) return false;
         try {
@@ -79,7 +81,7 @@ public static class InventoryRawPrinter {
             if(!GetJob(printer,id,1,buffer,needed,out needed)) return false;
             JobInfo job=(JobInfo)Marshal.PtrToStructure(buffer,typeof(JobInfo));
             if(job.document!=expectedTitle) return false;
-            return SetJob(printer,id,0,IntPtr.Zero,5);
+            return SetJob(printer,id,0,IntPtr.Zero,command);
         } finally { if(buffer!=IntPtr.Zero) Marshal.FreeHGlobal(buffer); ClosePrinter(printer); }
     }
     public static int Print(string printerName,string jobName,byte[] bytes,Func<bool> shouldStop) {
@@ -122,15 +124,55 @@ function Control-Job($record, $action) {
     Request-Agent 'control' @{id=$record.id;claimId=$record.claimId;action=$action}
 }
 . (Join-Path $PSScriptRoot 'spool-queue.ps1')
+# Probe only an idle serial queue. Use a separate process so a Bluetooth Open()
+# timeout cannot block the heartbeat or retain the port in the agent process.
+$script:nextDeviceProbe=[DateTime]::MinValue
+$script:deviceObservation=$null
+function Read-SerialDeviceStatus($port) {
+    $worker=$null
+    try {
+        $worker=Start-Job -ArgumentList $port -ScriptBlock {
+            param($port)
+            $serial=New-Object System.IO.Ports.SerialPort $port,115200,'None',8,'One'
+            $serial.ReadTimeout=2000;$serial.WriteTimeout=2000
+            try {
+                $serial.Open();$serial.DiscardInBuffer()
+                $serial.Write([byte[]](27,105,83),0,3)
+                $bytes=New-Object byte[] 32;$offset=0
+                while($offset -lt 32){$offset+=$serial.Read($bytes,$offset,32-$offset)}
+                if($bytes[0] -ne 128 -or $bytes[1] -ne 32 -or $bytes[2] -ne 66){throw 'Invalid status'}
+                $state='ready';$detail='none'
+                if($bytes[8] -ne 0 -or $bytes[9] -ne 0){$state='error';$detail='device_error'}
+                @{state=$state;detail=$detail;tape=[int]$bytes[10]}
+            } finally {$serial.Dispose()}
+        }
+        $done=Wait-Job $worker -Timeout 7
+        if(!$done){return @{state='unreachable';detail='connection';tape=$null}}
+        $result=Receive-Job $worker -ErrorAction Stop
+        if(!$result){throw 'No status'}
+        return $result
+    } catch {return @{state='unreachable';detail='connection';tape=$null}}
+    finally {if($worker){Stop-Job $worker -ErrorAction SilentlyContinue;Remove-Job $worker -Force -ErrorAction SilentlyContinue}}
+}
 function Update-Status {
-    $deviceState='unknown';$detail='queue_only'
+    $deviceState='unknown';$detail='queue_only';$tape=$null
+    $spool=Read-SpoolSnapshot
     try {
         $printer=Get-Printer -Name $config.printer -ErrorAction Stop
-        if ([string]$printer.PrinterStatus -match 'Offline|Error|PaperOut|Paused') { $deviceState='error';$detail='device_error' }
-    } catch { $deviceState='unknown';$detail='probe_failed' }
-    # Queue readiness is deliberately never advertised as device readiness.
-    $spool=Read-SpoolSnapshot
-    $response=Request-Agent 'status' @{spool=$spool.snapshot;telemetry=@{host=$env:COMPUTERNAME;transport='system';device=$config.printer;state=$deviceState;tape=$null;detail=$detail;cancellation='spooler'}}
+        if($spool.snapshot.jobs.Count){
+            $script:deviceObservation=$null;$script:nextDeviceProbe=[DateTime]::MinValue
+            $deviceState='busy';$detail='none'
+            if([string]$printer.PrinterStatus -match 'Offline|Error|PaperOut|Paused' -or @($spool.snapshot.jobs | Where-Object {$_.state -match 'Error|Offline|Blocked|Paused'}).Count){$deviceState='error';$detail='device_error'}
+        } elseif($spool.snapshot.supported -and $printer.PortName -match '^COM[0-9]+:$') {
+            if([DateTime]::UtcNow -ge $script:nextDeviceProbe){
+                $script:deviceObservation=Read-SerialDeviceStatus $printer.PortName.TrimEnd(':')
+                $script:nextDeviceProbe=[DateTime]::UtcNow.AddSeconds(15)
+            }
+            if($script:deviceObservation){$deviceState=$script:deviceObservation.state;$detail=$script:deviceObservation.detail;$tape=$script:deviceObservation.tape}
+        }
+    } catch {$deviceState='unknown';$detail='probe_failed'}
+    $response=Request-Agent 'status' @{spool=$spool.snapshot;telemetry=@{host=$env:COMPUTERNAME;transport='system';device=$config.printer;state=$deviceState;tape=$tape;detail=$detail;cancellation='spooler'}}
+    if($response.recheck){$script:nextDeviceProbe=[DateTime]::MinValue}
     $spoolReceipts=Invoke-SpoolCommands $response.spoolCommands $spool.mapping
     if($spoolReceipts.Count){$null=Request-Agent 'status' @{spoolReceipts=@($spoolReceipts)}}
     $commands=@{}
