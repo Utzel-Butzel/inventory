@@ -144,6 +144,15 @@ function Read-SerialDeviceStatus($port) {
                 $state='ready';$detail='none'
                 if($bytes[8] -ne 0 -or $bytes[9] -ne 0){$state='error';$detail='device_error'}
                 @{state=$state;detail=$detail;tape=[int]$bytes[10]}
+            } catch {
+                # A driver/port-open error is not evidence that the device is off.
+                # In particular Windows Bluetooth ports can be listed by PnP but
+                # rejected by SerialPort.Open() as an invalid serial handle.
+                $cause=$_.Exception
+                while($cause.InnerException){$cause=$cause.InnerException}
+                if($cause -is [ArgumentException] -or $cause -is [UnauthorizedAccessException]) {
+                    @{state='unknown';detail='probe_failed';tape=$null}
+                } else { throw }
             } finally {$serial.Dispose()}
         }
         $done=Wait-Job $worker -Timeout 7
