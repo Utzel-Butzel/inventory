@@ -133,7 +133,7 @@ function Read-SerialDeviceStatus($port) {
     try {
         $worker=Start-Job -ArgumentList $port -ScriptBlock {
             param($port)
-            $serial=New-Object System.IO.Ports.SerialPort $port,115200,'None',8,'One'
+            $serial=[System.IO.Ports.SerialPort]::new([string]$port,115200,[System.IO.Ports.Parity]::None,8,[System.IO.Ports.StopBits]::One)
             $serial.ReadTimeout=2000;$serial.WriteTimeout=2000
             try {
                 $serial.Open();$serial.DiscardInBuffer()
