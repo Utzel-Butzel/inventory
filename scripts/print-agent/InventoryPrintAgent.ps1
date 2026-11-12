@@ -159,7 +159,8 @@ function Update-Status {
     $spool=Read-SpoolSnapshot
     try {
         $printer=Get-Printer -Name $config.printer -ErrorAction Stop
-        if($spool.snapshot.jobs.Count){
+        $activeJobs=@($spool.snapshot.jobs | Where-Object {$_.state -notmatch 'Complete|Printed' -or $_.state -match 'Printing|Error|Offline|Blocked|Paused|Deleting'})
+        if($activeJobs.Count){
             $script:deviceObservation=$null;$script:nextDeviceProbe=[DateTime]::MinValue
             $deviceState='busy';$detail='none'
             if([string]$printer.PrinterStatus -match 'Offline|Error|PaperOut|Paused' -or @($spool.snapshot.jobs | Where-Object {$_.state -match 'Error|Offline|Blocked|Paused'}).Count){$deviceState='error';$detail='device_error'}

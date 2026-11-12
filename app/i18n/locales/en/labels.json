@@ -599,11 +599,11 @@
     "confirm": "Cancel jobs now",
     "back": "Back",
     "command": {
-      "queued": "Cancellation waiting for agent.",
-      "claimed": "Agent processing cancellation.",
+      "queued": "Command waiting for agent.",
+      "claimed": "Agent processing command.",
       "done": "Command accepted by the OS. Check the job status.",
       "uncertain": "Execution not confirmed. Check the current job status.",
-      "expired": "Agent did not collect cancellation in time. Please try again."
+      "expired": "Agent did not collect command in time. Please try again."
     },
     "unavailable": "System queue unavailable",
     "actions": {

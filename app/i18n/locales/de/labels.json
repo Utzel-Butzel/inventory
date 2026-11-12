@@ -599,11 +599,11 @@
     "confirm": "Jetzt abbrechen",
     "back": "Zurück",
     "command": {
-      "queued": "Abbruch wartet auf den Agenten.",
-      "claimed": "Agent bearbeitet den Abbruch.",
+      "queued": "Befehl wartet auf den Agenten.",
+      "claimed": "Agent führt den Befehl aus.",
       "done": "Befehl von Windows angenommen. Druckstatus unten prüfen.",
       "uncertain": "Ausführung nicht bestätigt. Aktuellen Auftragsstatus prüfen.",
-      "expired": "Agent hat den Abbruch nicht rechtzeitig abgeholt. Bitte erneut versuchen."
+      "expired": "Befehl nicht rechtzeitig abgeholt. Bitte erneut versuchen."
     },
     "unavailable": "Systemwarteschlange nicht verfügbar",
     "actions": {
