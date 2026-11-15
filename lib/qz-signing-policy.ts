@@ -21,10 +21,16 @@ const discoveryRequest = z.object({
   params: z.object({ query: z.string().max(200).nullable().optional() }).strict(),
 }).strict();
 
-export function isAllowedQzRequest(request: string, now = Date.now()): boolean {
+const queueName = z.string().min(1).max(200).regex(/P[ _-]?710BT/i);
+const queueRequest = z.union([
+  z.object({call:z.literal("printers.startListening"),timestamp:z.number().int(),params:z.object({printerNames:z.array(queueName).length(1)}).strict()}).strict(),
+  z.object({call:z.enum(["printers.getStatus","printers.stopListening"]),timestamp:z.number().int(),params:z.object({}).strict().optional()}).strict(),
+  z.object({call:z.literal("printers.clearQueue"),timestamp:z.number().int(),params:z.object({printerName:queueName,jobId:z.number().int().positive().optional()}).strict()}).strict(),
+]);
+export function isAllowedQzRequest(request: string, now = Date.now(), manageQueue = false): boolean {
   if (request.length > QZ_MAX_REQUEST_BYTES) return false;
   try {
-    const result = z.union([printRequest, discoveryRequest]).safeParse(JSON.parse(request));
+    const result = (manageQueue ? z.union([printRequest, discoveryRequest, queueRequest]) : z.union([printRequest, discoveryRequest])).safeParse(JSON.parse(request));
     return result.success && Math.abs(now - result.data.timestamp) < 60_000;
   } catch {
     return false;

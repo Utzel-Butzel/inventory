@@ -4745,8 +4745,10 @@ paths:
       tags:
         - Label printing
       summary: List enabled shared printers
-      description: Requires a browser session with labels.read. online means an agent poll was received
-        within 45 seconds.
+      description: Requires a browser session with labels.read. online means an agent
+        heartbeat within 45 seconds. telemetry and checkedAt describe a separate
+        device observation, which also expires after 45 seconds. Queue discovery
+        alone does not imply device readiness.
       security:
         - adminSession: []
       responses:
@@ -4764,15 +4766,15 @@ paths:
                     items:
                       $ref: "#/components/schemas/SharedPrinter"
         "403":
-          description: Required permission or browser session missing; printing mutations also reject
-            read-only organizations and cross-site requests.
+          description: Required permission or browser session missing; printing mutations
+            also reject read-only organizations and cross-site requests.
     post:
       tags:
         - Label printing
       summary: Provision a shared Office printer
-      description: Requires a browser session with tokens.manage. Currently provisions 24 mm tape only.
-        The returned iprt_ token is shown once and is restricted to this printer; store it in the
-        agent configuration.
+      description: Requires a browser session with tokens.manage. Register each
+        computer separately. The returned iprt_ token is shown once and is
+        restricted to this printer.
       security:
         - adminSession: []
       requestBody:
@@ -4824,8 +4826,8 @@ paths:
         "400":
           description: Malformed request.
         "403":
-          description: Required permission or browser session missing; printing mutations also reject
-            read-only organizations and cross-site requests.
+          description: Required permission or browser session missing; printing mutations
+            also reject read-only organizations and cross-site requests.
         "413":
           description: Request exceeds the size limit.
         "422":
@@ -4834,8 +4836,9 @@ paths:
       tags:
         - Label printing
       summary: Disable a shared printer
-      description: Requires a browser session with tokens.manage. Revokes agent access and cancels queued
-        jobs. To rotate credentials, provision a replacement printer.
+      description: Requires a browser session with tokens.manage. Revokes agent access
+        and cancels queued jobs. To rotate credentials, provision a replacement
+        printer.
       security:
         - adminSession: []
       requestBody:
@@ -4871,8 +4874,8 @@ paths:
         "400":
           description: Malformed request.
         "403":
-          description: Required permission or browser session missing; printing mutations also reject
-            read-only organizations and cross-site requests.
+          description: Required permission or browser session missing; printing mutations
+            also reject read-only organizations and cross-site requests.
         "404":
           description: Printer not found in this organization.
         "413":
@@ -4886,8 +4889,8 @@ paths:
       tags:
         - Label printing
       summary: List your latest shared print jobs
-      description: Requires a browser session with labels.read. Returns at most 20 jobs submitted by the
-        current user in this organization.
+      description: Requires a browser session with labels.read. Returns at most 20
+        jobs submitted by the current user in this organization.
       security:
         - adminSession: []
       responses:
@@ -4905,16 +4908,16 @@ paths:
                     items:
                       $ref: "#/components/schemas/SharedPrintJob"
         "403":
-          description: Required permission or browser session missing; printing mutations also reject
-            read-only organizations and cross-site requests.
+          description: Required permission or browser session missing; printing mutations
+            also reject read-only organizations and cross-site requests.
     post:
       tags:
         - Label printing
       summary: Queue a prepared PT-P710BT print job
-      description: "Requires a browser session with labels.read. The browser renders and validates labels
-        before submission. Reuse body.id only with identical data to retrieve an existing job. Limits:
-        100 labels, 4 MB RAW data, 10 submissions/minute per user/printer and 20 pending jobs per
-        printer. Queued jobs expire after 10 minutes."
+      description: "Requires labels.read and an online selected computer. Known device
+        errors and a confirmed tape mismatch reject new jobs with 409. Reuse
+        body.id with identical data for an idempotent retry. Queued jobs expire
+        after 10 minutes."
       security:
         - adminSession: []
       requestBody:
@@ -4938,12 +4941,13 @@ paths:
         "400":
           description: Malformed request.
         "403":
-          description: Required permission or browser session missing; printing mutations also reject
-            read-only organizations and cross-site requests.
+          description: Required permission or browser session missing; printing mutations
+            also reject read-only organizations and cross-site requests.
         "404":
           description: Printer unavailable.
         "409":
-          description: Idempotency ID reused with different data, or tape width differs from the printer.
+          description: Idempotency ID reused with different data, or tape width differs
+            from the printer.
         "413":
           description: Request exceeds the size limit.
         "422":
@@ -4953,9 +4957,13 @@ paths:
     delete:
       tags:
         - Label printing
-      summary: Cancel one of your waiting print jobs
-      description: Requires a browser session with labels.read. Only a queued job owned by the caller can
-        be cancelled.
+      summary: Cancel your queued job or request a stop from a version 2 agent
+      description: Queued jobs are cancelled atomically. Claimed jobs support
+        cancellation when claimed by a version 2 agent. Submitted spool jobs can
+        be stopped for 10 minutes using the agent’s durable local receipt.
+        Returns the updated job; cancelRequestedAt without cancelResult means
+        pending. Stopping a transfer or spool queue cannot retract printed or
+        device-buffered pages.
       security:
         - adminSession: []
       requestBody:
@@ -4973,36 +4981,189 @@ paths:
               additionalProperties: false
       responses:
         "200":
-          description: Job cancelled.
+          description: Updated job and whether it was cancelled before transfer.
           content:
             application/json:
               schema:
                 type: object
-                required:
-                  - cancelled
                 properties:
                   cancelled:
                     type: boolean
-                    const: true
+                  job:
+                    $ref: "#/components/schemas/SharedPrintJob"
         "400":
           description: Malformed request.
         "403":
-          description: Required permission or browser session missing; printing mutations also reject
-            read-only organizations and cross-site requests.
+          description: Required permission or browser session missing; printing mutations
+            also reject read-only organizations and cross-site requests.
         "409":
           description: Job already dispatched or not found.
         "413":
           description: Request exceeds the size limit.
         "422":
           description: Invalid input or raster data.
+  /label-print-agent/control:
+    post:
+      tags:
+        - Label printing
+      summary: Check cancellation or authorize one physical dispatch
+      security:
+        - printAgent: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - claimId
+                - action
+              additionalProperties: false
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                claimId:
+                  type: string
+                  format: uuid
+                action:
+                  type: string
+                  enum:
+                    - check
+                    - start
+      responses:
+        "200":
+          description: cancel, mayPrint, status. A start is authorized at most once; a
+            lost start response must not result in automatic printing.
+        "400":
+          description: Invalid request
+        "403":
+          description: Not authorized
+  /label-print-agent/status:
+    post:
+      tags:
+        - Label printing
+      summary: Report agent heartbeat, device observation and optional OS queue snapshot
+      security:
+        - printAgent: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                telemetry:
+                  $ref: "#/components/schemas/PrinterTelemetry"
+                spool:
+                  $ref: "#/components/schemas/SpoolSnapshot"
+                spoolReceipts:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [id, result]
+                    properties:
+                      id: { type: string, format: uuid }
+                      result: { type: string, enum: [done, uncertain] }
+      responses:
+        "200":
+          description: recheck, spoolCommands (id and snapshot refs only), and cancellations (id and claimId only). Cancellation must
+            use the matching local spool receipt, never a server-supplied spool
+            destination.
+        "400":
+          description: Invalid request
+        "403":
+          description: Not authorized
+  /label-printers/spool:
+    get:
+      tags: [Label printing]
+      summary: Read the remote operating system queue (requires tokens.manage)
+      parameters:
+        - in: query
+          name: printerId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Snapshot, server checkedAt, freshness flag and recent command receipts. Snapshots expire after 45 seconds.
+        "403":
+          description: Not authorized
+    post:
+      tags: [Label printing]
+      summary: Cancel selected remote spool jobs (requires tokens.manage)
+      description: Only opaque references from a fresh snapshot are accepted. Commands expire after 60 seconds. Agents revalidate job identities and persist receipts before executing OS commands.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [printerId, refs]
+              properties:
+                printerId: { type: string, format: uuid }
+                refs:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items: { type: string, pattern: '^[a-f0-9]{64}$' }
+      responses:
+        "202":
+          description: Queued command id and status; not proof of physical cancellation.
+        "409":
+          description: Snapshot unavailable, stale, changed, or another command is pending.
+        "403":
+          description: Not authorized
+  /label-printers/status:
+    post:
+      tags:
+        - Label printing
+      summary: Request a new device check without printing (labels.read)
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              additionalProperties: false
+              properties:
+                id:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: requested; requests are coalesced for 10 seconds.
+        "400":
+          description: Invalid request
+        "403":
+          description: Not authorized
+  /label-printers/agent:
+    get:
+      tags:
+        - Label printing
+      summary: Download credential-free agent installation sources (tokens.manage)
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Gzip tar archive for Windows and macOS
   /label-print-agent/claim:
     post:
       tags:
         - Label printing
       summary: Claim the next job for a printer
-      description: Windows agent endpoint; use the dedicated iprt_ credential, not an inventory API token.
-        Reuse claimId to recover the same claim. Stale claims become uncertain after five minutes and
-        are never handed out again. History cleanup runs on polling after seven days.
+      description: Windows agent endpoint; use the dedicated iprt_ credential, not an
+        inventory API token. Reuse claimId to recover the same claim. Stale
+        claims become uncertain after five minutes and are never handed out
+        again. History cleanup runs on polling after seven days.
       security:
         - printAgent: []
       requestBody:
@@ -5017,6 +5178,23 @@ paths:
                 claimId:
                   type: string
                   format: uuid
+                version:
+                  type: integer
+                  enum:
+                    - 1
+                    - 2
+                  default: 1
+                formats:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - ptouch
+                      - pdf
+                  minItems: 1
+                  maxItems: 2
+                  default:
+                    - ptouch
               additionalProperties: false
       responses:
         "200":
@@ -5050,8 +5228,8 @@ paths:
         "401":
           description: Invalid, disabled or read-only printer credential.
         "403":
-          description: Required permission or browser session missing; printing mutations also reject
-            read-only organizations and cross-site requests.
+          description: Required permission or browser session missing; printing mutations
+            also reject read-only organizations and cross-site requests.
         "413":
           description: Request exceeds the size limit.
   /label-print-agent/ack:
@@ -5059,9 +5237,11 @@ paths:
       tags:
         - Label printing
       summary: Acknowledge a printer claim
-      description: Agent only. Report submitted after Windows accepts the RAW job, failed after a definite
-        failure, or uncertain if acceptance is ambiguous. The receipt clears the stored payload. It
-        does not prove physical printing.
+      description: Agent receipt. submitted confirms spool acceptance, completed
+        requires device completion, uncertain means output needs inspection.
+        cancelled is accepted only before dispatch after a cancellation request.
+        cancelResult distinguishes a stop request from confirmed pre-transfer
+        cancellation.
       security:
         - printAgent: []
       requestBody:
@@ -5085,14 +5265,27 @@ paths:
                   type: string
                   enum:
                     - submitted
+                    - completed
                     - failed
                     - uncertain
+                    - cancelled
                 spoolJobId:
                   anyOf:
                     - type: integer
                       minimum: 1
                     - type: "null"
                   default: null
+                cancelResult:
+                  type:
+                    - string
+                    - "null"
+                  enum:
+                    - cancelled
+                    - stopped
+                    - uncertain
+                    - too_late
+                    - unsupported
+                    - null
               additionalProperties: false
       responses:
         "200":
@@ -5660,6 +5853,7 @@ components:
             - queued
             - claimed
             - submitted
+            - completed
             - failed
             - uncertain
             - cancelled
@@ -5671,8 +5865,87 @@ components:
           anyOf:
             - type: integer
             - type: "null"
-      description: submitted confirms Windows spooler acceptance, not physical output. uncertain jobs are
-        never automatically reprinted.
+        cancelRequestedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        cancelResult:
+          type:
+            - string
+            - "null"
+        canCancel:
+          type: boolean
+      description: submitted confirms Windows spooler acceptance, not physical output.
+        uncertain jobs are never automatically reprinted.
+    SpoolSnapshot:
+      type: object
+      additionalProperties: false
+      required: [supported, jobs]
+      properties:
+        supported: { type: boolean }
+        jobs:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            additionalProperties: false
+            required: [ref, id, title, owner, state]
+            properties:
+              ref: { type: string, pattern: '^[a-f0-9]{64}$' }
+              id: { type: integer, minimum: 1 }
+              title: { type: string, maxLength: 240 }
+              owner: { type: string, maxLength: 120 }
+              state: { type: string, maxLength: 80 }
+    PrinterTelemetry:
+      type: object
+      additionalProperties: false
+      required:
+        - host
+        - transport
+        - device
+        - state
+        - tape
+        - detail
+        - cancellation
+      properties:
+        host:
+          type: string
+          maxLength: 120
+        device:
+          type: string
+          maxLength: 200
+        transport:
+          type: string
+          enum:
+            - bluetooth
+            - system
+        state:
+          type: string
+          enum:
+            - ready
+            - busy
+            - unreachable
+            - error
+            - unknown
+        tape:
+          type:
+            - number
+            - "null"
+        detail:
+          type: string
+          enum:
+            - none
+            - connection
+            - device_error
+            - queue_only
+            - probe_failed
+        cancellation:
+          type: string
+          enum:
+            - transfer
+            - spooler
+            - process
     SharedPrinter:
       type: object
       required:
@@ -5693,6 +5966,22 @@ components:
           type: boolean
         enabled:
           type: boolean
+        agentVersion:
+          type: integer
+        checkedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        lastSeenAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        telemetry:
+          anyOf:
+            - $ref: "#/components/schemas/PrinterTelemetry"
+            - type: "null"
     LabelWorkspace:
       type: object
       required:

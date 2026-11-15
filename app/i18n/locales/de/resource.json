@@ -194,6 +194,8 @@
       "ocrLocal": "Texterkennung läuft lokal auf diesem Gerät.",
       "searchablePdf": "Mehrseitiges PDF mit durchsuchbarer OCR-Textebene",
       "errors": {
+    "imageNotFound": "Kein passendes Bild mit direkter Bild-URL gefunden. Präzisiere Marke und Modell oder lade ein Bild hoch.",
+    "reusableImageNotFound": "Kein passendes Bild mit bestätigten Nutzungsrechten gefunden. Präzisiere die Suche, aktiviere „Lizenz ignorieren“, um auch Bilder mit unklaren Rechten einzubeziehen, oder lade ein Bild hoch.",
         "permission": "Der Kamerazugriff wurde blockiert. Erlaube ihn in den Browser-Einstellungen.",
         "notFound": "Auf diesem Gerät wurde keine passende Kamera gefunden.",
         "inUse": "Die Kamera wird gerade von einer anderen App verwendet.",
@@ -239,6 +241,8 @@
     "notes": "Interne Notizen"
   },
   "ai": {
+    "imageIgnoreLicense": "Lizenz ignorieren",
+    "imageIgnoreLicenseHelp": "Auch Bilder mit unklarer Lizenz berücksichtigen. Dadurch werden keine Nutzungsrechte erteilt.",
     "title": "KI-Werkzeuge",
     "description": "Angaben ergänzen und Bilder hinzufügen oder verbessern",
     "analyzeImages": "Angaben aus Fotos übernehmen",
@@ -786,7 +790,7 @@
     "researchComplete": "Fehlende Angaben wurden durch KI-Webrecherche ergänzt. Bestehende Informationen blieben erhalten.",
     "researchNoChanges": "Die KI-Webrecherche ist abgeschlossen, hat aber keine verlässlichen fehlenden Angaben gefunden.",
     "coverComplete": "Ein neues Titelbild wurde erstellt und als erstes Bild festgelegt.",
-    "imageSearchComplete": "Ein wiederverwendbares Webbild wurde gefunden, importiert und an den Eintrag angehängt.",
+    "imageSearchComplete": "Ein Webbild wurde gefunden, importiert und an den Eintrag angehängt.",
     "imageGenerationComplete": "Ein neues KI-Bild wurde erstellt und an den Eintrag angehängt.",
     "savedTranslationStale": "Änderungen gespeichert. Die Übersetzung ist noch veraltet: {{reason}}",
     "savedTranslations": "Änderungen gespeichert. Die Übersetzungen werden im Hintergrund aktualisiert.",

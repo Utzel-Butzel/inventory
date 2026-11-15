@@ -507,6 +507,7 @@ export const inventoryImageInputSchema = z.discriminatedUnion("mode", [
   z
     .object({
       mode: z.literal("search"),
+      ignoreLicense: z.boolean().optional(),
       query: z.string().trim().min(1).max(500).optional(),
     })
     .strict(),

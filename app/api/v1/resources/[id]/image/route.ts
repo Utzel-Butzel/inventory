@@ -1,3 +1,4 @@
+import { InventoryWebImageNotFoundError } from "@/lib/inventory-web-image-search-contract";
 import { resolveAiPrompt } from "@/lib/ai-prompt-store";
 import { AiPromptSelectionError } from "@/lib/ai-prompt-templates";
 import { and, asc, eq, sql } from "drizzle-orm";
@@ -234,6 +235,7 @@ export async function POST(request: Request, context: Context) {
         run: () => searchInventoryWebImage({
           resource: searchContext,
           query: searchInput.query,
+          ignoreLicense: searchInput.ignoreLicense,
         }),
       });
       const downloaded = await downloadExternalImage(candidate.imageUrl);
@@ -250,6 +252,7 @@ export async function POST(request: Request, context: Context) {
         ),
         details: {
           mode: "search",
+          ignoreLicense: searchInput.ignoreLicense ?? false,
           title: candidate.title,
           attribution: candidate.attribution,
           license: candidate.license,
@@ -421,6 +424,9 @@ export async function POST(request: Request, context: Context) {
       idempotencyKey: idempotency.key,
     });
   } catch (error) {
+    if (error instanceof InventoryWebImageNotFoundError) {
+      return finish({ error: error.message, code: error.code }, 422);
+    }
     if (error instanceof AiMonthlyBudgetExceededError) {
       return finishTransient(
         aiBudgetErrorBody(error),

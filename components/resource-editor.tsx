@@ -523,6 +523,7 @@ export function ResourceEditor({
     "search" | "generate"
   >("search");
   const [imageSearchQuery, setImageSearchQuery] = useState("");
+  const [imageIgnoreLicense, setImageIgnoreLicense] = useState(false);
   const promptLibrary = useAiPromptTemplates();
   const [promptSelections, setPromptSelections] = useState<Partial<Record<AiPromptKind, AiPromptSelection>>>({});
   const promptPicker = (kind: AiPromptKind) => <AiPromptPicker kind={kind} library={promptLibrary} value={promptSelections[kind]} disabled={Boolean(aiAction)} onChange={(value) => setPromptSelections((current) => ({ ...current, [kind]: value }))} />;
@@ -937,6 +938,8 @@ export function ResourceEditor({
 
   const imageGenerationErrorMessage = (error: unknown, fallback: string) => {
     if (error instanceof ApiRequestError) {
+      if (error.details.code === "AI_IMAGE_NOT_FOUND") return t("errors.imageNotFound");
+      if (error.details.code === "AI_REUSABLE_IMAGE_NOT_FOUND") return t("errors.reusableImageNotFound");
       if (error.details.code === "AI_IMAGE_GENERATION_DISABLED") {
         return t("errors.imageGenerationDisabled");
       }
@@ -1008,6 +1011,7 @@ export function ResourceEditor({
               ? {
                   mode: "search",
                   query: imageSearchQuery.trim() || undefined,
+                  ignoreLicense: imageIgnoreLicense,
                 }
               : {
                   mode: "generate",
@@ -2329,8 +2333,17 @@ export function ResourceEditor({
                 className={inputClass}
               />
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={imageIgnoreLicense}
+                onChange={(event) => setImageIgnoreLicense(event.target.checked)}
+                disabled={aiAction === "image"}
+              />
+              {t("ai.imageIgnoreLicense")}
+            </label>
             <p className="rounded-xl border border-warning-border bg-warning-soft px-3 py-2.5 text-[12px] leading-5 text-warning">
-              {t("ai.imageSearchRights")}
+              {t(imageIgnoreLicense ? "ai.imageIgnoreLicenseHelp" : "ai.imageSearchRights")}
             </p>
           </>
         ) : (

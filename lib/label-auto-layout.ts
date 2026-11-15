@@ -1,3 +1,4 @@
+import { computeLabelAutoLayout, elementWidthSizing, type LayoutBox } from "@/lib/label-layout-engine";
 import { labelElementKey, type LabelElement, type LabelSetupDto, type LabelRowLayout, type LabelTextElement } from "@/lib/label-setup-contract";
 
 export function isRowText(element: LabelElement): element is LabelTextElement {
@@ -5,7 +6,7 @@ export function isRowText(element: LabelElement): element is LabelTextElement {
 }
 
 export function hugsRowContent(element: LabelElement) {
-  return isRowText(element) && element.rowSizing !== "fixed";
+  return isRowText(element) && elementWidthSizing(element) === "hug";
 }
 
 /** Flow order is independent of stacking order and the stored free-layout geometry. */
@@ -14,14 +15,54 @@ export function orderedRowElements(elements: LabelElement[]) {
     .sort((a, b) => (a.rowOrder ?? a.x) - (b.rowOrder ?? b.x));
 }
 
-export function moveRowElement(elements: LabelElement[], key: string, index: number) {
-  const ordered = orderedRowElements(elements);
-  const source = ordered.findIndex(element => labelElementKey(element) === key);
-  if (source < 0) return elements;
-  const [element] = ordered.splice(source, 1);
-  ordered.splice(Math.max(0, Math.min(index, ordered.length)), 0, element);
-  const order = new Map(ordered.map((item, i) => [labelElementKey(item), i]));
+/** Groups form indivisible items in the outer row. */
+export function rowBlocks(elements: LabelElement[]) {
+  const blocks: LabelElement[][] = [];
+  const groups = new Map<string, LabelElement[]>();
+  for (const element of orderedRowElements(elements)) {
+    if (!element.groupId) { blocks.push([element]); continue; }
+    let members = groups.get(element.groupId);
+    if (!members) { members = []; groups.set(element.groupId, members); blocks.push(members); }
+    members.push(element);
+  }
+  return blocks;
+}
+
+export function rowSiblings(elements: LabelElement[], key: string) {
+  const element = elements.find(item => labelElementKey(item) === key);
+  return element?.groupId
+    ? orderedRowElements(elements).filter(item => item.groupId === element.groupId)
+    : rowBlocks(elements).map(block => block[0]);
+}
+
+function applyRowOrder(elements: LabelElement[], ordered: LabelElement[]) {
+  const order = new Map(ordered.map((item, index) => [labelElementKey(item), index]));
   return elements.map(item => item.type === "background" ? item : { ...item, rowOrder: order.get(labelElementKey(item))! });
+}
+
+export function moveRowElement(elements: LabelElement[], key: string, index: number) {
+  const blocks = rowBlocks(elements);
+  const blockIndex = blocks.findIndex(block => block.some(item => labelElementKey(item) === key));
+  if (blockIndex < 0) return elements;
+  const block = blocks[blockIndex];
+  if (block[0].groupId) {
+    const source = block.findIndex(item => labelElementKey(item) === key);
+    const [element] = block.splice(source, 1);
+    block.splice(Math.max(0, Math.min(index, block.length)), 0, element);
+  } else {
+    blocks.splice(blockIndex, 1);
+    blocks.splice(Math.max(0, Math.min(index, blocks.length)), 0, block);
+  }
+  return applyRowOrder(elements, blocks.flat());
+}
+
+export function moveRowGroup(elements: LabelElement[], groupId: string, direction: number) {
+  const blocks = rowBlocks(elements);
+  const index = blocks.findIndex(block => block[0].groupId === groupId);
+  if (index < 0) return elements;
+  const [block] = blocks.splice(index, 1);
+  blocks.splice(Math.max(0, Math.min(index + direction, blocks.length)), 0, block);
+  return applyRowOrder(elements, blocks.flat());
 }
 
 export const DEFAULT_LABEL_ROW: LabelRowLayout = {
@@ -34,7 +75,7 @@ export function initializeLabelRow<T extends Pick<LabelSetupDto, "widthMm" | "he
   return {
     ...setup, layout: setup.layout ?? { ...DEFAULT_LABEL_ROW },
     elements: setup.elements.map(element => element.type === "background" ? element : {
-      ...element, rowOrder: order.get(labelElementKey(element)),
+      ...element, rowOrder: element.rowOrder ?? order.get(labelElementKey(element)),
       rowWidthMm: element.rowWidthMm ?? Math.max(0.1, element.width / 100 * setup.widthMm),
       rowHeightMm: element.rowHeightMm ?? Math.max(0.1, element.height / 100 * setup.heightMm),
     }),
@@ -42,31 +83,18 @@ export function initializeLabelRow<T extends Pick<LabelSetupDto, "widthMm" | "he
 }
 
 /** Resolve in millimeters first so text growth never scales images, QR codes or spacing. */
-export function resolveLabelRow(setup: LabelSetupDto, measuredWidths: Record<string, number>): LabelSetupDto {
-  const layout = setup.layout;
-  if (!layout) return setup;
-  const availableHeight = setup.heightMm - layout.paddingTopMm - layout.paddingBottomMm;
-  const boxes = new Map<string, { x: number; y: number; width: number; height: number }>();
-  let right = layout.paddingLeftMm;
-  const items = orderedRowElements(setup.elements).filter(element => element.visible);
-  items.forEach((element, index) => {
-    const measured = measuredWidths[labelElementKey(element)];
-    const width = hugsRowContent(element) && Number.isFinite(measured)
-      ? Math.max(0.1, measured) : element.rowWidthMm ?? element.width / 100 * setup.widthMm;
-    const height = element.rowHeightMm ?? element.height / 100 * setup.heightMm;
-    const y = layout.paddingTopMm + Math.max(0, availableHeight - height) *
-      (layout.align === "bottom" ? 1 : layout.align === "middle" ? 0.5 : 0);
-    boxes.set(labelElementKey(element), { x: right, y, width, height });
-    right += width + (index < items.length - 1 ? layout.gapMm : 0);
-  });
-  const widthMm = Math.max(1, right + layout.paddingRightMm);
+export type ResolvedLabelSetup = LabelSetupDto & { autoLayoutFrames?: Record<string, LayoutBox>; autoLayoutOverflowY?: boolean; autoLayoutOverflowX?: boolean };
+export function resolveLabelRow(setup: LabelSetupDto, measuredWidths: Record<string, number>, measuredHeights: Record<string, number> = {}): ResolvedLabelSetup {
+  if (!setup.layout) return setup;
+  const result = computeLabelAutoLayout(setup, { widths: measuredWidths, heights: measuredHeights });
   return {
-    ...setup, widthMm,
+    ...setup, widthMm: result.widthMm, autoLayoutFrames: result.frames,
+    autoLayoutOverflowY: result.overflowY, autoLayoutOverflowX: result.overflowX,
     elements: setup.elements.map(element => {
       if (element.type === "background") return { ...element, x: 0, y: 0, width: 100, height: 100 };
-      const box = boxes.get(labelElementKey(element));
-      return box ? { ...element, x: box.x / widthMm * 100, y: box.y / setup.heightMm * 100,
-        width: box.width / widthMm * 100, height: box.height / setup.heightMm * 100 } : element;
+      const box = result.elements[labelElementKey(element)];
+      return box ? { ...element, x: box.x / result.widthMm * 100, y: box.y / setup.heightMm * 100,
+        width: box.width / result.widthMm * 100, height: box.height / setup.heightMm * 100 } : { ...element, visible: false };
     }),
   };
 }

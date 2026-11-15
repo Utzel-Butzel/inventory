@@ -40,5 +40,6 @@ async function sendPrintContent(value: object) {
     },
   );
   pending = undefined;
+  window.dispatchEvent(new Event("inventory:print-jobs"));
   return result.job;
 }

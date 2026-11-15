@@ -27,6 +27,7 @@ foreach ($queue in $queues) {
         $queue | Add-Member -NotePropertyName pdfPrinter -NotePropertyValue $executable -Force
     }
 }
+Copy-Item -LiteralPath (Join-Path $Source 'spool_queue.py') -Destination $target -Force
 Copy-Item -LiteralPath (Join-Path $Source 'inventory_print_agent.py') -Destination $target -Force
 $config | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $target 'config.json') -Encoding UTF8
 $arguments = '"' + $target + '\inventory_print_agent.py" --config "' + $target + '\config.json" --state-dir "' + $target + '\state"'

@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   try {
     const printer = await agentPrinter(request);
     const parsed = z
-      .object({ claimId: z.uuid(), formats: z.array(z.enum(["ptouch", "pdf"])).min(1).max(2).default(["ptouch"]) })
+      .object({ claimId: z.uuid(), version: z.union([z.literal(1), z.literal(2)]).default(1), formats: z.array(z.enum(["ptouch", "pdf"])).min(1).max(2).default(["ptouch"]) })
       .strict()
       .safeParse(await boundedPrintJson(request, 1024));
     if (!parsed.success)
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     if (!parsed.data.formats.includes(requiredFormat))
       return Response.json({ error: "This printer requires an agent with PDF support." }, { status: 409 });
     return Response.json(
-      { job: await claimSharedPrint(String(printer.id), parsed.data.claimId) },
+      { job: await claimSharedPrint(String(printer.id), parsed.data.claimId, parsed.data.version) },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {

@@ -1,4 +1,6 @@
 "use client";
+import { LabelPrintRoute } from "@/components/label-print-route";
+import { LabelHelp } from "@/components/label-help";
 
 import { ResourceTitle } from "@/components/resource-title";
 import {
@@ -41,6 +43,8 @@ import { captureLabel, preparedSnapshot, ptouchSnapshot, printLabelDocument } fr
 import { LabelPrintMedia } from "@/components/label-print-media";
 import { LabelDocumentPreview } from "@/components/label-document-preview";
 import type { SharedPrinter } from "@/lib/shared-label-print-contract";
+import { effectivePrinterState } from "@/lib/printer-status";
+import { devicePrintPreferenceKey, devicePrintPreferencesSchema } from "@/lib/label-device-preferences";
 import { Button, Card, Skeleton } from "@/components/ui";
 import { fetchJson, type ClientResource } from "@/lib/client-types";
 import {
@@ -53,6 +57,8 @@ import { applyLabelTextOverride, type LabelTextOverride, labelTargetKey, labelTa
 import { LabelStockUnitPicker } from "@/components/label-stock-unit-picker";
 import { PTOUCH_TAPES, PTOUCH_PIXELS_PER_MM, ptouchPrintableDots, type PtouchTape } from "@/lib/ptouch-raster";
 
+import { PrinterSpoolQueue } from "@/components/printer-spool-queue";
+import { SharedPrintJobs } from "@/components/shared-print-jobs";
 import { SharedLabelPrinter } from "@/components/shared-label-printer";
 import { sendSharedLabels, sendSharedDocument } from "@/lib/shared-label-print-client";
 import { mediaImageVariantUrl } from "@/lib/media-image";
@@ -131,6 +137,9 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
   const [sharedPrinter, setSharedPrinter] = useState("");
   const selectedPrinter = printTarget === "shared" ? sharedPrinter : printer;
   const [sharedProfile, setSharedProfile] = useState<SharedPrinter | null>(null);
+  const sharedState = sharedProfile ? effectivePrinterState(sharedProfile.online, sharedProfile.telemetry, sharedProfile.checkedAt) : "offline";
+  const sharedUnavailable = printTarget === "shared" && (!sharedProfile || ["offline", "unreachable", "error"].includes(sharedState));
+  const outputName = printTarget === "shared" ? sharedProfile?.name : printTarget === "ptouch" ? printer : null;
   const isRasterPrint = printTarget === "ptouch" || (printTarget === "shared" && sharedProfile?.kind === "ptouch");
   const [media, setMedia] = useState<PrintMedia>(DEFAULT_PRINT_MEDIA);
   const [documentPreview, setDocumentPreview] = useState<{ labels: LabelSnapshot[]; media: PrintMedia; printer: SharedPrinter | null } | null>(null);
@@ -153,6 +162,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
   const queueLock = useRef(false);
   const preferenceWrites = useRef(Promise.resolve());
   const preferenceKey = useRef("");
+  const devicePreferenceScope = useRef<string | null>(null);
   const [preferenceRetry, setPreferenceRetry] = useState(0);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
@@ -167,15 +177,17 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
         setPreparedLabels(workspace.labels.map(deserializePreparedLabel));
         const prefs = workspace.preferences;
         if (prefs.setupId !== undefined) setSetupId(prefs.setupId);
-        if (prefs.printTarget) setPrintTarget(prefs.printTarget);
-        else { try {
-          const old = localStorage.getItem("inventory.labelPrintTarget");
-          if (old === "ptouch" || old === "shared") { setPrintTarget(old); if (!prefs.setupId) setSetupId("ptouch-preset"); }
-        } catch { /* Optional migration from the old browser preference. */ } }
+        // A destination from another computer must never be selected implicitly.
+        devicePreferenceScope.current = workspace.preferenceScope ?? null;
+        try {
+          const saved = workspace.preferenceScope ? localStorage.getItem(devicePrintPreferenceKey(workspace.preferenceScope)) : null;
+          const local = saved ? devicePrintPreferencesSchema.safeParse(JSON.parse(saved)) : null;
+          if (local?.success) {
+            setPrintTarget(local.data.printTarget); setPrinter(local.data.printer);
+            setSharedPrinter(local.data.sharedPrinter); setTape(local.data.tape);
+          }
+        } catch { /* A restricted browser starts with the browser print dialog. */ }
         if (prefs.media) setMedia(prefs.media);
-        if (prefs.tape) setTape(prefs.tape as PtouchTape);
-        if (prefs.printer) setPrinter(prefs.printer);
-        if (prefs.sharedPrinter) setSharedPrinter(prefs.sharedPrinter);
         setWorkspaceReady(true);
       }).catch(error => { if (!controller.signal.aborted) setWorkspaceError(String(error)); });
     return () => controller.abort();
@@ -183,14 +195,16 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
 
   useEffect(() => {
     if (!workspaceReady || setupsLoading) return;
-    const preferences = { setupId, printTarget, tape, printer, sharedPrinter, ...(printMediaSchema.safeParse(media).success ? { media } : {}) };
-    const key = JSON.stringify(preferences) + preferenceRetry;
+    const preferences = { setupId, ...(printMediaSchema.safeParse(media).success ? { media } : {}) };
+    const devicePreferences = { printTarget, tape, printer, sharedPrinter };
+    const key = JSON.stringify({ preferences, devicePreferences }) + preferenceRetry;
     if (key === preferenceKey.current) return;
     preferenceKey.current = key;
     setSavingPreferences(true);
     // Preserve the order of rapid selection changes, including a slower network.
     preferenceWrites.current = preferenceWrites.current.then(async () => {
       try {
+        if (devicePreferenceScope.current) localStorage.setItem(devicePrintPreferenceKey(devicePreferenceScope.current), JSON.stringify(devicePreferences));
         await fetchJson("/api/v1/label-workspace", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "preferences", preferences }) });
         if (preferenceKey.current === key) setPreferenceError(null);
       } catch (error) { if (preferenceKey.current === key) setPreferenceError(String(error)); }
@@ -826,38 +840,28 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
           <h1 className="text-3xl font-semibold tracking-[-0.035em] text-foreground sm:text-4xl">
             {t("header.title")}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            {t("header.description")}
-          </p>
+
           <p role="status" className="mt-1 text-xs text-muted">{t(!workspaceReady ? "workspace.loading" : savingQueue || savingPreferences ? "workspace.saving" : preferenceError ? "workspace.unsaved" : "workspace.saved")}</p>
         </div>
         {(workspaceReady || preparedLabels.length > 0) ? <a href="#prepared-labels" className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium">{t("queue.title")} · {preparedLabels.length}</a> : null}
       </div>
 
       <Card className="mb-5 p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="text-sm font-medium">
-            {t("direct.destination")}
-            <select className="ml-3 rounded-lg border border-border bg-surface p-2" value={printTarget} disabled={preparingPrint || connecting}
-              onChange={(event) => {
-                const target = event.target.value as "browser" | "ptouch" | "shared";
-                setPrintTarget(target);
-                if (target !== "ptouch" && setupId === "ptouch-preset") setSetupId(setups[0]?.id ?? "");
-                else if (!setupId && target === "ptouch") setSetupId("ptouch-preset");
-              }}>
-              <option value="browser">{t("direct.browser")}</option>
-              <option value="shared">{t("shared.destination")}</option>
-              <option value="ptouch">Brother PT-P710BT · USB / QZ Tray</option>
-            </select>
-          </label>
-          {isRasterPrint ? <>
+        <LabelPrintRoute value={printTarget} disabled={preparingPrint || connecting} onChange={target => {
+          setPrintTarget(target);
+          setPrintError(null);
+          setPrintSuccess(false);
+          if (target !== "ptouch" && setupId === "ptouch-preset") setSetupId(setups[0]?.id ?? "");
+          else if (!setupId && target === "ptouch") setSetupId("ptouch-preset");
+        }} />
+        {printTarget === "ptouch" ? <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4">
             <label className="text-sm font-medium">{t("direct.tape")}
-              <select className="ml-3 rounded-lg border border-border bg-surface p-2" value={tape} disabled={preparingPrint || printTarget === "shared"}
+              <select className="ml-3 rounded-lg border border-border bg-surface p-2" value={tape} disabled={preparingPrint}
                 onChange={(event) => setTape(Number(event.target.value) as PtouchTape)}>
                 {PTOUCH_TAPES.map((width) => <option key={width} value={width}>{width} mm</option>)}
               </select>
             </label>
-            {printTarget === "ptouch" ? <><Button variant="secondary" onClick={() => void connectPrinter()} disabled={connecting || preparingPrint}>
+            <Button variant="secondary" onClick={() => void connectPrinter()} disabled={connecting || preparingPrint}>
               {connecting ? <LoaderCircle size={16} className="animate-spin" /> : <Usb size={16} />}
               {connecting ? t("direct.connecting") : t("direct.connect")}
             </Button>
@@ -865,15 +869,18 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
               <select className="rounded-lg border border-border bg-surface p-2" value={printer} disabled={preparingPrint} onChange={(event) => setPrinter(event.target.value)}>
                 {printers.map((name) => <option key={name}>{name}</option>)}
               </select>
-            </label> : null}</> : null}
-          </> : null}
-        </div>
+            </label> : null}
+          <LabelHelp>{t("shared.localCancelHelp")}</LabelHelp>
+        </div> : null}
         {printTarget === "ptouch" ? <details className="mt-3 text-xs leading-5 text-muted"><summary className="cursor-pointer">{t("printer.title")}</summary><p>{t("direct.help", { height: (ptouchPrintableDots(tape) / PTOUCH_PIXELS_PER_MM).toFixed(1) })} <a href="https://qz.io/download/" target="_blank" rel="noreferrer" className="underline">{t("direct.download")}</a></p></details> : null}
-        {printTarget === "shared" ? <SharedLabelPrinter canManage={canManagePrinters} printerId={sharedPrinter} disabled={preparingPrint} onSelect={p=>{setSharedProfile(p); if (p) { setSharedPrinter(p.id); if (p.kind === "ptouch") setTape(p.tape); } else setSharedPrinter("");}} /> : null}
+        {printTarget === "shared" && workspaceReady ? <SharedLabelPrinter canManage={canManagePrinters} printerId={sharedPrinter} disabled={preparingPrint} onSelect={p=>{setSharedProfile(p); if (p) { setSharedPrinter(p.id); if (p.kind === "ptouch") setTape(p.tape); } else setSharedPrinter("");}} /> : null}
+
+
         {!isRasterPrint ? <LabelPrintMedia value={media} onChange={setMedia} disabled={preparingPrint} onTest={calibrationPage} /> : null}
         {printSuccess ? <p role="status" className="mt-3 text-sm text-brand">{t(printTarget === "shared" ? "shared.sent" : "direct.sent")}</p> : null}
       </Card>
-
+      {workspaceReady ? <SharedPrintJobs /> : null}
+      {workspaceReady && canManagePrinters && printTarget !== "browser" && selectedPrinter ? <PrinterSpoolQueue key={`${printTarget}:${selectedPrinter}`} remoteId={printTarget === "shared" ? sharedPrinter : undefined} name={printTarget === "shared" ? sharedProfile?.name ?? sharedPrinter : printer} /> : null}
 
       {setupHasQrImageOverlap || selectionError || printError ? (
         <p
@@ -1146,13 +1153,12 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
             ) : null}
           </div>
 
-          {activeSetup ? <div className="border-t border-border px-4 py-3">
+          {activeSetup ? <div className="flex items-center gap-2 border-t border-border px-4 py-3">
             <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
               <input type="checkbox" checked={activeSetup.inverted ?? false} disabled={preparingPrint || connecting} onChange={event => setInversionOverride({ key: `${activeSetup.id}:${activeSetup.revision}`, inverted: event.target.checked })} />
               {t("print.inverted")}
             </label>
-            <p className="mt-1 text-xs text-muted">{t("print.invertedTemporary")}</p>
-            {activeSetup.inverted ? <p className="mt-1 text-xs text-muted">{t("print.invertedHint")}</p> : null}
+            <LabelHelp><p>{t("print.invertedTemporary")}</p>{activeSetup.inverted ? <p className="mt-2">{t("print.invertedHint")}</p> : null}</LabelHelp>
           </div> : null}
 
           <div className={styles.previewViewport}>
@@ -1255,6 +1261,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
             !activeSetup ||
             preparingPrint ||
             connecting ||
+            sharedUnavailable ||
             (printTarget !== "browser" && !selectedPrinter) ||
             setupHasQrImageOverlap
           }
@@ -1266,7 +1273,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
           )}
           {preparingPrint
             ? t("print.preparing")
-            : t("print.button", { count: labels.length })}
+            : outputName ? t("shared.printAt", { name: outputName, count: labels.length }) : t("print.button", { count: labels.length })}
         </Button>
         </div>
         </div>
@@ -1276,15 +1283,14 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
         <Card id="prepared-labels" className="mt-5 scroll-mt-4 overflow-hidden" aria-label={t("queue.title")}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
             <div>
-              <h2 className="text-sm font-semibold">{t("queue.title")} · {preparedLabels.length}/100</h2>
-              <p className="mt-1 max-w-2xl text-xs leading-5 text-muted">{t("queue.description")}</p>
+              <div className="flex items-center gap-2"><h2 className="text-sm font-semibold">{t("queue.title")} · {preparedLabels.length}/100</h2><LabelHelp><p>{t("queue.description")}</p><p className="mt-2">{t("queue.session")}</p></LabelHelp></div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {preparedLabels.length > 0 ? <LabelCopyCount label={t("queue.seriesCopies")} value={effectiveSeriesCopies} max={maxSeriesCopies} onChange={setSeriesCopies} disabled={preparingPrint || connecting} /> : null}
               <Button variant="secondary" disabled={!preparedLabels.length || preparingPrint || connecting}
                 onClick={() => removePrepared(preparedLabels.map(label => label.id))}>{t("queue.clear")}</Button>
-              <Button disabled={!preparedLabels.length || (printTarget !== "browser" && !selectedPrinter) || preparingPrint || connecting || !!editingPrepared}
-                onClick={() => void printPrepared()}><Printer size={16} aria-hidden="true" />{t("queue.print", { count: preparedLabels.length * effectiveSeriesCopies })}</Button>
+              <Button disabled={!preparedLabels.length || (printTarget !== "browser" && !selectedPrinter) || sharedUnavailable || preparingPrint || connecting || !!editingPrepared}
+                onClick={() => void printPrepared()}><Printer size={16} aria-hidden="true" />{outputName ? t("shared.printAt", { name: outputName, count: preparedLabels.length * effectiveSeriesCopies }) : t("queue.print", { count: preparedLabels.length * effectiveSeriesCopies })}</Button>
             </div>
           </div>
           {queueNotice ? <p role="status" className="px-4 pt-3 text-sm text-brand">{queueNotice}</p> : null}
@@ -1315,7 +1321,7 @@ export function LabelPrinter({ canWrite = false, canManagePrinters = false }: { 
               </li>)}
             </ol>
           </> : <p className="p-4 text-sm text-muted">{t("queue.empty")}</p>}
-          <p className="border-t border-border px-4 py-3 text-xs text-muted">{t("queue.session")}</p>
+
         </Card>
       ) : null}
 

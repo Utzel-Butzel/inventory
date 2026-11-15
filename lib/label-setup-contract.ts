@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { computeLabelAutoLayout } from "@/lib/label-layout-engine";
 
 export const labelElementTypes = [
   "background",
@@ -77,7 +78,11 @@ const labelElementBoxShape = {
   width: normalizedSizeSchema,
   height: normalizedSizeSchema,
   visible: z.boolean(),
-  rowOrder: z.number().int().min(0).max(MAX_LABEL_ELEMENTS - 1).optional(),
+  groupId: z.string().uuid().optional(),
+  widthSizing: z.enum(["hug", "fill", "fixed"]).optional(),
+  heightSizing: z.enum(["hug", "fill", "fixed"]).optional(),
+  ignoreLayout: z.boolean().optional(),
+  rowOrder: z.number().int().min(0).max(MAX_LABEL_ELEMENTS * 2).optional(),
   rowWidthMm: z.number().finite().min(0.1).max(1000).optional(),
   rowHeightMm: z.number().finite().min(0.1).max(1000).optional(),
   layer: z.number().int().min(0).max(MAX_LABEL_ELEMENTS - 1).optional(),
@@ -228,15 +233,59 @@ export const labelElementsSchema = labelElementsBaseSchema.superRefine((elements
   }
 });
 
-export const labelRowLayoutSchema = z.object({
-  mode: z.literal("row"),
-  gapMm: z.number().finite().min(0).max(1000),
-  paddingTopMm: z.number().finite().min(0).max(1000),
-  paddingRightMm: z.number().finite().min(0).max(1000),
-  paddingBottomMm: z.number().finite().min(0).max(1000),
-  paddingLeftMm: z.number().finite().min(0).max(1000),
-  align: z.enum(labelTextVerticalAlignments),
+const frameOptions = {
+  widthSizing: z.enum(["hug", "fill", "fixed"]).optional(),
+  heightSizing: z.enum(["hug", "fill", "fixed"]).optional(),
+  widthMm: z.number().finite().min(0.1).max(1000).optional(),
+  heightMm: z.number().finite().min(0.1).max(1000).optional(),
+  mainAlign: z.enum(["start", "center", "end", "space-between"]).optional(),
+  wrap: z.boolean().optional(),
+  crossGapMm: z.number().finite().min(-1000).max(1000).optional(),
+};
+export const labelAutoLayoutGroupSchema = z.object({
+  ...frameOptions,
+  parentId: z.string().uuid().optional(),
+  order: z.number().int().min(0).max(MAX_LABEL_ELEMENTS * 2).optional(),
+  visible: z.boolean().optional(),
+  paddingTopMm: z.number().finite().min(-1000).max(1000).optional(),
+  paddingRightMm: z.number().finite().min(-1000).max(1000).optional(),
+  paddingBottomMm: z.number().finite().min(-1000).max(1000).optional(),
+  paddingLeftMm: z.number().finite().min(-1000).max(1000).optional(),
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(160),
+  direction: z.enum(["row", "column"]),
+  gapMm: z.number().finite().min(-1000).max(1000),
+  paddingMm: z.number().finite().min(-1000).max(1000),
+  align: z.enum(["start", "center", "end"]),
 }).strict();
+export type LabelAutoLayoutGroup = z.infer<typeof labelAutoLayoutGroupSchema>;
+
+export const labelRowLayoutSchema = z.object({
+  ...frameOptions,
+  direction: z.enum(["row", "column"]).optional(),
+  mode: z.literal("row"),
+  groups: z.array(labelAutoLayoutGroupSchema).max(MAX_LABEL_ELEMENTS).refine(groups => new Set(groups.map(group => group.id)).size === groups.length, "Duplicate group IDs").optional(),
+  gapMm: z.number().finite().min(-1000).max(1000),
+  paddingTopMm: z.number().finite().min(-1000).max(1000),
+  paddingRightMm: z.number().finite().min(-1000).max(1000),
+  paddingBottomMm: z.number().finite().min(-1000).max(1000),
+  paddingLeftMm: z.number().finite().min(-1000).max(1000),
+  align: z.enum(labelTextVerticalAlignments),
+}).strict().superRefine((layout, context) => {
+  const groups = new Map(layout.groups?.map(group => [group.id, group]));
+  for (const [index, group] of (layout.groups ?? []).entries()) {
+    const seen = new Set([group.id]);
+    let parent = group.parentId;
+    while (parent) {
+      if (seen.has(parent) || !groups.has(parent)) {
+        context.addIssue({ code: "custom", path: ["groups", index, "parentId"], message: "Frame parents must exist and cannot form a cycle." });
+        break;
+      }
+      seen.add(parent);
+      parent = groups.get(parent)?.parentId;
+    }
+  }
+});
 export type LabelRowLayout = z.infer<typeof labelRowLayoutSchema>;
 
 const labelSetupShape = {
@@ -252,16 +301,26 @@ export const labelSetupCreateSchema = z.object(labelSetupShape).strict().superRe
   if (!setup.layout && hasVisibleQrImageOverlap(setup.elements)) {
     context.addIssue({ code: "custom", path: ["elements"], message: "The object image must not overlap the QR code." });
   }
+  const groupIds = new Set(setup.layout?.groups?.map(group => group.id));
+  setup.elements.forEach((element, index) => {
+    if (element.id && groupIds.has(element.id)) {
+      context.addIssue({ code: "custom", path: ["elements", index, "id"], message: "Frame and element IDs must be unique." });
+    }
+    if (element.groupId && (element.type === "background" || !groupIds.has(element.groupId))) {
+      context.addIssue({ code: "custom", path: ["elements", index, "groupId"], message: "Element must reference an existing Auto Layout group." });
+    }
+  });
   if (labelRowHeightError(setup)) {
     context.addIssue({ code: "custom", path: ["layout"], message: "Auto Layout elements and padding must fit the fixed label height." });
   }
 });
 
-export function labelRowHeightError(setup: Pick<LabelSetupDto, "layout" | "elements" | "heightMm">) {
+export function labelRowHeightError(setup: Pick<LabelSetupDto, "layout" | "elements" | "heightMm" | "widthMm">) {
   if (!setup.layout) return false;
-  const available = setup.heightMm - setup.layout.paddingTopMm - setup.layout.paddingBottomMm;
-  return available < 0.1 || setup.elements.some(element => element.visible && element.type !== "background" &&
-    (element.rowHeightMm ?? element.height / 100 * setup.heightMm) > available + 0.000001);
+  // Content-dependent text height is measured by the renderer after fonts load.
+  // Validate fixed geometry here without rejecting a valid Hug layout on stale template heights.
+  const heights = Object.fromEntries(setup.elements.filter(element => element.heightSizing === "hug" && ["name", "subtitle", "identifier", "url", "location", "text"].includes(element.type)).map(element => [labelElementKey(element), 0.1]));
+  return computeLabelAutoLayout(setup, { heights }).overflowY;
 }
 
 export const labelSetupPatchSchema = z

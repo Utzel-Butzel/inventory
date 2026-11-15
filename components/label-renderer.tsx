@@ -279,7 +279,7 @@ export function LabelRenderer({
       data-label-inverted={setup.inverted ? "true" : undefined}
       data-label-width-mm={setup.widthMm}
       data-label-height-mm={setup.heightMm}
-      data-label-layout-error={labelRowHeightError(template) ? "Auto Layout elements and padding exceed the label height." : undefined}
+      data-label-layout-error={(setup.autoLayoutOverflowY ?? labelRowHeightError(template)) || setup.autoLayoutOverflowX ? "Auto Layout contents exceed the frame or label dimensions." : undefined}
       className={`${styles.label} ${styles.designedLabel}${setup.inverted ? ` ${styles.invertedLabel}` : ""}${className ? ` ${className}` : ""}`}
       style={{
         width: `${setup.widthMm * dimensionScale}${dimensionUnit}`,
@@ -384,10 +384,10 @@ export function LabelRenderer({
           const value = runs ? runs.map((run, index) => (
             <span key={index} style={{ fontWeight: run.weight ?? defaultLabelFontWeight(element), fontStyle: run.italic ? "italic" : "normal", textDecorationLine: labelTextDecoration(run) }}>{run.text}</span>
           )) : plainValue;
-          const growsWithText = setup.layout ? hugsRowContent(element) : element.autoWidth;
+          const growsWithText = setup.layout ? hugsRowContent(element) || element.heightSizing === "hug" : element.autoWidth;
           const textScale = (pixelsPerMm ?? 96 / 25.4) / LABEL_TEXT_PIXELS_PER_MM;
           const lineCount = (runs ? runs.map(run => run.text).join("") : plainValue).split("\n").length;
-          const contentHeightMm = lineCount * (element.fontSizeMm ?? defaultLabelFontSize(element)) * (element.lineHeight ?? 1.08);
+          const contentHeightMm = setup.layout && element.heightSizing === "hug" ? element.height / 100 * setup.heightMm : lineCount * (element.fontSizeMm ?? defaultLabelFontSize(element)) * (element.lineHeight ?? 1.08);
           const textOverflow = element.textOverflow ?? "ellipsis";
           return (
             <div
@@ -407,7 +407,7 @@ export function LabelRenderer({
                 <span className={styles.designedTextContent} style={{ position: "relative", height: pixelsPerMm ? `${contentHeightMm * pixelsPerMm}px` : `${contentHeightMm}mm` }}>
                   <span style={{ position: "absolute", left: 0, top: 0, width: `${100 / textScale}%`,
                     fontSize: `${(element.fontSizeMm ?? defaultLabelFontSize(element)) * LABEL_TEXT_PIXELS_PER_MM}px`,
-                    fontWeight: defaultLabelFontWeight(element), whiteSpace: "pre", lineHeight: element.lineHeight ?? 1.08,
+                    fontWeight: defaultLabelFontWeight(element), whiteSpace: setup.layout && !hugsRowContent(element) ? "pre-wrap" : "pre", overflowWrap: "anywhere", lineHeight: element.lineHeight ?? 1.08,
                     transform: `scale(${textScale})`, transformOrigin: "top left" }}>{value}</span>
                 </span>
               ) : textOverflow === "shrink" ? (

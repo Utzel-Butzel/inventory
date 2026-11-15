@@ -194,6 +194,8 @@
       "ocrLocal": "Text recognition runs locally on this device.",
       "searchablePdf": "Multi-page PDF with a searchable OCR text layer",
       "errors": {
+    "imageNotFound": "No matching image with a direct image URL was found. Refine the brand and model or upload an image.",
+    "reusableImageNotFound": "No matching image with confirmed reuse rights was found. Refine your search, enable “Ignore license” to include images with unclear rights, or upload an image.",
         "permission": "Camera access was blocked. Allow it in your browser settings.",
         "notFound": "No suitable camera was found on this device.",
         "inUse": "The camera is currently being used by another app.",
@@ -239,6 +241,8 @@
     "notes": "Internal notes"
   },
   "ai": {
+    "imageIgnoreLicense": "Ignore license",
+    "imageIgnoreLicenseHelp": "Include images with unclear licenses. This does not grant usage rights.",
     "title": "AI tools",
     "description": "Fill item details and add or improve images",
     "analyzeImages": "Fill details from photos",
@@ -786,7 +790,7 @@
     "researchComplete": "Missing details were added with AI web research. Existing information was preserved.",
     "researchNoChanges": "AI web research finished, but found no reliable missing details to add.",
     "coverComplete": "A new studio cover was generated and set as the first image.",
-    "imageSearchComplete": "A reusable web image was found, imported and appended to the item.",
+    "imageSearchComplete": "A web image was found, imported and appended to the item.",
     "imageGenerationComplete": "A new AI image was generated and appended to the item.",
     "savedTranslationStale": "Changes saved. Translation is still stale: {{reason}}",
     "savedTranslations": "Changes saved. Translation refresh is queued in the background.",

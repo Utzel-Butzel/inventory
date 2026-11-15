@@ -98,3 +98,11 @@ test("built-in prompts remain available when clients omit overrides", () => {
     /exactly one of: object, tool/,
   );
 });
+
+test("web image search accepts an explicit license opt-out only in search mode", () => {
+  for (const ignoreLicense of [true, false]) {
+    assert.equal(inventoryImageInputSchema.parse({ mode: "search", ignoreLicense }).ignoreLicense, ignoreLicense);
+  }
+  assert.equal(inventoryImageInputSchema.safeParse({ mode: "search", ignoreLicense: "true" }).success, false);
+  assert.equal(inventoryImageInputSchema.safeParse({ mode: "generate", ignoreLicense: true }).success, false);
+});

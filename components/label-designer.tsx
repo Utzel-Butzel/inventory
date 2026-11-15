@@ -49,6 +49,7 @@ import {
 } from "@/components/label-renderer";
 import { Button } from "@/components/ui";
 import { LabelCopyCount } from "@/components/label-copy-count";
+import { LabelFrameProperties, LabelLayoutTree, LabelSizingControl } from "@/components/label-layout-groups";
 import { LabelNumberControl } from "@/components/label-number-control";
 import { labelFontWeights, defaultLabelFontSize, defaultLabelFontWeight, mmToPoints, pointsToMm } from "@/lib/label-typography";
 import { labelNudge } from "@/lib/label-editor-keyboard";
@@ -56,8 +57,10 @@ import { LabelFontSelect } from "@/components/label-font-select";
 import { LabelRichTextEditor } from "@/components/label-rich-text-editor";
 import { defaultLabelTextContent, labelPlaceholderValues } from "@/lib/label-rich-text";
 import { useLabelLayout } from "@/components/use-label-layout";
-import { hugsRowContent, isRowText, initializeLabelRow, orderedRowElements, moveRowElement } from "@/lib/label-auto-layout";
-import { labelRowHeightError, type LabelRowLayout } from "@/lib/label-setup-contract";
+import { hugsRowContent, isRowText, initializeLabelRow } from "@/lib/label-auto-layout";
+import { elementWidthSizing, type LayoutBox } from "@/lib/label-layout-engine";
+import { ROOT_FRAME, layoutItems, layoutChildren, layoutAncestors, topLevelSelection, wrapLayoutNodes, dissolveLayoutFrame, moveLayoutNodes, deleteLayoutNodes, duplicateLayoutNodes } from "@/lib/label-layout-tree";
+import { labelRowHeightError, type LabelAutoLayoutGroup } from "@/lib/label-setup-contract";
 import { automaticLabelText } from "@/lib/label-dynamic-layout";
 import { DEFAULT_CROP_PADDING, DEFAULT_CROP_TOLERANCE } from "@/lib/label-image-crop";
 import { placeNewLabelElement, duplicateLabelElement, moveLabelElement, orderedLabelElements } from "@/lib/label-element-layout";
@@ -287,11 +290,19 @@ export function LabelDesigner({
   const undoRef = useRef<() => void>(() => undefined);
   const redoRef = useRef<() => void>(() => undefined);
   const [historyState, setHistoryState] = useState({ past: 0, future: 0 });
-  const [selectedKey, setSelectedKey] = useState(() => {
+  const [selectionState, setSelection] = useState<string[]>(() => {
     const initial = value.elements.find(element => element.type === "qr") ?? value.elements[0];
-    return initial ? labelElementKey(initial) : "";
+    return initial ? [labelElementKey(initial)] : [];
   });
-  const [coordinateDraft, setCoordinateDraft] = useState<{ element: string; key: CoordinateKey; unit: CoordinateUnit; text: string } | null>(null);
+  const selection = selectionState.filter(key => key === ROOT_FRAME || value.elements.some(element => labelElementKey(element) === key) || value.layout?.groups?.some(frame => frame.id === key));
+  const selectedKey = selection.at(-1) ?? "";
+  const setSelectedKey = (key: string | ((previous: string) => string)) => setSelection(previous => {
+    const next = typeof key === "function" ? key(previous.at(-1) ?? "") : key;
+    return next ? [next] : [];
+  });
+  const selectNode = (key: string, additive = false) => setSelection(previous => additive
+    ? previous.includes(key) ? previous.filter(id => id !== key) : [...previous.filter(id => id !== ROOT_FRAME), key]
+    : [key]);
   const [showAddElements, setShowAddElements] = useState(false);
   const [fontSizeUnit, setFontSizeUnit] = useState<"mm" | "pt">("mm");
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -303,6 +314,11 @@ export function LabelDesigner({
   const [previewScenario, setPreviewScenario] =
     useState<PreviewScenario>("current");
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
+  const [marquee, setMarquee] = useState<{ pointerId: number; startX: number; startY: number; x: number; y: number; originX: number; originY: number; additive: boolean; initial: string[] } | null>(null);
+  const [frameInteraction, setFrameInteraction] = useState<{
+    id: string; mode: "move" | "resize"; pointerId: number; startX: number; startY: number;
+    bounds: LayoutBox; boxes: Record<string, LayoutBox>; before: LabelSetupDraft;
+  } | null>(null);
   const [interaction, setInteraction] = useState<{
     key: string;
     mode: "move" | "resize";
@@ -392,11 +408,16 @@ export function LabelDesigner({
   const orderedElements = orderedLabelElements(value.elements);
   const selectedLayer = orderedElements.findIndex(element => labelElementKey(element) === selectedKey);
   const rowLayout = value.layout;
-  const rowItems = orderedRowElements(value.elements);
+  const selectedFrame = rowLayout && selection.length <= 1 ? selectedKey === ROOT_FRAME || !selection.length ? rowLayout : rowLayout.groups?.find(frame => frame.id === selectedKey) : undefined;
+  const selectedParent = layoutItems(value).find(item => item.id === selectedKey)?.parentId ?? ROOT_FRAME;
+  const selectedSiblings = layoutChildren(value, selectedParent);
+  const layoutBoxes: Record<string, LayoutBox> = useMemo(() => ({ ...previewLayout.autoLayoutFrames,
+    ...Object.fromEntries(previewLayout.elements.map(element => [labelElementKey(element), { x: element.x / 100 * previewLayout.widthMm,
+      y: element.y / 100 * previewLayout.heightMm, width: element.width / 100 * previewLayout.widthMm, height: element.height / 100 * previewLayout.heightMm }])) }), [previewLayout]);
   const autoText = rowLayout ? undefined : automaticLabelText(value.elements);
   const qrImageOverlap = !rowLayout && hasVisibleQrImageOverlap(value.elements);
-  const rowHeightError = labelRowHeightError(value);
-  const rowWidthError = !!rowLayout && previewLayout.widthMm > 1000;
+  const rowHeightError = previewLayout.autoLayoutOverflowY ?? labelRowHeightError(value);
+  const rowWidthError = !!rowLayout && (previewLayout.widthMm > 1000 || !!previewLayout.autoLayoutOverflowX);
   const layoutInvalid = qrImageOverlap || rowHeightError || rowWidthError;
   const canUndo = historyState.past > 0;
   const canRedo = historyState.future > 0;
@@ -478,21 +499,65 @@ export function LabelDesigner({
     [applyDraft],
   );
 
-  const updateRow = (patch: Partial<LabelRowLayout>, record = true) => {
+  const updateFrame = (id: string, patch: Partial<LabelAutoLayoutGroup>, record = true) => {
     const current = currentValueRef.current;
-    if (current.layout) applyDraft({ ...current, layout: { ...current.layout, ...patch } }, record);
+    if (!current.layout) return;
+    if (id === ROOT_FRAME) {
+      const { widthMm, heightMm, align, ...rest } = patch;
+      applyDraft({ ...current, ...(widthMm !== undefined ? { widthMm } : {}), ...(heightMm !== undefined ? { heightMm } : {}),
+        layout: { ...current.layout, ...rest, ...(align ? { align: align === "start" ? "top" : align === "end" ? "bottom" : "middle" } : {}) } }, record);
+    } else applyDraft({ ...current, layout: { ...current.layout, groups: current.layout.groups?.map(frame => frame.id === id ? { ...frame, ...patch } : frame) } }, record);
+  };
+  const setSizing = (id: string, axis: "width" | "height", mode: "hug" | "fill" | "fixed") => {
+    let current = structuredClone(currentValueRef.current);
+    if (!current.layout) return;
+    const size = axis === "width" ? "widthMm" : "heightMm", sizing = axis === "width" ? "widthSizing" : "heightSizing";
+    const bounds = layoutBoxes[id];
+    const measured = Math.min(1000, Math.max(0.1, bounds?.[axis] ?? 10));
+    if (id === ROOT_FRAME) {
+      current = { ...current, [size]: measured, layout: { ...current.layout, [sizing]: mode } };
+    } else if (current.layout.groups?.some(frame => frame.id === id)) {
+      current.layout.groups = current.layout.groups.map(frame => frame.id === id ? { ...frame, [sizing]: mode, [size]: measured } : frame);
+    } else current.elements = current.elements.map(element => labelElementKey(element) === id ? { ...element, [sizing]: mode, [axis === "width" ? "rowWidthMm" : "rowHeightMm"]: measured } : element);
+    // Fill needs a definite parent dimension. Freeze a hugging parent at its current size.
+    if (mode === "fill") {
+      const parentId = layoutItems(current).find(item => item.id === id)?.parentId ?? ROOT_FRAME;
+      const parentSize = Math.min(1000, Math.max(0.1, layoutBoxes[parentId]?.[axis] ?? current[size]));
+      if (parentId === ROOT_FRAME) {
+        if (axis === "width" && current.layout!.widthSizing !== "fixed") current = { ...current, widthMm: parentSize, layout: { ...current.layout!, widthSizing: "fixed" } };
+      } else current.layout!.groups = current.layout!.groups?.map(frame => frame.id === parentId && (frame[sizing] ?? "hug") === "hug" ? { ...frame, [sizing]: "fixed", [size]: parentSize } : frame);
+    }
+    applyDraft(current);
+  };
+  const createAutoLayout = () => {
+    const current = initializeLabelRow(currentValueRef.current);
+    if ((current.layout?.groups?.length ?? 0) >= MAX_LABEL_ELEMENTS) return;
+    if (selection.includes(ROOT_FRAME)) return;
+    const id = crypto.randomUUID();
+    applyDraft(wrapLayoutNodes(current, selection, id, t("designer.frames.defaultName", { number: (current.layout?.groups?.length ?? 0) + 1 }), layoutBoxes));
+    setSelectedKey(id);
+    requestAnimationFrame(() => canvasRef.current?.focus());
+  };
+  const dissolveFrame = (id: string) => {
+    const current = currentValueRef.current;
+    const children = layoutChildren(current, id).map(item => item.id);
+    applyDraft(dissolveLayoutFrame(current, id)); setSelection(children);
+    requestAnimationFrame(() => canvasRef.current?.focus());
   };
   const shiftRowElement = (key: string, direction: number) => {
     const current = currentValueRef.current;
-    const index = orderedRowElements(current.elements).findIndex(element => labelElementKey(element) === key);
-    applyDraft({ ...current, elements: moveRowElement(current.elements, key, index + direction) });
+    const parent = layoutItems(current).find(item => item.id === key)?.parentId ?? ROOT_FRAME;
+    const index = layoutChildren(current, parent).findIndex(item => item.id === key);
+    applyDraft(moveLayoutNodes(current, [key], parent, index + direction));
   };
 
   const addElement = (type: ElementType) => {
     const current = currentValueRef.current;
     if (current.elements.length >= MAX_LABEL_ELEMENTS) return;
-    const element = placeNewLabelElement(newElement(type), current.elements);
-    applyDraft({ ...current, elements: [...current.elements, { ...element, ...(current.layout ? { rowOrder: MAX_LABEL_ELEMENTS } : {}) }] });
+    const parentId = current.layout?.groups?.some(frame => frame.id === selectedKey) ? selectedKey
+      : current.elements.find(element => labelElementKey(element) === selectedKey)?.groupId;
+    const element = { ...placeNewLabelElement(newElement(type), current.elements), ...(current.layout && type !== "background" ? { groupId: parentId } : {}) };
+    applyDraft({ ...current, elements: [...current.elements, { ...element, ...(current.layout ? { rowOrder: current.elements.filter(item => item.type !== "background").length } : {}) }] });
     setSelectedKey(labelElementKey(element));
     setShowAddElements(false);
     addButtonRef.current?.focus();
@@ -555,21 +620,29 @@ export function LabelDesigner({
       const deltaY = ((event.clientY - interaction.startY) / rect.height) * 100;
       const original = interaction.original;
 
-      if (currentValueRef.current.layout && original.type !== "background") {
+      if (currentValueRef.current.layout && original.type !== "background" && !original.ignoreLayout) {
         const current = currentValueRef.current;
         if (interaction.mode === "move") {
-          const pointerX = (event.clientX - rect.left) / pixelsPerMm;
-          const items = orderedRowElements(interaction.layoutBefore.elements).filter(element => element.visible && labelElementKey(element) !== interaction.key);
-          const before = items.find(element => pointerX < (element.x + element.width / 2) / 100 * interaction.layoutBefore.widthMm);
-          const remaining = orderedRowElements(interaction.draftBefore.elements).filter(element => labelElementKey(element) !== interaction.key);
-          const index = before ? remaining.findIndex(element => labelElementKey(element) === labelElementKey(before)) : remaining.length;
-          const elements = moveRowElement(current.elements, interaction.key, index);
-          if (JSON.stringify(elements) !== JSON.stringify(current.elements)) applyDraft({ ...current, elements }, false);
+          const group = current.layout?.groups?.find(group => group.id === original.groupId);
+          const vertical = (group?.direction ?? current.layout?.direction) === "column";
+          const pointer = vertical ? (event.clientY - rect.top) / pixelsPerMm : (event.clientX - rect.left) / pixelsPerMm;
+          const parent = original.groupId ?? ROOT_FRAME;
+          const siblings = layoutChildren(interaction.draftBefore, parent).filter(item => item.id !== interaction.key);
+          const before = siblings.find(item => {
+            const child = interaction.layoutBefore.elements.find(element => labelElementKey(element) === item.id);
+            const box = child ? { x: child.x / 100 * interaction.layoutBefore.widthMm, y: child.y / 100 * interaction.layoutBefore.heightMm,
+              width: child.width / 100 * interaction.layoutBefore.widthMm, height: child.height / 100 * interaction.layoutBefore.heightMm } : layoutBoxes[item.id];
+            return box && pointer < (vertical ? box.y + box.height / 2 : box.x + box.width / 2);
+          });
+          const index = before ? siblings.findIndex(item => item.id === before.id) : siblings.length;
+          const next = moveLayoutNodes(current, [interaction.key], parent, index);
+          if (JSON.stringify(next) !== JSON.stringify(current)) applyDraft(next, false);
         } else {
           const snapMm = (mm: number) => snapToGrid ? Math.round(mm / gridSizeMm) * gridSizeMm : roundMeasurement(mm);
           updateElement(interaction.key, {
-            ...(hugsRowContent(original) ? {} : { rowWidthMm: clamp(snapMm((original.rowWidthMm ?? original.width / 100 * value.widthMm) + (event.clientX - interaction.startX) / pixelsPerMm), 0.1, 1000) }),
-            rowHeightMm: clamp(snapMm((original.rowHeightMm ?? original.height / 100 * value.heightMm) + (event.clientY - interaction.startY) / pixelsPerMm), 0.1, Math.max(0.1, value.heightMm - current.layout!.paddingTopMm - current.layout!.paddingBottomMm)),
+            ...(hugsRowContent(original) ? {} : { widthSizing: "fixed", rowWidthMm: clamp(snapMm((interaction.layoutBefore.elements.find(element => labelElementKey(element) === interaction.key)!.width / 100 * interaction.layoutBefore.widthMm) + (event.clientX - interaction.startX) / pixelsPerMm), 0.1, 1000) }),
+            heightSizing: "fixed",
+            rowHeightMm: clamp(snapMm((interaction.layoutBefore.elements.find(element => labelElementKey(element) === interaction.key)!.height / 100 * interaction.layoutBefore.heightMm) + (event.clientY - interaction.startY) / pixelsPerMm), 0.1, 1000),
           }, false);
         }
         return;
@@ -608,7 +681,7 @@ export function LabelDesigner({
     };
     const handlePointerUp = (event: PointerEvent) => {
       if (event.pointerId !== interaction.pointerId) return;
-      if (JSON.stringify(currentValueRef.current.elements) !== JSON.stringify(interaction.draftBefore.elements)) {
+      if (JSON.stringify(currentValueRef.current) !== JSON.stringify(interaction.draftBefore)) {
         recordHistory(interaction.draftBefore);
       }
       setInteraction(null);
@@ -621,7 +694,78 @@ export function LabelDesigner({
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [interaction, recordHistory, snapCoordinate, updateElement, value.heightMm, value.widthMm, pixelsPerMm, previewLayout, applyDraft, snapToGrid, gridSizeMm]);
+  }, [interaction, recordHistory, snapCoordinate, updateElement, value.heightMm, value.widthMm, pixelsPerMm, previewLayout, layoutBoxes, applyDraft, snapToGrid, gridSizeMm]);
+
+  useEffect(() => {
+    if (!frameInteraction) return;
+    const drag = frameInteraction;
+    const move = (event: PointerEvent) => {
+      if (event.pointerId !== drag.pointerId || Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 3) return;
+      const current = currentValueRef.current;
+      if (!current.layout) return;
+      if (drag.mode === "resize") {
+        const widthMm = clamp(roundMeasurement(drag.bounds.width + (event.clientX - drag.startX) / pixelsPerMm), 0.1, 1000);
+        const heightMm = clamp(roundMeasurement(drag.bounds.height + (event.clientY - drag.startY) / pixelsPerMm), 0.1, 1000);
+        applyDraft({ ...current, layout: { ...current.layout, groups: current.layout.groups?.map(frame => frame.id === drag.id
+          ? { ...frame, widthSizing: "fixed", heightSizing: "fixed", widthMm, heightMm } : frame) } }, false);
+      } else {
+        const parent = layoutItems(drag.before).find(item => item.id === drag.id)?.parentId ?? ROOT_FRAME;
+        const parentFrame = drag.before.layout?.groups?.find(frame => frame.id === parent) ?? drag.before.layout;
+        const vertical = parentFrame?.direction === "column";
+        const siblings = layoutChildren(drag.before, parent).filter(item => item.id !== drag.id);
+        const center = vertical ? drag.bounds.y + drag.bounds.height / 2 + (event.clientY - drag.startY) / pixelsPerMm : drag.bounds.x + drag.bounds.width / 2 + (event.clientX - drag.startX) / pixelsPerMm;
+        const target = siblings.findIndex(item => { const box = drag.boxes[item.id]; return box && center < (vertical ? box.y + box.height / 2 : box.x + box.width / 2); });
+        applyDraft(moveLayoutNodes(current, [drag.id], parent, target < 0 ? siblings.length : target), false);
+      }
+    };
+    const finish = (event: PointerEvent) => {
+      if (event.pointerId !== drag.pointerId) return;
+      if (event.type === "pointercancel") applyDraft(drag.before, false);
+      else if (JSON.stringify(currentValueRef.current) !== JSON.stringify(drag.before)) recordHistory(drag.before);
+      setFrameInteraction(null);
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", finish); window.addEventListener("pointercancel", finish);
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish); };
+  }, [frameInteraction, pixelsPerMm, applyDraft, recordHistory]);
+  useEffect(() => {
+    if (!marquee) return;
+    const start = marquee;
+    const move = (event: PointerEvent) => {
+      if (event.pointerId === start.pointerId) setMarquee(previous => previous ? { ...previous,
+        x: (event.clientX - start.originX) / pixelsPerMm, y: (event.clientY - start.originY) / pixelsPerMm } : null);
+    };
+    const finish = (event: PointerEvent) => {
+      if (event.pointerId !== start.pointerId) return;
+      if (event.type !== "pointercancel") {
+        const endX = (event.clientX - start.originX) / pixelsPerMm, endY = (event.clientY - start.originY) / pixelsPerMm;
+        const minX = Math.min(start.startX, endX), maxX = Math.max(start.startX, endX);
+        const minY = Math.min(start.startY, endY), maxY = Math.max(start.startY, endY);
+        const hit = Object.entries(layoutBoxes).filter(([id, box]) => id !== ROOT_FRAME && (previewLayout.autoLayoutFrames?.[id] || previewLayout.elements.some(element => element.visible && labelElementKey(element) === id)) && box.x >= minX && box.y >= minY && box.x + box.width <= maxX && box.y + box.height <= maxY).map(([id]) => id);
+        const ids = start.additive ? [...start.initial, ...hit] : hit;
+        setSelection(value.layout ? topLevelSelection(value, ids) : [...new Set(ids)]);
+      }
+      setMarquee(null);
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", finish); window.addEventListener("pointercancel", finish);
+    return () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish); };
+  }, [marquee, pixelsPerMm, layoutBoxes, previewLayout, value]);
+  const beginMarquee = (event: ReactPointerEvent) => {
+    if (event.button !== 0) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    event.preventDefault(); canvasRef.current?.focus();
+    const x = (event.clientX - rect.left) / pixelsPerMm, y = (event.clientY - rect.top) / pixelsPerMm;
+    setMarquee({ pointerId: event.pointerId, startX: x, startY: y, x, y, originX: rect.left, originY: rect.top,
+      additive: event.shiftKey, initial: selection });
+  };
+  const beginFrameInteraction = (event: ReactPointerEvent, id: string, mode: "move" | "resize") => {
+    event.preventDefault(); event.stopPropagation(); canvasRef.current?.focus();
+    if (event.shiftKey || event.metaKey || event.ctrlKey) { selectNode(id, true); return; }
+    setSelectedKey(id);
+    const bounds = layoutBoxes[id];
+    if (bounds) setFrameInteraction({ id, mode, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      bounds, boxes: structuredClone(layoutBoxes), before: structuredClone(currentValueRef.current) });
+  };
 
   const beginInteraction = (
     event: ReactPointerEvent,
@@ -631,6 +775,12 @@ export function LabelDesigner({
     event.preventDefault();
     event.stopPropagation();
     canvasRef.current?.focus();
+    if (event.shiftKey || event.metaKey || event.ctrlKey) { selectNode(labelElementKey(element), true); return; }
+    if (mode === "move" && rowLayout && element.groupId && selectedKey !== labelElementKey(element)) {
+      const ancestors = layoutAncestors(value, labelElementKey(element)).filter(id => id !== ROOT_FRAME);
+      beginFrameInteraction(event, ancestors.find(id => selection.includes(id)) ?? ancestors.at(-1)!, "move");
+      return;
+    }
     setSelectedKey(labelElementKey(element));
     setInteraction({
       key: labelElementKey(element),
@@ -645,16 +795,38 @@ export function LabelDesigner({
   };
 
   const handleEditorKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
-    if (event.defaultPrevented || event.nativeEvent.isComposing || saving || testPrintLock.current || uploadLock.current || interaction) return;
+    if (event.defaultPrevented || event.nativeEvent.isComposing || saving || testPrintLock.current || uploadLock.current || interaction || frameInteraction) return;
     const target = event.target as HTMLElement;
     if (target.isContentEditable || target.closest("input, textarea, select, [role='menu']")) return;
+    if (event.shiftKey && (event.code === "KeyA" || event.key.toLowerCase() === "a")) {
+      event.preventDefault();
+      if (event.altKey && rowLayout?.groups?.some(frame => frame.id === selectedKey)) dissolveFrame(selectedKey);
+      else if (!event.altKey) createAutoLayout();
+      return;
+    }
+    if (event.key === "Enter" && rowLayout?.groups?.some(frame => frame.id === selectedKey)) {
+      event.preventDefault(); const child = layoutChildren(value, selectedKey)[0]; if (child) setSelectedKey(child.id); return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
-      setSelectedKey("");
+      setSelectedKey(rowLayout && selectedKey && selectedKey !== ROOT_FRAME ? selectedParent : "");
       canvasRef.current?.focus();
       return;
     }
     const mod = event.metaKey || event.ctrlKey;
+    if (rowLayout && selection.length && !selection.includes(ROOT_FRAME)) {
+      if (mod && event.shiftKey && event.key.toLowerCase() === "g") { event.preventDefault(); dissolveFrame(selectedKey); return; }
+      if (mod && event.key.toLowerCase() === "d") {
+        event.preventDefault(); const result = duplicateLayoutNodes(currentValueRef.current, selection, () => crypto.randomUUID());
+        applyDraft(result.setup); setSelection(result.ids); return;
+      }
+      if (["Delete", "Backspace"].includes(event.key)) {
+        event.preventDefault(); applyDraft(deleteLayoutNodes(currentValueRef.current, selection)); setSelectedKey(selectedParent); requestAnimationFrame(() => canvasRef.current?.focus()); return;
+      }
+      if (rowLayout.groups?.some(frame => frame.id === selectedKey) && event.key.startsWith("Arrow")) {
+        event.preventDefault(); shiftRowElement(selectedKey, event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1); return;
+      }
+    }
     if (mod && event.key.toLowerCase() === "d" && selected) {
       event.preventDefault(); duplicateSelected(); canvasRef.current?.focus(); return;
     }
@@ -669,7 +841,7 @@ export function LabelDesigner({
     }
     if (!mod && !event.altKey && selected && rowLayout && selected.type !== "background" && event.key.startsWith("Arrow")) {
       event.preventDefault();
-      if (event.key === "ArrowLeft" || event.key === "ArrowRight") shiftRowElement(selectedKey, event.key === "ArrowLeft" ? -1 : 1);
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) shiftRowElement(selectedKey, event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1);
       return;
     }
     if (!mod && !event.altKey && selected) {
@@ -706,7 +878,7 @@ export function LabelDesigner({
         const width = 30;
         const height = Math.min(80, Math.max(5, width * current.widthMm / current.heightMm * decoded.naturalHeight / decoded.naturalWidth));
         const element = placeNewLabelElement({ ...newElement("image"), type: "image", width, height, fit: "contain", source, altText: file.name.slice(0, 300) }, current.elements);
-        applyDraft({ ...current, elements: [...current.elements, { ...element, ...(current.layout ? { rowOrder: MAX_LABEL_ELEMENTS } : {}) }] });
+        applyDraft({ ...current, elements: [...current.elements, { ...element, ...(current.layout ? { rowOrder: current.elements.filter(item => item.type !== "background").length } : {}) }] });
         setSelectedKey(labelElementKey(element));
       } else {
         const element = current.elements.find(element => labelElementKey(element) === key);
@@ -722,7 +894,7 @@ export function LabelDesigner({
     if (!selected || value.elements.length >= MAX_LABEL_ELEMENTS) return;
     const current = currentValueRef.current;
     const copy = duplicateLabelElement(selected, current.elements, crypto.randomUUID());
-    applyDraft({ ...current, elements: [...current.elements, { ...copy, ...(current.layout ? { rowOrder: MAX_LABEL_ELEMENTS } : {}) }] });
+    applyDraft({ ...current, elements: [...current.elements, { ...copy, ...(current.layout ? { rowOrder: current.elements.filter(item => item.type !== "background").length } : {}) }] });
     setSelectedKey(labelElementKey(copy));
   };
   const testPrint = async () => {
@@ -803,7 +975,7 @@ export function LabelDesigner({
         </header>
 
         <div inert={testPrinting || uploadingImage || saving} className="grid min-h-0 flex-1 overflow-y-auto xl:grid-cols-[250px_minmax(300px,1fr)_320px] xl:overflow-hidden">
-          <aside className="border-b border-border p-5 xl:overflow-y-auto xl:border-b-0 xl:border-r">
+          <aside className="relative border-b border-border p-5 xl:overflow-y-auto xl:border-b-0 xl:border-r">
             <label className="block text-[12px] font-semibold text-muted">
               {t("designer.setupName")}
               <input
@@ -820,48 +992,24 @@ export function LabelDesigner({
             </label>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {(["widthMm", "heightMm"] as const).map((key) => (
-                <label key={key} className="block text-[12px] font-semibold text-muted">
-                  {key === "widthMm"
-                    ? t("designer.width")
-                    : t("designer.height")}
-                  <input
-                    type="number"
-                    min="1"
-                    max="1000"
-                    step="0.1"
-                    value={rowLayout && key === "widthMm" ? roundMeasurement(previewLayout.widthMm) : value[key]}
-                    disabled={!!rowLayout && key === "widthMm"}
-                    onChange={(event) => {
-                      const next = Number(event.target.value);
-                      if (Number.isFinite(next)) {
-                        applyDraft({ ...currentValueRef.current, [key]: next });
-                      }
-                    }}
-                    className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus"
-                  />
-                </label>
+                <LabelNumberControl key={key} label={key === "widthMm" ? t("designer.width") : t("designer.height")}
+                  min={1} max={1000} step={0.1} unit="mm"
+                  value={rowLayout && key === "widthMm" && rowLayout.widthSizing !== "fixed" ? roundMeasurement(previewLayout.widthMm) : value[key]}
+                  disabled={!!rowLayout && key === "widthMm" && rowLayout.widthSizing !== "fixed"}
+                  onChange={(next, record) => applyDraft({ ...currentValueRef.current, [key]: next }, record)} />
               ))}
             </div>
 
             <label className="mt-4 block text-xs font-semibold text-muted">
               {t("designer.layoutMode")}
-              <select value={rowLayout ? "row" : "free"} onChange={event => applyDraft(event.target.value === "row" ? initializeLabelRow(currentValueRef.current) : { ...currentValueRef.current, layout: null })}
+              <select value={rowLayout ? "row" : "free"} onChange={event => applyDraft(event.target.value === "row" ? initializeLabelRow(currentValueRef.current) : { ...currentValueRef.current, layout: null, elements: currentValueRef.current.elements.map(element => ({ ...element, groupId: undefined })) })}
                 className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-2 text-xs text-foreground">
                 <option value="free">{t("designer.freeLayout")}</option>
                 <option value="row">{t("designer.rowLayout")}</option>
               </select>
             </label>
             {rowLayout ? <div className="mt-3 space-y-3">
-              <p className="text-xs leading-5 text-muted">{t("designer.rowHint")}</p>
-              {(["gapMm", "paddingTopMm", "paddingRightMm", "paddingBottomMm", "paddingLeftMm"] as const).map(key =>
-                <LabelNumberControl key={key} label={t(`designer.row.${key}`)} value={rowLayout[key]} min={0} max={1000} step={0.1} sliderMax={20}
-                  onChange={(number, record) => updateRow({ [key]: number }, record)} />)}
-              <label className="block text-xs font-semibold text-muted">{t("designer.row.align")}
-                <select value={rowLayout.align} onChange={event => updateRow({ align: event.target.value as LabelRowLayout["align"] })}
-                  className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-foreground">
-                  {(["top", "middle", "bottom"] as const).map(align => <option key={align} value={align}>{t(`designer.row.${align}`)}</option>)}
-                </select>
-              </label>
+              <button type="button" onClick={() => setSelectedKey(ROOT_FRAME)} className="w-full rounded-lg border border-border px-3 py-2 text-left text-xs hover:bg-surface-hover">{t("designer.frames.editRoot")}</button>
               <p className="text-xs font-semibold text-brand">{t("designer.actualLength", { length: roundMeasurement(previewLayout.widthMm) })}</p>
             </div> : <>
             <label className="mt-4 block text-xs font-semibold text-muted">
@@ -882,7 +1030,7 @@ export function LabelDesigner({
             <p className="mt-2 text-[11px] leading-4 text-muted">{t("designer.autoLengthHint")}</p>
             {autoText ? <div className="mt-3">
               <LabelNumberControl label={t("designer.autoLengthRightMargin")} unit="mm"
-                value={autoText.autoWidthRightMarginMm ?? 0} min={0} max={1000} step={0.1} sliderMax={20}
+                value={autoText.autoWidthRightMarginMm ?? 0} min={0} max={1000} step={0.1}
                 onChange={(autoWidthRightMarginMm, record) => updateElement(labelElementKey(autoText), { autoWidthRightMarginMm }, record)} />
               <p className="mt-1.5 text-[11px] leading-4 text-muted">{t("designer.autoLengthRightMarginHint")}</p>
             </div> : null}
@@ -897,9 +1045,9 @@ export function LabelDesigner({
 
             <div className="mt-6">
               <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
-                {t(rowLayout ? "designer.rowOrder" : "designer.layersTitle")}
+                {t("designer.layersTitle")}
               </p>
-              <p className="mt-1 text-[11px] text-muted">{t(rowLayout ? "designer.rowHint" : "designer.layersHint")}</p>
+              <p className="mt-1 text-[11px] text-muted">{t(rowLayout ? "designer.frames.hint" : "designer.layersHint")}</p>
               <div className="mt-3" onKeyDown={event => {
                 if (event.key === "Escape" && showAddElements) {
                   event.preventDefault();
@@ -946,32 +1094,42 @@ export function LabelDesigner({
                   </p>
                 ) : null}
               </div>
-              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong px-3 py-2.5 text-xs font-semibold hover:bg-surface-hover">
+              <label className="relative mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong px-3 py-2.5 text-xs font-semibold hover:bg-surface-hover">
                 <Upload size={14} aria-hidden="true" />{t(uploadingImage ? "designer.imageUploading" : "designer.insertImage")}
                 <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml"
                   disabled={uploadingImage || value.elements.length >= MAX_LABEL_ELEMENTS}
                   onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadBackground(null, file); }} />
               </label>
               {backgroundError ? <p role="alert" className="mt-2 text-xs text-danger">{backgroundError}</p> : null}
-              <div className="mt-3 space-y-1.5">
-                {(rowLayout ? [...rowItems, ...value.elements.filter(element => element.type === "background")] : [...orderedElements].reverse()).map(element => {
+              {rowLayout ? <>
+                <button type="button" onClick={createAutoLayout} className="mt-3 flex w-full items-center justify-between rounded-lg border border-border px-2 py-2 text-xs hover:bg-surface-hover">
+                  <span>{t("designer.frames.add")}</span><kbd className="text-muted">{t("designer.frames.shortcut")}</kbd>
+                </button>
+                <LabelLayoutTree setup={value} selection={selection} elementName={elementName} onSelect={selectNode}
+                  onMove={(ids, parentId, index) => applyDraft(moveLayoutNodes(currentValueRef.current, ids, parentId, index))}
+                  onVisibility={(id, visible) => value.layout?.groups?.some(frame => frame.id === id) ? updateFrame(id, { visible }) : updateElement(id, { visible })} />
+                {value.elements.filter(element => element.type === "background").map(element => <button key={labelElementKey(element)} type="button" onClick={() => setSelectedKey(labelElementKey(element))}
+                  className="mt-1 block w-full rounded px-2 py-2 text-left text-xs hover:bg-surface-hover">{elementName(element)}</button>)}
+              </> : <div className="mt-3 space-y-1.5">
+                {[...orderedElements].reverse().map(element => {
                   const key = labelElementKey(element);
                   const option = ELEMENT_OPTIONS.find(item => item.type === element.type)!;
                   const Icon = option.icon;
                   const name = elementName(element);
+
                   return (
                     <div
                       key={key}
                       className={`flex w-full items-center rounded-xl border transition ${
-                        selectedKey === key
+                        selection.includes(key)
                           ? "border-brand-border bg-brand-soft"
                           : "border-transparent hover:bg-surface-hover"
                       }`}
                     >
                       <button
                         type="button"
-                        aria-pressed={selectedKey === key}
-                        onClick={() => setSelectedKey(current => current === key ? "" : key)}
+                        aria-pressed={selection.includes(key)}
+                        onClick={event => selectNode(key, event.shiftKey || event.metaKey || event.ctrlKey)}
                         className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
                       >
                         <Icon size={15} className="shrink-0 text-muted" aria-hidden="true" />
@@ -981,11 +1139,11 @@ export function LabelDesigner({
                       </button>
                       <div className="flex shrink-0 flex-col">
                         <button type="button" title={t(rowLayout ? "designer.rowEarlier" : "designer.bringForward")} aria-label={rowLayout ? `${name}: ${t("designer.rowEarlier")}` : t("designer.raiseElement", { element: name })}
-                          disabled={rowLayout ? element.type === "background" || element === rowItems[0] : key === labelElementKey(orderedElements.at(-1)!)}
+                          disabled={key === labelElementKey(orderedElements.at(-1)!)}
                           onClick={() => rowLayout ? shiftRowElement(key, -1) : applyDraft({ ...value, elements: moveLabelElement(value.elements, key, "forward") })}
                           className="rounded px-1 text-muted hover:text-brand disabled:opacity-25"><ArrowUp size={14} /></button>
                         <button type="button" title={t(rowLayout ? "designer.rowLater" : "designer.sendBackward")} aria-label={rowLayout ? `${name}: ${t("designer.rowLater")}` : t("designer.lowerElement", { element: name })}
-                          disabled={rowLayout ? element.type === "background" || element === rowItems.at(-1) : key === labelElementKey(orderedElements[0])}
+                          disabled={key === labelElementKey(orderedElements[0])}
                           onClick={() => rowLayout ? shiftRowElement(key, 1) : applyDraft({ ...value, elements: moveLabelElement(value.elements, key, "backward") })}
                           className="rounded px-1 text-muted hover:text-brand disabled:opacity-25"><ArrowDown size={14} /></button>
                       </div>
@@ -1013,15 +1171,14 @@ export function LabelDesigner({
                 {value.elements.length === 0 ? (
                   <p className="text-xs leading-5 text-muted">{t("designer.noElements")}</p>
                 ) : null}
-              </div>
+              </div>}
             </div>
           </aside>
 
           <div className="relative min-h-[500px] overflow-auto bg-surface-muted p-6 pt-40 subtle-grid sm:pt-28 xl:min-h-0"
             onPointerDown={event => {
               if (event.button !== 0 || event.target !== event.currentTarget) return;
-              setSelectedKey("");
-              canvasRef.current?.focus();
+              beginMarquee(event);
             }}>
             <div className="absolute left-3 right-3 top-3 z-40 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface/95 p-2 shadow-sm backdrop-blur">
               <label className="flex min-w-0 items-center gap-2 text-[11px] font-semibold text-muted">
@@ -1114,8 +1271,7 @@ export function LabelDesigner({
               onPointerDown={event => {
                 // Element drag/resize handles stop propagation; only empty canvas reaches here.
                 if (event.button !== 0) return;
-                setSelectedKey("");
-                canvasRef.current?.focus();
+                beginMarquee(event);
               }}>
               <div
                 ref={canvasRef}
@@ -1145,7 +1301,22 @@ export function LabelDesigner({
                   aria-hidden="true"
                 />
               ) : null}
-                <div className="absolute inset-0 z-10">
+                <div className="pointer-events-none absolute inset-0 z-10">
+                  {marquee ? <div className="absolute z-50 border border-focus bg-focus/10" style={{
+                    left: Math.min(marquee.startX, marquee.x) * pixelsPerMm, top: Math.min(marquee.startY, marquee.y) * pixelsPerMm,
+                    width: Math.abs(marquee.x - marquee.startX) * pixelsPerMm, height: Math.abs(marquee.y - marquee.startY) * pixelsPerMm,
+                  }} /> : null}
+                  {rowLayout?.groups?.map(frame => {
+                    const box = layoutBoxes[frame.id];
+                    if (!box || !previewLayout.autoLayoutFrames?.[frame.id]) return null;
+                    return <div key={frame.id} onPointerDown={event => beginFrameInteraction(event, frame.id, "move")} className={`pointer-events-auto absolute border ${selection.includes(frame.id) ? "border-focus" : "border-transparent"}`}
+                      style={{ left: box.x * pixelsPerMm, top: box.y * pixelsPerMm, width: box.width * pixelsPerMm, height: box.height * pixelsPerMm }}>
+                      {selection.includes(frame.id) || (!frame.parentId && !selection.some(id => rowLayout.groups?.some(item => item.id === id))) ? <button type="button" onPointerDown={event => beginFrameInteraction(event, frame.id, "move")}
+                        className={`pointer-events-auto absolute -top-5 cursor-move left-0 max-w-full truncate rounded px-1 text-[10px] ${selection.includes(frame.id) ? "bg-brand-solid text-on-brand" : "bg-surface text-muted"}`}>{frame.name}</button> : null}
+                      {selection.includes(frame.id) ? <button type="button" aria-label={t("designer.frames.resize")} onPointerDown={event => beginFrameInteraction(event, frame.id, "resize")}
+                        className="pointer-events-auto absolute -bottom-1.5 -right-1.5 z-30 size-3 cursor-nwse-resize border border-on-brand bg-brand-solid" /> : null}
+                    </div>;
+                  })}
                   {orderedLabelElements(previewLayout.elements)
                     .filter(
                       (element) => element.visible && element.type !== "background",
@@ -1153,8 +1324,8 @@ export function LabelDesigner({
                     .map((element) => (
                     <div
                       key={labelElementKey(element)}
-                      className={`absolute cursor-move border-2 transition-colors ${
-                        selectedKey === labelElementKey(element)
+                      className={`pointer-events-auto absolute cursor-move border-2 transition-colors ${
+                        selection.includes(labelElementKey(element))
                           ? "z-20 border-focus bg-focus/[0.035]"
                           : "z-10 border-transparent hover:border-focus/50"
                       }`}
@@ -1165,6 +1336,7 @@ export function LabelDesigner({
                         height: `${element.height}%`,
                       }}
                       onPointerDown={(event) => beginInteraction(event, element, "move")}
+                      onDoubleClick={event => { event.stopPropagation(); setSelectedKey(labelElementKey(element)); }}
                     >
                       {selectedKey === labelElementKey(element) ? (
                         <>
@@ -1199,11 +1371,20 @@ export function LabelDesigner({
             </div>
           </div>
 
-          <aside className="border-t border-border p-5 xl:overflow-y-auto xl:border-l xl:border-t-0">
+          <aside className="relative border-t border-border p-5 xl:overflow-y-auto xl:border-l xl:border-t-0">
             <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted">
               {t("designer.properties")}
             </p>
-            {selected ? (
+            {selection.length > 1 ? <div className="mt-3 space-y-3">
+              <p className="text-xs text-muted">{t("designer.frames.selection", { count: selection.length })}</p>
+              <Button onClick={createAutoLayout}>{t("designer.frames.add")} {t("designer.frames.shortcut")}</Button>
+            </div> : selectedFrame ? <div className="mt-3">
+              <LabelFrameProperties key={selectedKey || ROOT_FRAME} frame={selectedFrame} root={!("id" in selectedFrame)}
+                bounds={layoutBoxes[selectedKey || ROOT_FRAME] ?? { x: 0, y: 0, width: 10, height: 5 }}
+                onChange={(patch, record) => updateFrame(selectedKey || ROOT_FRAME, patch, record)}
+                onSizing={(axis, mode) => setSizing(selectedKey || ROOT_FRAME, axis, mode)}
+                onDissolve={"id" in selectedFrame ? () => dissolveFrame(selectedFrame.id) : undefined} />
+            </div> : selected ? (
               <div className="mt-3">
                 <div className="mb-4 flex items-center gap-2 rounded-xl bg-surface-subtle px-3 py-2.5">
                   {(() => {
@@ -1229,10 +1410,10 @@ export function LabelDesigner({
                 <div role="group" aria-label={t("designer.arrange")} className="mb-4 flex flex-wrap items-center gap-1 rounded-xl border border-border p-1.5">
                   {rowLayout && selected.type !== "background" ? <>
                     <button type="button" title={t("designer.rowEarlier")} aria-label={t("designer.rowEarlier")}
-                      disabled={selected === rowItems[0]} onClick={() => shiftRowElement(selectedKey, -1)}
+                      disabled={selectedKey === selectedSiblings[0]?.id} onClick={() => shiftRowElement(selectedKey, -1)}
                       className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-hover disabled:opacity-30"><ArrowLeft size={17} /></button>
                     <button type="button" title={t("designer.rowLater")} aria-label={t("designer.rowLater")}
-                      disabled={selected === rowItems.at(-1)} onClick={() => shiftRowElement(selectedKey, 1)}
+                      disabled={selectedKey === selectedSiblings.at(-1)?.id} onClick={() => shiftRowElement(selectedKey, 1)}
                       className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-hover disabled:opacity-30"><ArrowRight size={17} /></button>
                   </> : <>{([
                     ["forward", "bringForward", ArrowUp],
@@ -1263,15 +1444,30 @@ export function LabelDesigner({
                     </button>
                   </> : null}
                 </div>
-                {rowLayout && isRowText(selected) ? <label className="mb-3 block text-xs font-semibold text-muted">{t("designer.rowSizing")}
-                  <select value={selected.rowSizing ?? "content"} onChange={event => updateElement(selectedKey, { rowSizing: event.target.value as "content" | "fixed", rowWidthMm: previewSelected!.width / 100 * previewLayout.widthMm })}
-                    className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-foreground">
-                    <option value="content">{t("designer.hugContent")}</option><option value="fixed">{t("designer.fixedSize")}</option>
-                  </select>
-                </label> : null}
+                {rowLayout && selected.type !== "background" ? <div className="mb-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["width", "height"] as const).map(axis => <LabelSizingControl key={axis} axis={axis}
+                      value={layoutBoxes[selectedKey]?.[axis] ?? 1}
+                      mode={axis === "width" ? elementWidthSizing(selected) : selected.heightSizing ?? "fixed"}
+                      allowHug={isRowText(selected)} onMode={mode => setSizing(selectedKey, axis, mode)}
+                      onValue={(next, record) => updateElement(selectedKey, { [axis === "width" ? "rowWidthMm" : "rowHeightMm"]: next }, record)} />)}
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={!!selected.ignoreLayout}
+                    onChange={event => {
+                      const current = currentValueRef.current;
+                      const box = layoutBoxes[selectedKey], parent = layoutBoxes[selected.groupId ?? ROOT_FRAME];
+                      if (!event.target.checked || !box || !parent) { updateElement(selectedKey, { ignoreLayout: event.target.checked }); return; }
+                      applyDraft({ ...current, elements: current.elements.map(element => labelElementKey(element) === selectedKey ? { ...element, ignoreLayout: true, widthSizing: "fixed", heightSizing: "fixed",
+                        x: clamp((box.x - parent.x) / current.widthMm * 100, MIN_LABEL_POSITION, 100 - element.width),
+                        y: clamp((box.y - parent.y) / current.heightMm * 100, MIN_LABEL_POSITION, 100 - element.height), rowWidthMm: box.width, rowHeightMm: box.height } : element),
+                        layout: { ...current.layout!, groups: current.layout?.groups?.map(frame => frame.id === selected.groupId ? { ...frame,
+                          widthSizing: frame.widthSizing === "fill" ? "fill" : "fixed", heightSizing: frame.heightSizing === "fill" ? "fill" : "fixed", widthMm: parent.width, heightMm: parent.height } : frame) } });
+                    }} />{t("designer.frames.ignoreLayout")}</label>
+                  <button type="button" onClick={createAutoLayout} className="w-full rounded-lg border border-border px-2 py-2 text-xs hover:bg-surface-hover">{t("designer.frames.add")} {t("designer.frames.shortcut")}</button>
+                </div> : null}
                 {selected.type !== "background" ? (
                   <div className="grid grid-cols-2 gap-2">
-                    {(["x", "y", "width", "height"] as const).map((key) => {
+                    {(rowLayout ? ["x", "y"] as const : ["x", "y", "width", "height"] as const).map((key) => {
                       const dimensionMm = coordinateDimensionMm(key);
                       const shown = previewSelected ?? selected;
                       const minimumNormalized =
@@ -1287,29 +1483,20 @@ export function LabelDesigner({
                               ? Math.min(100, 100 - shown.x)
                               : Math.min(100, 100 - shown.y);
                       return (
-                        <label key={key} className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
-                          {t(`designer.coordinates.${key}`)} ({coordinateUnit === "mm" ? "mm" : "%"})
-                          <input
-                            type="number"
+                        <LabelNumberControl key={`${selectedKey}-${key}-${coordinateUnit}`} label={t(`designer.coordinates.${key}`)} unit={coordinateUnit === "mm" ? "mm" : "%"}
                             min={displayedCoordinate(key, minimumNormalized)}
                             max={rowLayout && (key === "width" || key === "height") ? displayedCoordinate(key, (key === "width" ? 1000 : value.heightMm - rowLayout.paddingTopMm - rowLayout.paddingBottomMm) / dimensionMm * 100) : displayedCoordinate(key, maximumNormalized)}
-                            step={coordinateUnit === "mm" ? "0.1" : "0.01"}
-                            value={coordinateDraft?.element === selectedKey && coordinateDraft.key === key && coordinateDraft.unit === coordinateUnit ? coordinateDraft.text : displayedCoordinate(key, previewSelected?.[key] ?? selected[key])}
-                            onBlur={() => setCoordinateDraft(null)}
-                            onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }}
-                            disabled={rowLayout ? key === "x" || key === "y" || key === "width" && hugsRowContent(selected) : key === "width" && "autoWidth" in selected && selected.autoWidth}
-                            onChange={(event) => {
-                              const text = event.target.value;
-                              setCoordinateDraft({ element: selectedKey, key, unit: coordinateUnit, text });
-                              const next = Number(text);
-                              if (text === "" || !Number.isFinite(next)) return;
+                            step={coordinateUnit === "mm" ? 0.1 : 0.01}
+                            value={displayedCoordinate(key, previewSelected?.[key] ?? selected[key])}
+                            disabled={rowLayout ? !selected.ignoreLayout : key === "width" && "autoWidth" in selected && selected.autoWidth}
+                            onChange={(next, record) => {
                               const normalized =
                                 coordinateUnit === "mm"
                                   ? (next / dimensionMm) * 100
                                   : next;
-                              if (rowLayout) {
+                              if (rowLayout && !selected.ignoreLayout) {
                                 const mm = normalized / 100 * dimensionMm;
-                                if (key === "width" || key === "height") updateElement(selectedKey, { [key === "width" ? "rowWidthMm" : "rowHeightMm"]: clamp(mm, 0.1, key === "width" ? 1000 : Math.max(0.1, value.heightMm - rowLayout.paddingTopMm - rowLayout.paddingBottomMm)) });
+                                if (key === "width" || key === "height") updateElement(selectedKey, { [key === "width" ? "rowWidthMm" : "rowHeightMm"]: clamp(mm, 0.1, key === "width" ? 1000 : Math.max(0.1, value.heightMm - rowLayout.paddingTopMm - rowLayout.paddingBottomMm)) }, record);
                                 return;
                               }
                               // Map the visible geometry back to the unchanged template coordinate system.
@@ -1326,11 +1513,10 @@ export function LabelDesigner({
                                     baseMaximum,
                                   ),
                                 ),
-                              });
+                              }, record);
                             }}
-                            className="mt-1.5 h-9 w-full rounded-lg border border-border bg-surface px-2.5 text-xs font-medium text-foreground outline-none focus:border-focus"
                           />
-                        </label>
+
                       );
                     })}
                   </div>
@@ -1338,7 +1524,7 @@ export function LabelDesigner({
 
                 {selected.type === "background" ? (
                   <div className="space-y-4">
-                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-surface-subtle px-3 py-3 text-xs font-semibold text-muted-strong hover:border-focus hover:text-foreground">
+                    <label className="relative flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-surface-subtle px-3 py-3 text-xs font-semibold text-muted-strong hover:border-focus hover:text-foreground">
                       <Upload size={15} aria-hidden="true" />
                       {selected.source
                         ? t("designer.replaceBackground")
@@ -1413,7 +1599,7 @@ export function LabelDesigner({
 
                 {selected.type === "image" ? (
                   <div>
-                    <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong px-3 py-3 text-xs font-semibold">
+                    <label className="relative mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong px-3 py-3 text-xs font-semibold">
                       <Upload size={14} />{t(selected.source ? "designer.replaceImage" : "designer.uploadOwnImage")}
                       <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml" disabled={uploadingImage}
                         onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadBackground(selectedKey, file); }} />
@@ -1551,7 +1737,7 @@ export function LabelDesigner({
                       <LabelNumberControl key={`${labelElementKey(selected)}-size-${fontSizeUnit}`} label={t("designer.fontSizeValue")} unit={fontSizeUnit}
                         value={fontSizeUnit === "pt" ? mmToPoints((selected as TextElement).fontSizeMm ?? defaultLabelFontSize(selected as TextElement)) : (selected as TextElement).fontSizeMm ?? defaultLabelFontSize(selected as TextElement)}
                         min={fontSizeUnit === "pt" ? mmToPoints(0.5) : 0.5} max={fontSizeUnit === "pt" ? mmToPoints(100) : 100} step={fontSizeUnit === "pt" ? 0.5 : 0.1}
-                        sliderMax={fontSizeUnit === "pt" ? 48 : 16} presets={fontSizeUnit === "pt" ? [6, 8, 9, 10, 12, 14, 16, 18, 24, 32, 48, 72] : [1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10, 12, 16]}
+                        presets={fontSizeUnit === "pt" ? [6, 8, 9, 10, 12, 14, 16, 18, 24, 32, 48, 72] : [1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8, 10, 12, 16]}
                         onChange={(size, record) => {
                           const mm = Math.min(100, Math.max(0.5, fontSizeUnit === "pt" ? pointsToMm(size) : size));
                           updateElement(labelElementKey(selected), { fontSizeMm: mm, ...((selected as TextElement).minFontSizeMm! > mm ? { minFontSizeMm: mm } : {}) }, record);
@@ -1559,7 +1745,7 @@ export function LabelDesigner({
                       <div className="grid grid-cols-2 gap-3">
                         <LabelNumberControl key={`${labelElementKey(selected)}-line`} label={t("designer.lineHeight")} value={(selected as TextElement).lineHeight ?? ((selected as TextElement).textOverflow === "shrink" ? 1.08 : 1.05)} min={0.8} max={3} step={0.01} unit="×"
                           onChange={(lineHeight, record) => updateElement(labelElementKey(selected), { lineHeight }, record)} />
-                        <LabelNumberControl key={`${labelElementKey(selected)}-spacing`} label={t("designer.letterSpacing")} value={((selected as TextElement).letterSpacingEm ?? 0) * 100} min={-10} max={100} step={1} unit="%" sliderMax={30}
+                        <LabelNumberControl key={`${labelElementKey(selected)}-spacing`} label={t("designer.letterSpacing")} value={((selected as TextElement).letterSpacingEm ?? 0) * 100} min={-10} max={100} step={1} unit="%"
                           onChange={(spacing, record) => updateElement(labelElementKey(selected), { letterSpacingEm: spacing / 100 }, record)} />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
@@ -1592,7 +1778,7 @@ export function LabelDesigner({
                       {t("designer.textOverflow")}
                       <select
                         value={(selected as TextElement).textOverflow ?? "ellipsis"}
-                        disabled={rowLayout ? hugsRowContent(selected) : (selected as TextElement).autoWidth}
+                        disabled={rowLayout ? hugsRowContent(selected) || selected.heightSizing === "hug" : (selected as TextElement).autoWidth}
                         onChange={(event) =>
                           updateElement(labelElementKey(selected), {
                             textOverflow: event.target.value as "ellipsis" | "shrink",
@@ -1609,28 +1795,12 @@ export function LabelDesigner({
                       </select>
                     </label>
                     {(selected as TextElement).textOverflow === "shrink" ? (
-                      <label className="mt-4 block text-[12px] font-semibold text-muted">
-                        {t("designer.minimumFontSize")}
-                        <input
-                          type="number"
-                          min="0.5"
-                          max={(selected as TextElement).fontSizeMm ?? 3}
-                          step="0.1"
-                          value={
-                            (selected as TextElement).minFontSizeMm ??
-                            Math.min((selected as TextElement).fontSizeMm ?? 3, 1)
-                          }
-                          onChange={(event) => {
-                            const next = Number(event.target.value);
-                            if (Number.isFinite(next)) {
-                              updateElement(labelElementKey(selected), {
-                                minFontSizeMm: next,
-                              } as Partial<LabelElement>);
-                            }
-                          }}
-                          className="mt-1.5 h-10 w-full rounded-xl border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-focus"
-                        />
-                      </label>
+                      <div className="mt-4">
+                        <LabelNumberControl label={t("designer.minimumFontSize")} unit="mm"
+                          min={0.5} max={(selected as TextElement).fontSizeMm ?? 3} step={0.1}
+                          value={(selected as TextElement).minFontSizeMm ?? Math.min((selected as TextElement).fontSizeMm ?? 3, 1)}
+                          onChange={(minFontSizeMm, record) => updateElement(labelElementKey(selected), { minFontSizeMm } as Partial<LabelElement>, record)} />
+                      </div>
                     ) : null}
                   </>
                 ) : null}

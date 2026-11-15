@@ -1,3 +1,43 @@
+# Agent version 2: office PC and Mac
+
+Deploy the server with migration `0081_printer_status_and_cancellation.sql` before
+updating these agents. Keep the existing config, installation name and state
+journals. Never run the old and new agent for the same registration simultaneously.
+
+Use separate registrations/configs for the office PC and the Mac. The Labels
+setup panel downloads this archive and a separate credential-bearing config.
+A config from another Inventory website cannot be used for this website.
+
+For macOS, put the downloaded `config.json` next to these files and run:
+
+```sh
+python3 install_macos.py --config config.json --name paperlesspaper
+```
+
+Python 3.10+ and Xcode command-line tools are required. Bluetooth configs must
+include the paired PT-P710BT's `bluetoothAddress`; the installer sets the absolute
+`bluetoothHelper` path. It starts a private per-user LaunchAgent, so waiting jobs
+can print immediately. The Mac needs internet and Bluetooth permission. A separate
+installation name preserves an existing agent for another website.
+
+For Windows P-touch, use the PowerShell installer below. The updated Python agent
+and `Install-SystemPrintAgent.ps1` also support Windows system/PDF printers.
+Stop the old agent after outstanding jobs/receipts have finished before updating.
+Do not remove `pending.json` or the submitted-job receipts to clear errors.
+
+Version 2 reports computer/device status and supports cancellation requests.
+Windows/CUPS queue presence is shown as **readiness unknown**, never as a confirmed
+Bluetooth connection. The Mac Bluetooth helper can report loaded tape and errors.
+
+Queued jobs are cancelled before transfer. A running transfer/spool job can only
+be stopped on a best-effort basis: already printed/buffered labels cannot be
+retracted. Stop receipts are durable; a lost HTTP response retries the receipt,
+not the print or cancel operation. Submitted spool jobs can be cancelled for ten
+minutes using the local receipt. Browser/QZ jobs must be cancelled in the local
+OS queue. Never automatically resubmit an uncertain job.
+
+---
+
 # Shared Office label printing
 
 Users select **Shared Office printer** in the Labels view. Their browser renders
@@ -36,7 +76,7 @@ The Windows PC must remain awake, online and connected to the powered-on printer
    an at-startup task running as **LOCAL SERVICE**, and starts it immediately.
    Files live in `C:\ProgramData\InventoryPrintAgent`, readable only by that
    service, SYSTEM and administrators. No inbound firewall rule is needed.
-4. Verify **Online** in Inventory and send one test label. Remove the temporary
+4. Verify the computer/device status in Inventory and send one test label. Remove the temporary
    copy of `config.json` and any temporary transfer share after installation.
 
 ## Another Inventory website on the same Windows PC
@@ -72,8 +112,8 @@ layout, text, preview and raster snapshot; later template edits do not alter it.
 
 `/api/v1/label-workspace`, `/api/v1/label-printers`, and
 `/api/v1/label-print-jobs` require a browser session. The `iprt_` credential from
-`config.json` only authenticates `/api/v1/label-print-agent/claim` and
-`/api/v1/label-print-agent/ack`; it is not an inventory API token. The OpenAPI
+`config.json` only authenticates the `claim`, `ack`, `status`, and `control` endpoints under
+`/api/v1/label-print-agent/`; it is not an inventory API token. The OpenAPI
 specification documents these separate authentication methods and job statuses.
 
 ## Access and job behavior
@@ -89,7 +129,8 @@ specification documents these separate authentication methods and job statuses.
   is retained for seven days and cleaned when the agent polls.
 - **Submitted to Windows** confirms spooler acceptance, not physical printing.
   Check power, tape and Windows queue if no label emerges. Waiting jobs can be
-  cancelled by their submitting user.
+  cancelled by their submitting user; version 2 agents also accept best-effort
+  stop requests after dispatch.
 - Requests use idempotency IDs. The agent writes a durable local journal before
   calling Windows. After a crash or ambiguous submission, a job becomes
   **Outcome uncertain** and is never printed again automatically. Check the
@@ -122,3 +163,14 @@ with `-ValidateJournal` using the same approved PowerShell policy. This checks
 atomic state replacement without contacting the server or sending a print job.
 Start the task again afterward. Transport errors are stored in `last-error.txt`
 inside the protected service directory; tokens and label payloads are not logged.
+
+
+### Operating system queue administration
+
+The label page separates Inventory job history from the computer's OS queue. Queue administration requires `tokens.manage`, since document titles and owners from other applications may be visible.
+
+- Local QZ: explicitly connect the selected PT-P710BT queue to receive job events. QZ events are not a complete queue enumeration. Individual reported jobs or the entire named queue can be cancelled after confirmation. Queue clearing requires QZ Tray 2.2.4 or later. Completed events remain history; a successful API call does not prove physical cancellation.
+- Remote: updated Python and PowerShell agents report the configured Windows/CUPS queue. Cancel one job or remove the displayed snapshot after confirmation. No blanket purge is used remotely: later arrivals are preserved. References include the job ID, title, owner and submission time; agents recheck them before deletion. Durable command receipts prevent replay after a lost response or restart.
+- Snapshots expire after 45 seconds, commands after 60 seconds. Unknown/unavailable queues disable administration. OS permissions may prevent enumerating or deleting other users' jobs. Direct native Bluetooth has no OS spool queue; use Inventory job cancellation for that transport.
+
+Apply migrations `0081` and `0082` before deploying these routes. Reinstall/update the agent bundle; Python installations require `spool_queue.py` alongside the agent, and the Windows PowerShell agent requires `spool-queue.ps1`. Existing agents continue printing but cannot provide this queue view. No incoming ports on the office PC are needed; the agent polls the server over HTTPS.
