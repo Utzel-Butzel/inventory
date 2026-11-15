@@ -33,6 +33,7 @@ test(
       await connection.unsafe(await readFile(new URL("../db/migrations/0074_general_printing.sql", import.meta.url), "utf8"));
       await connection.unsafe(await readFile(new URL("../db/migrations/0081_printer_status_and_cancellation.sql", import.meta.url), "utf8"));
       await connection.unsafe(await readFile(new URL("../db/migrations/0082_spool_queue.sql", import.meta.url), "utf8"));
+      await connection.unsafe(await readFile(new URL("../db/migrations/0083_spool_recovery.sql", import.meta.url), "utf8"));
       const {
         cancelSharedPrint, controlSharedPrint,
         enqueueSharedPrint,
@@ -203,7 +204,7 @@ test(
       assert.deepEqual((await connection`SELECT spool_snapshot FROM label_printers WHERE id=${printer}`)[0].spool_snapshot,spool);
       await connection`INSERT INTO label_spool_commands(id,printer_id,refs,created_by) VALUES(${spoolCommand},${printer},${JSON.stringify([spoolRef])}::jsonb,'test-user')`;
       const commands = await (await statusRoute(agentRequest({}))).json();
-      assert.deepEqual(commands.spoolCommands,[{id:spoolCommand,refs:[spoolRef]}]);
+      assert.deepEqual(commands.spoolCommands,[{id:spoolCommand,refs:[spoolRef],action:"cancel"}]);
       assert.equal((await statusRoute(agentRequest({spoolReceipts:[{id:spoolCommand,result:'done'}]}))).status,200);
       assert.equal((await connection`SELECT status FROM label_spool_commands WHERE id=${spoolCommand}`)[0].status,'done');
       assert.deepEqual((await (await statusRoute(agentRequest({}))).json()).spoolCommands,[]);

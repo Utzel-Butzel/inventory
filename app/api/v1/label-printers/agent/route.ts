@@ -5,7 +5,7 @@ import { requireSessionPermission } from "@/lib/api-auth";
 export const runtime = "nodejs";
 
 // Fixed, credential-free source files only. No request-supplied filesystem paths.
-const files = ["spool_queue.py", "spool-queue.ps1", "inventory_print_agent.py", "macos_ptouch_bluetooth.m", "install_macos.py", "InventoryPrintAgent.ps1", "Install-InventoryPrintAgent.ps1", "Install-SystemPrintAgent.ps1", "README.md"];
+const files = ["Enable-PrinterRecovery.ps1", "spool_queue.py", "spool-queue.ps1", "inventory_print_agent.py", "macos_ptouch_bluetooth.m", "install_macos.py", "InventoryPrintAgent.ps1", "Install-InventoryPrintAgent.ps1", "Install-SystemPrintAgent.ps1", "README.md"];
 export async function GET(request: Request) {
   const auth = await requireSessionPermission(request, "tokens.manage");
   if (auth.response) return auth.response;

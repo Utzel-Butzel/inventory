@@ -174,3 +174,11 @@ The label page separates Inventory job history from the computer's OS queue. Que
 - Snapshots expire after 45 seconds, commands after 60 seconds. Unknown/unavailable queues disable administration. OS permissions may prevent enumerating or deleting other users' jobs. Direct native Bluetooth has no OS spool queue; use Inventory job cancellation for that transport.
 
 Apply migrations `0081` and `0082` before deploying these routes. Reinstall/update the agent bundle; Python installations require `spool_queue.py` alongside the agent, and the Windows PowerShell agent requires `spool-queue.ps1`. Existing agents continue printing but cannot provide this queue view. No incoming ports on the office PC are needed; the agent polls the server over HTTPS.
+
+### Windows recovery from the web UI
+
+Updated Windows agents advertise per-job pause, resume and restart. Restart begins the same job again and can duplicate labels already printed. Commands are bound to a fresh queue identity and journaled before execution; uncertain actions are never replayed automatically. Older/Python agents expose cancellation only.
+
+An idle serial P-touch queue is probed for actual media/error status with a bounded worker. A busy queue is not probed concurrently. “Submitted” means handed to the system queue, not physical print confirmation.
+
+Optional: after explicit administrator approval, run `Enable-PrinterRecovery.ps1` elevated on the office PC. It installs a fixed SYSTEM task that can only restart Spooler and grants LOCAL SERVICE read/run access to that task. The agent cannot edit it or supply arbitrary privileged commands. The Web UI then exposes “Repair print connection”, with confirmation that every printer on that PC is briefly interrupted and retained jobs may resume. This does not power on the printer.

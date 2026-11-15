@@ -5066,6 +5066,7 @@ export const labelPrintJobs = pgTable("label_print_jobs", {
 ]);
 
 export const labelSpoolCommands = pgTable("label_spool_commands", {
+  action: varchar("action", { length: 16 }).notNull().default("cancel"),
   id: uuid("id").primaryKey(),
   printerId: uuid("printer_id").notNull().references(() => labelPrinters.id, { onDelete: "cascade" }),
   refs: jsonb("refs").notNull(),
